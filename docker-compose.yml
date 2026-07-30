@@ -1,0 +1,66 @@
+name: jesusname7
+
+services:
+  api:
+    build:
+      context: .
+      target: development
+    command: ["npm", "run", "dev"]
+    init: true
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      PORT: ${PORT:-3000}
+      REDIS_URL: redis://redis:6379
+      LOG_PRETTY: "true"
+    ports:
+      - "127.0.0.1:${PORT:-3000}:3000"
+    volumes:
+      - .:/app
+      - api_node_modules:/app/node_modules
+      - uploads_data:/app/uploads
+    depends_on:
+      redis:
+        condition: service_healthy
+        restart: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+
+  redis:
+    image: redis:8.8.1-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --loglevel
+      - warning
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    stop_grace_period: 30s
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  api_node_modules:
+  redis_data:
+  uploads_data:
