@@ -335,6 +335,23 @@ export class AuthService {
       }
     }
 
+    if (input.phoneNumber) {
+      const phoneNumberTaken = await userRepository.existsByPhoneNumber(input.phoneNumber, userId);
+
+      if (phoneNumberTaken) {
+        throw new ConflictError('Phone number already in use.', {
+          code: AUTH_ERROR_CODES.PHONE_NUMBER_TAKEN,
+          fieldErrors: [
+            {
+              field: 'phoneNumber',
+              message: 'Phone number already in use.',
+              code: AUTH_ERROR_CODES.PHONE_NUMBER_TAKEN,
+            },
+          ],
+        });
+      }
+    }
+
     const profile: Partial<UserProfile> = {
       isSetupComplete: true,
     };
@@ -379,7 +396,12 @@ export class AuthService {
       profile.photoPublicId = uploaded.publicId;
     }
 
-    const user = await userRepository.updateProfile(userId, profile);
+    const user = await userRepository.updateProfile(userId, profile, {
+      ...(input.phoneNumber ? { phoneNumber: input.phoneNumber } : {}),
+      ...(input.dateOfBirth
+        ? { dateOfBirth: new Date(`${input.dateOfBirth}T00:00:00.000Z`) }
+        : {}),
+    });
 
     if (!user) {
       throw new UnauthorizedError('Authenticated user was not found.', {

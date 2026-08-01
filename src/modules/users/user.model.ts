@@ -18,6 +18,7 @@ export interface User {
   _id: Types.ObjectId;
   email: string;
   phoneNumber?: string;
+  dateOfBirth?: Date;
   passwordHash: string;
   role: UserRole;
   status: AccountStatus;
@@ -59,6 +60,7 @@ const userSchema = new Schema<User>(
       index: true,
     },
     phoneNumber: { type: String, trim: true, unique: true, sparse: true },
+    dateOfBirth: { type: Date, min: new Date('1900-01-01T00:00:00.000Z') },
     passwordHash: { type: String, required: true, select: false },
     role: {
       type: String,

@@ -471,6 +471,16 @@
               "type": "text"
             },
             {
+              "key": "phoneNumber",
+              "value": "+8801712345678",
+              "type": "text"
+            },
+            {
+              "key": "dateOfBirth",
+              "value": "1998-05-17",
+              "type": "text"
+            },
+            {
               "key": "bio",
               "value": "Tell us about yourself and your music...",
               "type": "text"

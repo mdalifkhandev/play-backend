@@ -3,6 +3,8 @@ import type { UserDocument } from './user.model.js';
 export interface PublicUserDto {
   id: string;
   email: string;
+  phoneNumber?: string;
+  dateOfBirth?: string;
   role: string;
   status: string;
   isEmailVerified: boolean;
@@ -25,6 +27,8 @@ export function toPublicUser(user: UserDocument): PublicUserDto {
   return {
     id: user._id.toString(),
     email: user.email,
+    ...(user.phoneNumber ? { phoneNumber: user.phoneNumber } : {}),
+    ...(user.dateOfBirth ? { dateOfBirth: user.dateOfBirth.toISOString().slice(0, 10) } : {}),
     role: user.role,
     status: user.status,
     isEmailVerified: user.isEmailVerified,

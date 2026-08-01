@@ -39,6 +39,31 @@ const usernameSchema = z.preprocess(
     .optional(),
 );
 
+const phoneNumberSchema = z.preprocess(
+  emptyStringToUndefined,
+  z
+    .string()
+    .trim()
+    .transform((value) => value.replace(/[\s()-]/g, ''))
+    .refine(
+      (value) => /^\+[1-9]\d{7,14}$/.test(value),
+      'Enter a valid phone number in international format, for example +8801712345678.',
+    )
+    .optional(),
+);
+
+const dateOfBirthSchema = z.preprocess(
+  emptyStringToUndefined,
+  z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date of birth must use YYYY-MM-DD format.')
+    .refine((value) => isValidCalendarDate(value), 'Enter a valid date of birth.')
+    .refine((value) => value >= '1900-01-01', 'Date of birth must be on or after 1900-01-01.')
+    .refine((value) => value <= currentUtcDate(), 'Date of birth cannot be in the future.')
+    .optional(),
+);
+
 export const signUpBodySchema = z
   .object({
     email: emailSchema,
@@ -103,6 +128,8 @@ export const logoutBodySchema = z.object({
 export const setupProfileBodySchema = z.object({
   username: usernameSchema,
   displayName: optionalTrimmedString(80),
+  phoneNumber: phoneNumberSchema,
+  dateOfBirth: dateOfBirthSchema,
   bio: optionalTrimmedString(500),
   instagram: optionalTrimmedString(120),
   youtube: optionalTrimmedString(250),
@@ -118,3 +145,12 @@ export type ResetPasswordInput = z.infer<typeof resetPasswordBodySchema>;
 export type RefreshTokenInput = z.infer<typeof refreshTokenBodySchema>;
 export type LogoutInput = z.infer<typeof logoutBodySchema>;
 export type SetupProfileInput = z.infer<typeof setupProfileBodySchema>;
+
+function isValidCalendarDate(value: string): boolean {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function currentUtcDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}

@@ -41,6 +41,15 @@ export class UserRepository {
     );
   }
 
+  async existsByPhoneNumber(phoneNumber: string, excludeUserId?: string): Promise<boolean> {
+    return (
+      (await UserModel.exists({
+        phoneNumber,
+        ...(excludeUserId ? { _id: { $ne: excludeUserId } } : {}),
+      })) !== null
+    );
+  }
+
   async markEmailVerified(userId: string | Types.ObjectId): Promise<UserDocument | null> {
     return UserModel.findByIdAndUpdate(
       userId,
@@ -92,17 +101,21 @@ export class UserRepository {
   async updateProfile(
     userId: string | Types.ObjectId,
     profile: Partial<UserProfile>,
+    account: Partial<Pick<User, 'phoneNumber' | 'dateOfBirth'>> = {},
   ): Promise<UserDocument | null> {
-    const update = Object.fromEntries(
+    const profileUpdate = Object.fromEntries(
       Object.entries(profile)
         .filter(([, value]) => value !== undefined)
         .map(([key, value]) => [`profile.${key}`, value]),
     );
+    const accountUpdate = Object.fromEntries(
+      Object.entries(account).filter(([, value]) => value !== undefined),
+    );
 
     return UserModel.findByIdAndUpdate(
       userId,
-      { $set: update },
-      { new: true },
+      { $set: { ...profileUpdate, ...accountUpdate } },
+      { new: true, runValidators: true },
     ).exec();
   }
 }
