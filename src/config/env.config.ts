@@ -49,6 +49,28 @@ const environmentSchema = z
       .optional(),
     LOG_REDACT_CENSOR: z.string().trim().min(1).default('[REDACTED]'),
     SERVICE_NAME: z.string().trim().min(1).default('jesusname7-backend'),
+    CORS_ORIGINS: z.string().trim().min(1).optional(),
+    JWT_ACCESS_TOKEN_SECRET: z.string().trim().min(32).optional(),
+    AUTH_ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+    AUTH_REFRESH_TOKEN_DAYS: z.coerce.number().int().positive().default(30),
+    AUTH_REMEMBER_ME_REFRESH_TOKEN_DAYS: z.coerce.number().int().positive().default(90),
+    AUTH_CODE_TTL_MINUTES: z.coerce.number().int().positive().max(60).default(10),
+    AUTH_MAX_CODE_ATTEMPTS: z.coerce.number().int().positive().max(20).default(5),
+    AUTH_PASSWORD_RESET_TOKEN_TTL_MINUTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(60)
+      .default(15),
+    BREVO_API_KEY: z.string().trim().min(1).optional(),
+    BREVO_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(30),
+    BREVO_MAX_RETRIES: z.coerce.number().int().nonnegative().max(5).default(2),
+    MAIL_FROM: z
+      .string()
+      .trim()
+      .min(3)
+      .refine((value) => isValidMailFromAddress(value), 'Must be a valid email address or Name <email> sender.')
+      .optional(),
     CLOUDINARY_CLOUD_NAME: z.string().trim().min(1).optional(),
     CLOUDINARY_API_KEY: z.string().trim().min(1).optional(),
     CLOUDINARY_API_SECRET: z.string().trim().min(1).optional(),
@@ -62,6 +84,59 @@ const environmentSchema = z
         message: 'Must be less than or equal to DATABASE_MAX_POOL_SIZE.',
       });
     }
+
+    if (value.NODE_ENV === 'production' && !value.JWT_ACCESS_TOKEN_SECRET) {
+      context.addIssue({
+        code: 'custom',
+        path: ['JWT_ACCESS_TOKEN_SECRET'],
+        message: 'JWT_ACCESS_TOKEN_SECRET is required in production.',
+      });
+    }
+
+    const configuredOrigins = value.CORS_ORIGINS?.split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean) ?? [];
+
+    if (value.NODE_ENV === 'production' && configuredOrigins.length === 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['CORS_ORIGINS'],
+        message: 'At least one trusted frontend origin is required in production.',
+      });
+    }
+
+    for (const origin of configuredOrigins) {
+      try {
+        const parsedOrigin = new URL(origin);
+
+        if (!['http:', 'https:'].includes(parsedOrigin.protocol) || parsedOrigin.origin !== origin) {
+          throw new Error('Invalid origin');
+        }
+      } catch {
+        context.addIssue({
+          code: 'custom',
+          path: ['CORS_ORIGINS'],
+          message: `Invalid origin: ${origin}`,
+        });
+      }
+    }
+
+    if (value.NODE_ENV === 'production') {
+      const requiredMailFields = [
+        ['BREVO_API_KEY', value.BREVO_API_KEY],
+        ['MAIL_FROM', value.MAIL_FROM],
+      ] as const;
+
+      for (const [field, fieldValue] of requiredMailFields) {
+        if (!fieldValue) {
+          context.addIssue({
+            code: 'custom',
+            path: [field],
+            message: `${field} is required in production.`,
+          });
+        }
+      }
+    }
   });
 
 const parsedEnvironment = environmentSchema.safeParse(process.env);
@@ -74,6 +149,24 @@ if (!parsedEnvironment.success) {
   throw new Error(`Invalid environment configuration: ${details}`);
 }
 
-export const env = Object.freeze(parsedEnvironment.data);
+export const env = Object.freeze({
+  ...parsedEnvironment.data,
+  JWT_ACCESS_TOKEN_SECRET:
+    parsedEnvironment.data.JWT_ACCESS_TOKEN_SECRET ??
+    'jesusname7-development-access-token-secret-change-before-production',
+});
 
-export type Environment = z.infer<typeof environmentSchema>;
+export const corsOrigins = Object.freeze(
+  (env.CORS_ORIGINS ?? 'http://localhost:3000').split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+);
+
+export type Environment = typeof env;
+
+function isValidMailFromAddress(value: string): boolean {
+  const displayNameMatch = value.match(/^.+<([^<>]+)>$/);
+  const email = displayNameMatch?.[1]?.trim() ?? value;
+
+  return z.string().email().safeParse(email).success;
+}

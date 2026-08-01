@@ -23,6 +23,8 @@ const redactionPaths = [
   'DATABASE_URL',
   'REDIS_URL',
   'CLOUDINARY_API_SECRET',
+  'BREVO_API_KEY',
+  'devCode',
   'headers.authorization',
   'headers.cookie',
   'req.headers.authorization',

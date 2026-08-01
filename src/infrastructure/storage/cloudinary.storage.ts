@@ -1,6 +1,6 @@
 import type { UploadApiOptions, UploadApiResponse } from 'cloudinary';
 
-import { storageConfig } from '../../config/storage.config.js';
+import { assertCloudinaryConfigured, storageConfig } from '../../config/storage.config.js';
 import { cloudinaryClient } from './cloudinary.client.js';
 import type {
   StorageDeleteOptions,
@@ -16,6 +16,8 @@ export class CloudinaryStorage implements StorageProvider {
     source: string,
     options: StorageUploadOptions = {},
   ): Promise<StoredAsset> {
+    assertCloudinaryConfigured();
+
     if (!source.trim()) {
       throw new TypeError('Upload source must not be empty.');
     }
@@ -32,6 +34,8 @@ export class CloudinaryStorage implements StorageProvider {
     buffer: Buffer,
     options: StorageUploadOptions = {},
   ): Promise<StoredAsset> {
+    assertCloudinaryConfigured();
+
     if (buffer.length === 0) {
       throw new TypeError('Upload buffer must not be empty.');
     }
@@ -64,6 +68,8 @@ export class CloudinaryStorage implements StorageProvider {
     publicId: string,
     options: StorageDeleteOptions = {},
   ): Promise<StorageDeleteResult> {
+    assertCloudinaryConfigured();
+
     if (!publicId.trim()) {
       throw new TypeError('Cloudinary public ID must not be empty.');
     }
