@@ -72,6 +72,12 @@ export const signUpBodySchema = z
     acceptTerms: z.literal(true, {
       error: 'You must accept terms and conditions.',
     }),
+    legalConsents: z
+      .object({
+        termsConditionsVersion: z.coerce.number().int().min(1),
+        privacyPolicyVersion: z.coerce.number().int().min(1),
+      })
+      .optional(),
   })
   .superRefine((value, context) => {
     if (value.password !== value.confirmPassword) {

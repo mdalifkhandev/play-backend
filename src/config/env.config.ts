@@ -62,6 +62,10 @@ const environmentSchema = z
       .positive()
       .max(60)
       .default(15),
+    REQUIRE_LEGAL_CONSENT_ON_SIGNUP: z
+      .enum(['true', 'false'])
+      .transform((value) => value === 'true')
+      .optional(),
     BREVO_API_KEY: z.string().trim().min(1).optional(),
     BREVO_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(30),
     BREVO_MAX_RETRIES: z.coerce.number().int().nonnegative().max(5).default(2),
@@ -71,6 +75,7 @@ const environmentSchema = z
       .min(3)
       .refine((value) => isValidMailFromAddress(value), 'Must be a valid email address or Name <email> sender.')
       .optional(),
+    SUPPORT_ADMIN_EMAIL: z.string().trim().email().optional(),
     CLOUDINARY_CLOUD_NAME: z.string().trim().min(1).optional(),
     CLOUDINARY_API_KEY: z.string().trim().min(1).optional(),
     CLOUDINARY_API_SECRET: z.string().trim().min(1).optional(),
@@ -151,6 +156,9 @@ if (!parsedEnvironment.success) {
 
 export const env = Object.freeze({
   ...parsedEnvironment.data,
+  REQUIRE_LEGAL_CONSENT_ON_SIGNUP:
+    parsedEnvironment.data.REQUIRE_LEGAL_CONSENT_ON_SIGNUP ??
+    parsedEnvironment.data.NODE_ENV === 'production',
   JWT_ACCESS_TOKEN_SECRET:
     parsedEnvironment.data.JWT_ACCESS_TOKEN_SECRET ??
     'jesusname7-development-access-token-secret-change-before-production',

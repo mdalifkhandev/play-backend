@@ -10,6 +10,7 @@ import { UnauthorizedError } from '../../common/errors/unauthorized-error.js';
 import { createSecureToken, hashPassword, sha256, verifyPassword } from '../../common/utils/hash.util.js';
 import { signAccessToken } from '../../common/utils/jwt.util.js';
 import { mailService } from '../../infrastructure/mail/mail.service.js';
+import { legalConsentService } from '../legal-consents/legal-consent.service.js';
 import { userRepository } from '../users/user.repository.js';
 import { toPublicUser, type PublicUserDto } from '../users/user.mapper.js';
 import type { UserDocument, UserProfile } from '../users/user.model.js';
@@ -34,7 +35,10 @@ import type {
 } from './auth.validation.js';
 
 export class AuthService {
-  async signUp(input: SignUpInput): Promise<{ user: PublicUserDto; verification: VerificationResult }> {
+  async signUp(
+    input: SignUpInput,
+    context: RequestContext,
+  ): Promise<{ user: PublicUserDto; verification: VerificationResult }> {
     const existingUser = await userRepository.existsByEmail(input.email);
 
     if (existingUser) {
@@ -50,12 +54,40 @@ export class AuthService {
       });
     }
 
+    if (env.REQUIRE_LEGAL_CONSENT_ON_SIGNUP && !input.legalConsents) {
+      throw new BadRequestError('Current legal document versions must be accepted.', {
+        code: 'LEGAL_CONSENT_REQUIRED',
+        fieldErrors: [
+          {
+            field: 'legalConsents',
+            message: 'Review and accept the current Terms and Privacy Policy.',
+            code: 'LEGAL_CONSENT_REQUIRED',
+          },
+        ],
+      });
+    }
+
+    if (input.legalConsents) {
+      await legalConsentService.assertCurrentVersions(input.legalConsents);
+    }
+
     const user = await userRepository.create({
       email: input.email,
       passwordHash: await hashPassword(input.password),
       status: AccountStatus.ACTIVE,
       isEmailVerified: false,
     });
+
+    if (input.legalConsents) {
+      await legalConsentService.acceptInitialConsents(
+        user._id.toString(),
+        input.legalConsents,
+        {
+          ...(context.ipAddress ? { ipAddress: context.ipAddress } : {}),
+          ...(context.userAgent ? { userAgent: context.userAgent } : {}),
+        },
+      );
+    }
 
     const verification = await this.createAndDispatchCode(
       user,

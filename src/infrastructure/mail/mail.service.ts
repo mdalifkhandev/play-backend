@@ -3,7 +3,11 @@ import { BrevoClient } from '@getbrevo/brevo';
 import { env } from '../../config/env.config.js';
 import { AppError } from '../../common/errors/app-error.js';
 import { logger } from '../logger/logger.js';
-import type { MailService, SendAuthCodeInput } from './mail.interface.js';
+import type {
+  MailService,
+  SendAuthCodeInput,
+  SendSupportNotificationInput,
+} from './mail.interface.js';
 
 interface MailSender {
   email: string;
@@ -44,6 +48,36 @@ class BrevoMailService implements MailService {
       logger.error({ err: error, email: input.to, purpose: input.purpose }, 'Brevo email send failed');
       throw new AppError('Email could not be sent.', 502, {
         code: 'EMAIL_SEND_FAILED',
+        details: error,
+      });
+    }
+  }
+
+  async sendSupportNotification(input: SendSupportNotificationInput): Promise<void> {
+    if (!env.BREVO_API_KEY || !env.MAIL_FROM) {
+      logger.warn(
+        { email: input.to, subject: input.subject },
+        'Support email skipped because mail provider is not configured',
+      );
+      return;
+    }
+
+    const content = buildSupportEmailContent(input);
+
+    try {
+      const result = await this.getClient().transactionalEmails.sendTransacEmail({
+        sender: this.getSender(),
+        to: [{ email: input.to }],
+        subject: content.subject,
+        textContent: content.textContent,
+        htmlContent: content.htmlContent,
+      });
+
+      logger.info({ email: input.to, messageId: result.messageId }, 'Brevo support email sent');
+    } catch (error) {
+      logger.error({ err: error, email: input.to, subject: input.subject }, 'Brevo support email send failed');
+      throw new AppError('Support email could not be sent.', 502, {
+        code: 'SUPPORT_EMAIL_SEND_FAILED',
         details: error,
       });
     }
@@ -212,6 +246,86 @@ function buildAuthEmailContent(input: SendAuthCodeInput): AuthEmailContent {
               <td align="center" style="padding:20px 24px 0;color:#666666;font-size:12px;line-height:19px;">
                 This is an automated security message from Jesusname7.<br>
                 Please do not reply to this email.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`,
+  };
+}
+
+function buildSupportEmailContent(input: SendSupportNotificationInput): AuthEmailContent {
+  const fieldText = input.fields.map((field) => `${field.label}: ${field.value}`).join('\n');
+  const textContent = `${input.title}\n\n${input.intro}\n\n${fieldText}\n\nJesusname7 Support`;
+
+  const fieldRows = input.fields
+    .map(
+      (field) => `
+        <tr>
+          <td style="padding:12px 0;border-bottom:1px solid #242424;color:#8f8f8f;font-size:13px;line-height:20px;width:150px;vertical-align:top;">
+            ${escapeHtml(field.label)}
+          </td>
+          <td style="padding:12px 0;border-bottom:1px solid #242424;color:#ffffff;font-size:14px;line-height:22px;vertical-align:top;">
+            ${escapeHtml(field.value).replaceAll('\n', '<br>')}
+          </td>
+        </tr>`,
+    )
+    .join('');
+
+  return {
+    subject: input.subject,
+    textContent,
+    htmlContent: `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="x-apple-disable-message-reformatting">
+    <title>${escapeHtml(input.subject)}</title>
+  </head>
+  <body style="width:100%;margin:0;padding:0;background-color:#050505;color:#ffffff;font-family:Arial,Helvetica,sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background-color:#050505;">
+      <tr>
+        <td align="center" style="padding:40px 16px;">
+          <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;background-color:#0b0b0b;border:1px solid #252525;border-radius:8px;">
+            <tr>
+              <td style="padding:26px 36px;border-bottom:1px solid #252525;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                  <tr>
+                    <td width="44">
+                      <table role="presentation" width="40" cellspacing="0" cellpadding="0" border="0" style="width:40px;height:40px;background-color:#a3e635;border-radius:8px;">
+                        <tr>
+                          <td align="center" style="color:#050505;font-size:17px;line-height:40px;font-weight:800;">J7</td>
+                        </tr>
+                      </table>
+                    </td>
+                    <td style="padding-left:12px;color:#ffffff;font-size:18px;line-height:24px;font-weight:700;">Jesusname7</td>
+                    <td align="right" style="color:#777777;font-size:12px;line-height:18px;">Support</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:36px 36px 18px;">
+                <p style="margin:0 0 12px;color:#a3e635;font-size:12px;line-height:18px;font-weight:700;letter-spacing:1px;">
+                  ${escapeHtml(input.actionLabel ?? 'SUPPORT REQUEST')}
+                </p>
+                <h1 style="margin:0 0 14px;color:#ffffff;font-size:26px;line-height:34px;font-weight:700;">
+                  ${escapeHtml(input.title)}
+                </h1>
+                <p style="margin:0;color:#b7b7b7;font-size:15px;line-height:25px;">
+                  ${escapeHtml(input.intro)}
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:10px 36px 40px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#141414;border:1px solid #303030;border-radius:8px;padding:10px 18px;">
+                  ${fieldRows}
+                </table>
               </td>
             </tr>
           </table>

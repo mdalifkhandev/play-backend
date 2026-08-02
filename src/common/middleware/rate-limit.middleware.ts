@@ -22,6 +22,7 @@ function createRedisStore(prefix: string): RedisStore | undefined {
 
 const globalRedisStore = createRedisStore('rate-limit:global:');
 const authRedisStore = createRedisStore('rate-limit:auth:');
+const supportRedisStore = createRedisStore('rate-limit:support:');
 
 export const globalRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1_000,
@@ -49,6 +50,21 @@ export const authRateLimiter = rateLimit({
     next(
       new AppError('Too many auth attempts. Please try again later.', 429, {
         code: 'AUTH_RATE_LIMITED',
+      }),
+    );
+  },
+});
+
+export const supportRequestRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1_000,
+  max: 20,
+  ...(supportRedisStore ? { store: supportRedisStore } : {}),
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_request, _response, next) => {
+    next(
+      new AppError('Too many support requests. Please try again later.', 429, {
+        code: 'SUPPORT_RATE_LIMITED',
       }),
     );
   },
