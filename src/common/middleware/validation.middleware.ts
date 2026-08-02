@@ -27,6 +27,15 @@ export function validateRequest(schema: RequestValidationSchema) {
           });
         }
 
+        if (segment === 'query') {
+          Object.defineProperty(request, 'query', {
+            value: parsed.data,
+            configurable: true,
+            enumerable: true,
+          });
+          continue;
+        }
+
         (request as unknown as Record<RequestSegment, unknown>)[segment] = parsed.data;
       }
 

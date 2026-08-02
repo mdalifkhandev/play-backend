@@ -80,6 +80,7 @@ const environmentSchema = z
     CLOUDINARY_API_KEY: z.string().trim().min(1).optional(),
     CLOUDINARY_API_SECRET: z.string().trim().min(1).optional(),
     CLOUDINARY_UPLOAD_FOLDER: z.string().trim().min(1).default('jesusname7'),
+    JAMENDO_CLIENT_ID: z.string().trim().min(1).optional(),
   })
   .superRefine((value, context) => {
     if (value.DATABASE_MIN_POOL_SIZE > value.DATABASE_MAX_POOL_SIZE) {
@@ -140,6 +141,14 @@ const environmentSchema = z
             message: `${field} is required in production.`,
           });
         }
+      }
+
+      if (!value.JAMENDO_CLIENT_ID) {
+        context.addIssue({
+          code: 'custom',
+          path: ['JAMENDO_CLIENT_ID'],
+          message: 'JAMENDO_CLIENT_ID is required in production.',
+        });
       }
     }
   });

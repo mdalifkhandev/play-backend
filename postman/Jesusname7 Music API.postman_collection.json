@@ -1,0 +1,56 @@
+{
+  "info": {
+    "name": "Jesusname7 Music API",
+    "description": "Jamendo public music search through the Jesusname7 backend. No OAuth callback, client secret, or redirect URL is used.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api/v1"
+    }
+  ],
+  "item": [
+    {
+      "name": "Music",
+      "item": [
+        {
+          "name": "Search Jamendo Tracks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/music/tracks?search=happy&page=1&limit=20&order=popularity_total",
+              "host": ["{{baseUrl}}"],
+              "path": ["music", "tracks"],
+              "query": [
+                { "key": "search", "value": "happy" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "order", "value": "popularity_total" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Browse Jamendo Tracks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/music/tracks?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["music", "tracks"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

@@ -23,6 +23,7 @@ function createRedisStore(prefix: string): RedisStore | undefined {
 const globalRedisStore = createRedisStore('rate-limit:global:');
 const authRedisStore = createRedisStore('rate-limit:auth:');
 const supportRedisStore = createRedisStore('rate-limit:support:');
+const musicRedisStore = createRedisStore('rate-limit:music:');
 
 export const globalRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1_000,
@@ -65,6 +66,21 @@ export const supportRequestRateLimiter = rateLimit({
     next(
       new AppError('Too many support requests. Please try again later.', 429, {
         code: 'SUPPORT_RATE_LIMITED',
+      }),
+    );
+  },
+});
+
+export const musicRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1_000,
+  max: 120,
+  ...(musicRedisStore ? { store: musicRedisStore } : {}),
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_request, _response, next) => {
+    next(
+      new AppError('Too many music requests. Please try again later.', 429, {
+        code: 'MUSIC_RATE_LIMITED',
       }),
     );
   },

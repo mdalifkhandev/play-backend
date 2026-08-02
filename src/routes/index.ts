@@ -6,6 +6,7 @@ import {
   contentPageRouter,
 } from '../modules/content-pages/content-page.route.js';
 import { legalConsentRouter } from '../modules/legal-consents/legal-consent.route.js';
+import { musicRouter } from '../modules/music/music.route.js';
 import {
   supportRequestAdminRouter,
   supportRequestRouter,
@@ -18,6 +19,7 @@ apiRouter.use('/health', healthRouter);
 apiRouter.use('/auth', authRouter);
 apiRouter.use('/content-pages', contentPageRouter);
 apiRouter.use('/legal-consents', legalConsentRouter);
+apiRouter.use('/music', musicRouter);
 apiRouter.use('/support-requests', supportRequestRouter);
 apiRouter.use('/admin/content-pages', contentPageAdminRouter);
 apiRouter.use('/admin/support-requests', supportRequestAdminRouter);
