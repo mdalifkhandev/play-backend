@@ -10,21 +10,54 @@ export async function authenticate(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const token = extractBearerToken(request);
+    await attachAuthenticatedUser(request, true);
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
 
-    if (!token) {
+export async function optionalAuthenticate(
+  request: Request,
+  _response: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    await attachAuthenticatedUser(request, false);
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function attachAuthenticatedUser(
+  request: Request,
+  required: boolean,
+): Promise<void> {
+  const token = extractBearerToken(request);
+
+  if (!token) {
+    if (required) {
       throw new UnauthorizedError('Access token is required.', {
         code: 'ACCESS_TOKEN_REQUIRED',
       });
     }
 
+    return;
+  }
+
+  try {
     const payload = await verifyAccessToken(token);
     const session = await authRepository.findActiveSessionById(payload.sessionId);
 
     if (!session) {
-      throw new UnauthorizedError('Access token session is no longer active.', {
-        code: 'SESSION_REVOKED',
-      });
+      if (required) {
+        throw new UnauthorizedError('Access token session is no longer active.', {
+          code: 'SESSION_REVOKED',
+        });
+      }
+
+      return;
     }
 
     request.user = {
@@ -35,18 +68,16 @@ export async function authenticate(
     };
 
     await authRepository.touchSession(payload.sessionId);
-    next();
   } catch (error) {
     if (error instanceof UnauthorizedError) {
-      next(error);
-      return;
+      throw error;
     }
 
-    next(
-      new UnauthorizedError('Access token is invalid or expired.', {
+    if (required) {
+      throw new UnauthorizedError('Access token is invalid or expired.', {
         code: 'ACCESS_TOKEN_INVALID',
-      }),
-    );
+      });
+    }
   }
 }
 

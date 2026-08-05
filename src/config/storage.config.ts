@@ -33,16 +33,9 @@ export function assertCloudinaryConfigured(): void {
     .map((issue) => issue.path.join('.'))
     .join(', ');
 
-  throw new AppError('Cloudinary is not configured for profile photo uploads.', 503, {
+  throw new AppError('Cloudinary storage is not configured.', 503, {
     code: 'CLOUDINARY_NOT_CONFIGURED',
     details: { missingFields },
-    fieldErrors: [
-      {
-        field: 'photo',
-        message: 'Profile photo upload is not available until Cloudinary keys are configured.',
-        code: 'CLOUDINARY_NOT_CONFIGURED',
-      },
-    ],
   });
 }
 

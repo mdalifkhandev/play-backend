@@ -14,18 +14,52 @@ services:
       PORT: ${PORT:-3000}
       REDIS_URL: redis://redis:6379
       LOG_PRETTY: "true"
+      FFMPEG_PATH: ffmpeg
+      FFPROBE_PATH: ffprobe
+      MEDIA_TEMP_DIRECTORY: /app/tmp/media
     ports:
       - "127.0.0.1:${PORT:-3000}:3000"
     volumes:
       - .:/app
       - api_node_modules:/app/node_modules
       - uploads_data:/app/uploads
+      - media_temp:/app/tmp/media
     depends_on:
       redis:
         condition: service_healthy
         restart: true
     restart: unless-stopped
     stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+
+  worker:
+    build:
+      context: .
+      target: development
+    command: ["npm", "run", "worker:dev"]
+    init: true
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      REDIS_URL: redis://redis:6379
+      LOG_PRETTY: "true"
+      FFMPEG_PATH: ffmpeg
+      FFPROBE_PATH: ffprobe
+      MEDIA_TEMP_DIRECTORY: /app/tmp/media
+    volumes:
+      - .:/app
+      - worker_node_modules:/app/node_modules
+      - media_temp:/app/tmp/media
+    depends_on:
+      redis:
+        condition: service_healthy
+        restart: true
+    restart: unless-stopped
+    stop_grace_period: 60s
     security_opt:
       - no-new-privileges:true
     networks:
@@ -62,5 +96,7 @@ networks:
 
 volumes:
   api_node_modules:
+  worker_node_modules:
   redis_data:
   uploads_data:
+  media_temp:

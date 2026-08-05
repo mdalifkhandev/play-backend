@@ -24,6 +24,10 @@ const redactionPaths = [
   'REDIS_URL',
   'CLOUDINARY_API_SECRET',
   'BREVO_API_KEY',
+  'signature',
+  'uploadUrl',
+  'audioSourceUrl',
+  'downloadUrl',
   'devCode',
   'headers.authorization',
   'headers.cookie',
@@ -44,6 +48,9 @@ const redactionPaths = [
   '*.refreshToken',
   '*.apiKey',
   '*.apiSecret',
+  '*.signature',
+  '*.audioSourceUrl',
+  '*.downloadUrl',
 ];
 
 const prettyLogs =

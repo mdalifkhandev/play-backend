@@ -5,6 +5,7 @@ export type {
   StorageDeleteResult,
   StorageProvider,
   StorageResourceType,
+  StorageSignedUpload,
   StorageUploadOptions,
   StorageUploadResourceType,
   StoredAsset,

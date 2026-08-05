@@ -1,0 +1,47 @@
+import { Router } from 'express';
+
+import { authenticate, optionalAuthenticate } from '../../common/middleware/auth.middleware.js';
+import {
+  reelPublishRateLimiter,
+  reelRetryRateLimiter,
+} from '../../common/middleware/rate-limit.middleware.js';
+import { validateRequest } from '../../common/middleware/validation.middleware.js';
+import { reelController } from './reel.controller.js';
+import {
+  createReelBodySchema,
+  reelFeedQuerySchema,
+  reelIdParamsSchema,
+} from './reel.validation.js';
+
+export const reelRouter = Router();
+
+reelRouter.get('/feed', optionalAuthenticate, validateRequest({ query: reelFeedQuerySchema }), reelController.feed);
+
+reelRouter.get(
+  '/:reelId',
+  optionalAuthenticate,
+  validateRequest({ params: reelIdParamsSchema }),
+  reelController.getById,
+);
+
+reelRouter.use(authenticate);
+
+reelRouter.post(
+  '/',
+  reelPublishRateLimiter,
+  validateRequest({ body: createReelBodySchema }),
+  reelController.create,
+);
+
+reelRouter.post(
+  '/:reelId/retry',
+  reelRetryRateLimiter,
+  validateRequest({ params: reelIdParamsSchema }),
+  reelController.retry,
+);
+
+reelRouter.delete(
+  '/:reelId',
+  validateRequest({ params: reelIdParamsSchema }),
+  reelController.delete,
+);

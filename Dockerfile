@@ -6,7 +6,9 @@ FROM node:${NODE_VERSION}-alpine AS base
 
 WORKDIR /app
 
-RUN chown node:node /app
+RUN apk add --no-cache ffmpeg \
+    && mkdir -p /app/uploads /app/tmp/media \
+    && chown -R node:node /app
 
 FROM base AS development
 
@@ -45,13 +47,11 @@ FROM base AS production
 
 ENV NODE_ENV=production
 ENV NODE_OPTIONS=--enable-source-maps
+ENV MEDIA_TEMP_DIRECTORY=/app/tmp/media
 
 COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --chown=node:node package.json package-lock.json ./
-
-RUN mkdir -p /app/uploads \
-    && chown node:node /app/uploads
 
 USER node
 

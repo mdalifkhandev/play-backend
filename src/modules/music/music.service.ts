@@ -1,7 +1,7 @@
 import { cacheKeys } from '../../infrastructure/cache/cache-keys.js';
 import { cacheService } from '../../infrastructure/cache/cache.service.js';
 import { jamendoProvider, type JamendoProvider } from './providers/jamendo.provider.js';
-import type { MusicSearchQuery, MusicSearchResult } from './music.types.js';
+import type { MusicSearchQuery, MusicSearchResult, MusicTrack } from './music.types.js';
 
 const MUSIC_SEARCH_CACHE_TTL_SECONDS = 5 * 60;
 
@@ -38,6 +38,10 @@ export class MusicService {
 
     await cacheService.set(cacheKey, response, MUSIC_SEARCH_CACHE_TTL_SECONDS);
     return response;
+  }
+
+  async getTrackById(providerTrackId: string): Promise<MusicTrack | null> {
+    return this.provider.getTrackById(providerTrackId);
   }
 }
 

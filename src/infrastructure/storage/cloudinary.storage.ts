@@ -7,11 +7,71 @@ import type {
   StorageDeleteResult,
   StorageProvider,
   StorageResourceType,
+  StorageSignedUpload,
   StorageUploadOptions,
   StoredAsset,
 } from './storage.interface.js';
 
 export class CloudinaryStorage implements StorageProvider {
+  createSignedUpload(
+    publicId: string,
+    resourceType: 'image' | 'video',
+    timestamp = Math.floor(Date.now() / 1_000),
+  ): StorageSignedUpload {
+    assertCloudinaryConfigured();
+
+    if (!publicId.trim()) {
+      throw new TypeError('Cloudinary public ID must not be empty.');
+    }
+
+    const overwrite = false as const;
+    const signature = cloudinaryClient.utils.api_sign_request(
+      { overwrite, public_id: publicId, timestamp },
+      storageConfig.cloudinary.apiSecret,
+    );
+
+    return {
+      provider: 'cloudinary',
+      cloudName: storageConfig.cloudinary.cloudName,
+      apiKey: storageConfig.cloudinary.apiKey,
+      timestamp,
+      signature,
+      publicId,
+      resourceType,
+      overwrite,
+      uploadUrl: `https://api.cloudinary.com/v1_1/${encodeURIComponent(storageConfig.cloudinary.cloudName)}/${resourceType}/upload`,
+    };
+  }
+
+  async getAsset(
+    publicId: string,
+    resourceType: 'image' | 'video',
+  ): Promise<StoredAsset> {
+    assertCloudinaryConfigured();
+
+    if (!publicId.trim()) {
+      throw new TypeError('Cloudinary public ID must not be empty.');
+    }
+
+    const result = (await cloudinaryClient.api.resource(publicId, {
+      resource_type: resourceType,
+      type: 'upload',
+    })) as unknown as CloudinaryAssetPayload;
+
+    return this.toStoredAsset(result as unknown as CloudinaryAssetPayload);
+  }
+
+  createThumbnailUrl(publicId: string, resourceType: 'image' | 'video'): string {
+    assertCloudinaryConfigured();
+
+    return cloudinaryClient.url(publicId, {
+      secure: true,
+      resource_type: resourceType,
+      ...(resourceType === 'video' ? { format: 'jpg', start_offset: '0' } : {}),
+      transformation: [{ width: 480, height: 854, crop: 'limit', quality: 'auto' }],
+    });
+  }
+
   async upload(
     source: string,
     options: StorageUploadOptions = {},
@@ -27,7 +87,7 @@ export class CloudinaryStorage implements StorageProvider {
       this.buildUploadOptions(options),
     );
 
-    return this.toStoredAsset(result);
+    return this.toStoredAsset(result as unknown as CloudinaryAssetPayload);
   }
 
   async uploadBuffer(
@@ -61,7 +121,7 @@ export class CloudinaryStorage implements StorageProvider {
       uploadStream.end(buffer);
     });
 
-    return this.toStoredAsset(result);
+    return this.toStoredAsset(result as unknown as CloudinaryAssetPayload);
   }
 
   async deleteAsset(
@@ -92,8 +152,16 @@ export class CloudinaryStorage implements StorageProvider {
   }
 
   private buildUploadOptions(options: StorageUploadOptions): UploadApiOptions {
+    const hasExplicitPublicId = options.publicId !== undefined;
+
     return {
-      folder: options.folder ?? storageConfig.cloudinary.uploadFolder,
+      ...(options.folder !== undefined
+        ? options.folder
+          ? { folder: options.folder }
+          : {}
+        : hasExplicitPublicId
+          ? {}
+          : { folder: storageConfig.cloudinary.uploadFolder }),
       resource_type: options.resourceType ?? 'auto',
       overwrite: options.overwrite ?? false,
       unique_filename: options.publicId === undefined,
@@ -103,7 +171,7 @@ export class CloudinaryStorage implements StorageProvider {
     };
   }
 
-  private toStoredAsset(result: UploadApiResponse): StoredAsset {
+  private toStoredAsset(result: CloudinaryAssetPayload): StoredAsset {
     return {
       assetId: result.asset_id,
       publicId: result.public_id,
@@ -126,6 +194,20 @@ export class CloudinaryStorage implements StorageProvider {
 
     throw new Error(`Unsupported Cloudinary resource type: ${resourceType}`);
   }
+}
+
+interface CloudinaryAssetPayload {
+  asset_id: string;
+  public_id: string;
+  secure_url: string;
+  resource_type: string;
+  bytes: number;
+  version: number;
+  created_at: string;
+  format?: string;
+  width?: number;
+  height?: number;
+  duration?: number;
 }
 
 export const cloudinaryStorage = new CloudinaryStorage();

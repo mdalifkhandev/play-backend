@@ -81,6 +81,33 @@ const environmentSchema = z
     CLOUDINARY_API_SECRET: z.string().trim().min(1).optional(),
     CLOUDINARY_UPLOAD_FOLDER: z.string().trim().min(1).default('jesusname7'),
     JAMENDO_CLIENT_ID: z.string().trim().min(1).optional(),
+    STORY_DURATION_HOURS: z.coerce.number().int().positive().max(168).default(24),
+    STORY_IMAGE_MAX_BYTES: z.coerce.number().int().positive().default(10 * 1024 * 1024),
+    STORY_VIDEO_MAX_BYTES: z.coerce.number().int().positive().default(100 * 1024 * 1024),
+    STORY_VIDEO_MAX_DURATION_SECONDS: z.coerce.number().positive().max(600).default(60),
+    STORY_IMAGE_MIN_DISPLAY_SECONDS: z.coerce.number().positive().default(3),
+    STORY_IMAGE_MAX_DISPLAY_SECONDS: z.coerce.number().positive().default(30),
+    STORY_UPLOAD_SESSION_TTL_MINUTES: z.coerce.number().int().positive().max(1_440).default(30),
+    STORY_CLEANUP_BATCH_SIZE: z.coerce.number().int().positive().max(500).default(100),
+    REEL_MIN_DURATION_MS: z.coerce.number().int().positive().default(1_000),
+    REEL_MAX_DURATION_MS: z.coerce.number().int().positive().default(60_000),
+    REEL_RAW_VIDEO_MAX_BYTES: z.coerce.number().int().positive().default(200 * 1024 * 1024),
+    REEL_RAW_VIDEO_MAX_DURATION_MS: z.coerce.number().int().positive().default(180_000),
+    REEL_UPLOAD_SESSION_TTL_MINUTES: z.coerce.number().int().positive().max(1_440).default(60),
+    REEL_OUTPUT_MAX_WIDTH: z.coerce.number().int().positive().default(1_080),
+    REEL_OUTPUT_MAX_HEIGHT: z.coerce.number().int().positive().default(1_920),
+    REEL_OUTPUT_VIDEO_BITRATE: z.string().trim().min(1).default('4M'),
+    REEL_OUTPUT_AUDIO_BITRATE: z.string().trim().min(1).default('128k'),
+    REEL_PROCESSING_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
+    REEL_WORKER_CONCURRENCY: z.coerce.number().int().positive().max(8).default(1),
+    REEL_JOB_ATTEMPTS: z.coerce.number().int().positive().max(10).default(3),
+    REEL_CLEANUP_BATCH_SIZE: z.coerce.number().int().positive().max(500).default(100),
+    REEL_MAX_RETRY_COUNT: z.coerce.number().int().positive().max(20).default(5),
+    REEL_STALE_PROCESSING_MS: z.coerce.number().int().positive().default(30 * 60 * 1_000),
+    FFMPEG_PATH: z.string().trim().min(1).default('ffmpeg'),
+    FFPROBE_PATH: z.string().trim().min(1).default('ffprobe'),
+    MEDIA_TEMP_DIRECTORY: z.string().trim().min(1).default('./tmp/media'),
+    REEL_FONT_FILE: z.string().trim().min(1).optional(),
   })
   .superRefine((value, context) => {
     if (value.DATABASE_MIN_POOL_SIZE > value.DATABASE_MAX_POOL_SIZE) {
@@ -88,6 +115,30 @@ const environmentSchema = z
         code: 'custom',
         path: ['DATABASE_MIN_POOL_SIZE'],
         message: 'Must be less than or equal to DATABASE_MAX_POOL_SIZE.',
+      });
+    }
+
+    if (value.STORY_IMAGE_MIN_DISPLAY_SECONDS > value.STORY_IMAGE_MAX_DISPLAY_SECONDS) {
+      context.addIssue({
+        code: 'custom',
+        path: ['STORY_IMAGE_MIN_DISPLAY_SECONDS'],
+        message: 'Must be less than or equal to STORY_IMAGE_MAX_DISPLAY_SECONDS.',
+      });
+    }
+
+    if (value.REEL_MIN_DURATION_MS > value.REEL_MAX_DURATION_MS) {
+      context.addIssue({
+        code: 'custom',
+        path: ['REEL_MIN_DURATION_MS'],
+        message: 'Must be less than or equal to REEL_MAX_DURATION_MS.',
+      });
+    }
+
+    if (value.REEL_MAX_DURATION_MS > value.REEL_RAW_VIDEO_MAX_DURATION_MS) {
+      context.addIssue({
+        code: 'custom',
+        path: ['REEL_MAX_DURATION_MS'],
+        message: 'Must be less than or equal to REEL_RAW_VIDEO_MAX_DURATION_MS.',
       });
     }
 

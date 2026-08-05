@@ -23,6 +23,18 @@ export interface StoredAsset {
   duration?: number;
 }
 
+export interface StorageSignedUpload {
+  provider: 'cloudinary';
+  cloudName: string;
+  apiKey: string;
+  timestamp: number;
+  signature: string;
+  publicId: string;
+  resourceType: 'image' | 'video';
+  overwrite: false;
+  uploadUrl: string;
+}
+
 export interface StorageDeleteOptions {
   resourceType?: StorageResourceType;
   invalidate?: boolean;

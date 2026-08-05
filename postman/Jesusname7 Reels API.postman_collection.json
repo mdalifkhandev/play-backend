@@ -1,0 +1,200 @@
+{
+  "info": {
+    "name": "Jesusname7 Reels API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Best architecture flow: upload-url → direct CDN upload → complete → create reel → worker FFmpeg → feed.\n\nSecurity notes:\n- Use mediaKey from backend (not arbitrary URLs)\n- Use musicId only (musicUrl is rejected)\n- Call /media/complete after Cloudinary upload before /reels"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api/v1" },
+    { "key": "accessToken", "value": "" },
+    { "key": "uploadId", "value": "" },
+    { "key": "mediaKey", "value": "" },
+    { "key": "mediaAssetId", "value": "" },
+    { "key": "reelId", "value": "" },
+    { "key": "idempotencyKey", "value": "reel-demo-001" },
+    { "key": "musicId", "value": "" },
+    { "key": "cloudinaryUploadUrl", "value": "" },
+    { "key": "cloudinaryApiKey", "value": "" },
+    { "key": "cloudinaryTimestamp", "value": "" },
+    { "key": "cloudinarySignature", "value": "" },
+    { "key": "cloudinaryPublicId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 Get Upload URL",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "pm.test('upload url prepared', () => pm.expect(json.success).to.eql(true));",
+              "pm.collectionVariables.set('uploadId', json.data.uploadId);",
+              "pm.collectionVariables.set('mediaKey', json.data.mediaKey);",
+              "pm.collectionVariables.set('cloudinaryUploadUrl', json.data.uploadUrl);",
+              "pm.collectionVariables.set('cloudinaryApiKey', json.data.apiKey);",
+              "pm.collectionVariables.set('cloudinaryTimestamp', String(json.data.timestamp));",
+              "pm.collectionVariables.set('cloudinarySignature', json.data.signature);",
+              "pm.collectionVariables.set('cloudinaryPublicId', json.data.publicId);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{baseUrl}}/media/upload-url",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fileName\": \"reel.mp4\",\n  \"contentType\": \"video/mp4\",\n  \"fileSize\": 12345678,\n  \"mediaType\": \"video\"\n}"
+        }
+      }
+    },
+    {
+      "name": "02 Upload Video To Cloudinary",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{cloudinaryUploadUrl}}",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "file", "type": "file", "src": [] },
+            { "key": "api_key", "value": "{{cloudinaryApiKey}}", "type": "text" },
+            { "key": "timestamp", "value": "{{cloudinaryTimestamp}}", "type": "text" },
+            { "key": "signature", "value": "{{cloudinarySignature}}", "type": "text" },
+            { "key": "public_id", "value": "{{cloudinaryPublicId}}", "type": "text" },
+            { "key": "overwrite", "value": "false", "type": "text" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "03 Complete Upload",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "pm.test('verified', () => pm.expect(json.success).to.eql(true));",
+              "pm.collectionVariables.set('mediaAssetId', json.data.mediaAssetId);",
+              "pm.collectionVariables.set('mediaKey', json.data.mediaKey);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{baseUrl}}/media/complete",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"uploadId\": \"{{uploadId}}\"\n}"
+        }
+      }
+    },
+    {
+      "name": "04 Create Reel",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "pm.test('accepted', () => {",
+              "  pm.expect(json.success).to.eql(true);",
+              "  pm.expect([200, 202]).to.include(pm.response.code);",
+              "});",
+              "pm.collectionVariables.set('reelId', json.data.reelId);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{baseUrl}}/reels",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rawMediaKey\": \"{{mediaKey}}\",\n  \"mediaType\": \"video\",\n  \"caption\": \"My reel\",\n  \"visibility\": \"public\",\n  \"forKids\": false,\n  \"audio\": {\n    \"originalVolume\": 70,\n    \"musicVolume\": 90,\n    \"musicId\": \"{{musicId}}\",\n    \"musicTrim\": {\n      \"startMs\": 9000,\n      \"endMs\": 17000\n    }\n  },\n  \"videoEdit\": {\n    \"trim\": {\n      \"startMs\": 0,\n      \"endMs\": 8000\n    },\n    \"filter\": \"Vivid\",\n    \"effect\": \"none\",\n    \"exposure\": 55,\n    \"contrast\": 60,\n    \"overlayText\": \"Hello world\"\n  }\n}"
+        }
+      }
+    },
+    {
+      "name": "04b Create Reel Video Only",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Idempotency-Key", "value": "reel-demo-video-only" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{baseUrl}}/reels",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rawMediaKey\": \"{{mediaKey}}\",\n  \"mediaType\": \"video\",\n  \"caption\": \"No music\",\n  \"audio\": {\n    \"originalVolume\": 100,\n    \"musicVolume\": 0\n  },\n  \"videoEdit\": {\n    \"trim\": { \"startMs\": 0, \"endMs\": 8000 },\n    \"filter\": \"none\",\n    \"effect\": \"none\",\n    \"exposure\": 50,\n    \"contrast\": 50\n  }\n}"
+        }
+      }
+    },
+    {
+      "name": "05 Get Reel Status",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/reels/{{reelId}}"
+      }
+    },
+    {
+      "name": "06 Retry Reel",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/reels/{{reelId}}/retry"
+      }
+    },
+    {
+      "name": "07 Feed",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/reels/feed?limit=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["reels", "feed"],
+          "query": [
+            { "key": "limit", "value": "20" },
+            { "key": "cursor", "value": "", "disabled": true }
+          ]
+        }
+      }
+    },
+    {
+      "name": "08 Delete Reel",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/reels/{{reelId}}"
+      }
+    }
+  ]
+}
