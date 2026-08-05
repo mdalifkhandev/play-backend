@@ -34,6 +34,10 @@ export interface MediaProbeSummary {
 }
 
 export async function runFfprobe(filePath: string): Promise<MediaProbeSummary> {
+  return runFfprobeSource(filePath);
+}
+
+export async function runFfprobeSource(source: string): Promise<MediaProbeSummary> {
   const raw = await runProcess(env.FFPROBE_PATH, [
     '-v',
     'error',
@@ -41,7 +45,7 @@ export async function runFfprobe(filePath: string): Promise<MediaProbeSummary> {
     'json',
     '-show_format',
     '-show_streams',
-    filePath,
+    source,
   ]);
 
   let parsed: FfprobeResult;
