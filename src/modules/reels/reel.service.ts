@@ -508,12 +508,18 @@ export class ReelService {
   ): { startMs: number; endMs: number } {
     const rawDurationMs = Math.round(asset.durationSeconds! * 1_000);
     const startMs = input.videoEdit.trim?.startMs ?? 0;
-    const endMs = input.videoEdit.trim?.endMs ?? rawDurationMs;
+    let endMs = input.videoEdit.trim?.endMs ?? rawDurationMs;
 
     if (startMs < 0 || endMs <= startMs) {
       throw new AppError('Video trim range is invalid.', 422, {
         code: 'REEL_INVALID_VIDEO_TRIM',
       });
+    }
+
+    // Allow a small tolerance (e.g. up to 1.5 seconds) for duration discrepancies 
+    // between frontend metadata and ffprobe verification.
+    if (endMs > rawDurationMs && endMs - rawDurationMs < 1500) {
+      endMs = rawDurationMs;
     }
 
     if (endMs > rawDurationMs) {
