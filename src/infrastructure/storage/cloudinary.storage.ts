@@ -183,7 +183,7 @@ export class CloudinaryStorage implements StorageProvider {
       ...(result.format ? { format: result.format } : {}),
       ...(typeof result.width === 'number' ? { width: result.width } : {}),
       ...(typeof result.height === 'number' ? { height: result.height } : {}),
-      ...(typeof result.duration === 'number' ? { duration: result.duration } : {}),
+      ...(parseCloudinaryDuration(result) !== undefined ? { duration: parseCloudinaryDuration(result) } : {}),
     };
   }
 
@@ -207,7 +207,30 @@ interface CloudinaryAssetPayload {
   format?: string;
   width?: number;
   height?: number;
-  duration?: number;
+  duration?: number | string;
+  video?: {
+    duration?: number | string;
+  };
+  audio?: {
+    duration?: number | string;
+  };
+}
+
+function parseCloudinaryDuration(result: CloudinaryAssetPayload): number | undefined {
+  const candidates = [
+    result.duration,
+    result.video?.duration,
+    result.audio?.duration,
+  ];
+
+  for (const candidate of candidates) {
+    const duration = Number(candidate);
+    if (Number.isFinite(duration) && duration > 0) {
+      return duration;
+    }
+  }
+
+  return undefined;
 }
 
 export const cloudinaryStorage = new CloudinaryStorage();
