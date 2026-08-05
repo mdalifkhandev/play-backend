@@ -65,7 +65,11 @@ export class MediaController {
       });
     }
 
-    const verified = await mediaAssetService.complete(ownerId, uploadId);
+    const verified = await mediaAssetService.complete(ownerId, uploadId, {
+      ...(body.durationSeconds !== undefined
+        ? { durationSeconds: body.durationSeconds }
+        : {}),
+    });
     const asset = await mediaAssetRepository.findById(verified.id);
 
     return sendSuccess(response, 200, 'Upload verified successfully.', {

@@ -47,6 +47,9 @@ export const mediaCompleteBodySchema = z
   .object({
     uploadId: objectIdSchema.optional(),
     mediaKey: z.string().trim().min(1).max(500).optional(),
+    /** Optional duration from Cloudinary direct-upload response (seconds). */
+    duration: z.coerce.number().positive().max(3_600).optional(),
+    durationSeconds: z.coerce.number().positive().max(3_600).optional(),
   })
   .strict()
   .superRefine((value, context) => {
@@ -57,7 +60,12 @@ export const mediaCompleteBodySchema = z
         message: 'uploadId or mediaKey is required.',
       });
     }
-  });
+  })
+  .transform((value) => ({
+    uploadId: value.uploadId,
+    mediaKey: value.mediaKey,
+    durationSeconds: value.durationSeconds ?? value.duration,
+  }));
 
 export type MediaUploadUrlInput = z.infer<typeof mediaUploadUrlBodySchema>;
 export type MediaCompleteInput = z.infer<typeof mediaCompleteBodySchema>;

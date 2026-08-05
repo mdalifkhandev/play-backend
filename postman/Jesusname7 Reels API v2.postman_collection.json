@@ -1,0 +1,561 @@
+{
+  "info": {
+    "name": "Jesusname7 Reels API v2",
+    "description": "Updated Reel flow (v2)\n\nOrder to test:\n0) Set accessToken (login from Auth collection)\n1) Search Music (optional)\n2) Get Upload URL\n3) Upload Video To Cloudinary (select mp4/mov file)\n4) Complete Upload\n5) Create Reel (video-only OR with music)\n6) Poll Get Reel Status until ready\n7) Feed + Engagement\n\nNotes:\n- baseUrl default: http://localhost:3000/api/v1\n- Cloudflare tunnel থাকলে baseUrl সেট করো\n- musicUrl ❌ — শুধু musicId\n- effect sparkle ❌ — none ব্যবহার করো\n- Redis ছাড়া music/upload চলবে; Reel processing-এ Redis + worker লাগে",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api/v1" },
+    { "key": "accessToken", "value": "" },
+    { "key": "uploadId", "value": "" },
+    { "key": "mediaKey", "value": "" },
+    { "key": "mediaAssetId", "value": "" },
+    { "key": "reelId", "value": "" },
+    { "key": "commentId", "value": "" },
+    { "key": "idempotencyKey", "value": "reel-demo-001" },
+    { "key": "musicId", "value": "" },
+    { "key": "cloudinaryUploadUrl", "value": "" },
+    { "key": "cloudinaryApiKey", "value": "" },
+    { "key": "cloudinaryTimestamp", "value": "" },
+    { "key": "cloudinarySignature", "value": "" },
+    { "key": "cloudinaryPublicId", "value": "" },
+    { "key": "cloudinaryDuration", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "00 Auth Login (set token)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "pm.test('login ok', () => pm.expect(json.success).to.eql(true));",
+              "if (json.data && json.data.accessToken) {",
+              "  pm.collectionVariables.set('accessToken', json.data.accessToken);",
+              "} else if (json.data && json.data.tokens && json.data.tokens.accessToken) {",
+              "  pm.collectionVariables.set('accessToken', json.data.tokens.accessToken);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{baseUrl}}/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"YOUR_EMAIL@example.com\",\n  \"password\": \"YOUR_PASSWORD\"\n}"
+        },
+        "description": "Login করে accessToken auto-save হবে। Email/password নিজের দিয়ে বদলাও।"
+      }
+    },
+    {
+      "name": "01 Search Music (optional)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "pm.test('music search ok', () => pm.expect(json.success).to.eql(true));",
+              "const tracks = (json.data && json.data.tracks) || [];",
+              "const usable = tracks.find(t => t.downloadAllowed === true);",
+              "if (usable) {",
+              "  pm.collectionVariables.set('musicId', usable.providerTrackId);",
+              "  console.log('Saved musicId:', usable.providerTrackId, usable.title);",
+              "} else {",
+              "  console.warn('No downloadAllowed track found. Use video-only create.');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/music/tracks?search=happy&page=1&limit=20&order=popularity_total",
+          "host": ["{{baseUrl}}"],
+          "path": ["music", "tracks"],
+          "query": [
+            { "key": "search", "value": "happy" },
+            { "key": "page", "value": "1" },
+            { "key": "limit", "value": "20" },
+            { "key": "order", "value": "popularity_total" }
+          ]
+        },
+        "description": "downloadAllowed=true track থেকে musicId auto-save হয়।"
+      }
+    },
+    {
+      "name": "02 Get Upload URL",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "pm.test('upload url prepared', () => {",
+              "  pm.expect(pm.response.code).to.eql(201);",
+              "  pm.expect(json.success).to.eql(true);",
+              "  pm.expect(json.data.uploadUrl).to.be.a('string');",
+              "  pm.expect(json.data.uploadId).to.be.a('string');",
+              "});",
+              "pm.collectionVariables.set('uploadId', json.data.uploadId);",
+              "pm.collectionVariables.set('mediaKey', json.data.mediaKey);",
+              "pm.collectionVariables.set('cloudinaryUploadUrl', json.data.uploadUrl);",
+              "pm.collectionVariables.set('cloudinaryApiKey', json.data.apiKey);",
+              "pm.collectionVariables.set('cloudinaryTimestamp', String(json.data.timestamp));",
+              "pm.collectionVariables.set('cloudinarySignature', json.data.signature);",
+              "pm.collectionVariables.set('cloudinaryPublicId', json.data.publicId);",
+              "console.log('uploadId:', json.data.uploadId);",
+              "console.log('mediaKey:', json.data.mediaKey);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{baseUrl}}/media/upload-url",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fileName\": \"reel.mp4\",\n  \"contentType\": \"video/mp4\",\n  \"fileSize\": 12345678,\n  \"mediaType\": \"video\"\n}"
+        },
+        "description": "Signed Cloudinary upload config দেয়। fileSize আনুমানিক দিলেই হয়।"
+      }
+    },
+    {
+      "name": "03 Upload Video To Cloudinary",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('cloudinary upload ok', () => {",
+              "  pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "});",
+              "try {",
+              "  const json = pm.response.json();",
+              "  console.log('Cloudinary public_id:', json.public_id);",
+              "  console.log('Cloudinary duration:', json.duration);",
+              "  console.log('Cloudinary secure_url:', json.secure_url);",
+              "  if (json.duration) {",
+              "    pm.collectionVariables.set('cloudinaryDuration', String(json.duration));",
+              "  }",
+              "} catch (e) {",
+              "  console.warn('Cloudinary response parse failed');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{cloudinaryUploadUrl}}",
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "file", "type": "file", "src": [], "description": "Select a valid .mp4 or .mov video file" },
+            { "key": "api_key", "value": "{{cloudinaryApiKey}}", "type": "text" },
+            { "key": "timestamp", "value": "{{cloudinaryTimestamp}}", "type": "text" },
+            { "key": "signature", "value": "{{cloudinarySignature}}", "type": "text" },
+            { "key": "public_id", "value": "{{cloudinaryPublicId}}", "type": "text" },
+            { "key": "overwrite", "value": "false", "type": "text" }
+          ]
+        },
+        "description": "শুধু file select করো। বাকি key Step 02 থেকে auto আসে। Valid mp4/mov দাও।"
+      }
+    },
+    {
+      "name": "04 Complete Upload",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const uploadId = pm.collectionVariables.get('uploadId');",
+              "const durationRaw = pm.collectionVariables.get('cloudinaryDuration');",
+              "const body = { uploadId };",
+              "const duration = Number(durationRaw);",
+              "if (Number.isFinite(duration) && duration > 0) {",
+              "  body.duration = duration;",
+              "}",
+              "pm.request.body.update(JSON.stringify(body, null, 2));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "pm.test('upload verified', () => {",
+              "  pm.expect(pm.response.code).to.eql(200);",
+              "  pm.expect(json.success).to.eql(true);",
+              "  pm.expect(json.data.uploadStatus).to.eql('verified');",
+              "  pm.expect(json.data.durationMs).to.be.a('number').and.above(0);",
+              "});",
+              "pm.collectionVariables.set('mediaAssetId', json.data.mediaAssetId);",
+              "pm.collectionVariables.set('mediaKey', json.data.mediaKey);",
+              "console.log('durationMs:', json.data.durationMs);",
+              "console.log('mediaAssetId:', json.data.mediaAssetId);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{baseUrl}}/media/complete",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"uploadId\": \"{{uploadId}}\",\n  \"duration\": {{cloudinaryDuration}}\n}"
+        },
+        "description": "Cloudinary upload success-এর পরই call করো। duration auto পাঠায় (Step 03 থেকে)। Backend retry + fl_getinfo + duration hint + ffprobe fallback ব্যবহার করে।"
+      }
+    },
+    {
+      "name": "05a Create Reel (Video Only)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('idempotencyKey', 'reel-' + Date.now());"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "pm.test('reel accepted', () => {",
+              "  pm.expect([200, 202]).to.include(pm.response.code);",
+              "  pm.expect(json.success).to.eql(true);",
+              "  pm.expect(json.data.reelId).to.be.a('string');",
+              "});",
+              "pm.collectionVariables.set('reelId', json.data.reelId);",
+              "console.log('reelId:', json.data.reelId, 'status:', json.data.status);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{baseUrl}}/reels",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rawMediaKey\": \"{{mediaKey}}\",\n  \"mediaType\": \"video\",\n  \"caption\": \"Postman video-only reel\",\n  \"visibility\": \"public\",\n  \"forKids\": false,\n  \"audio\": {\n    \"originalVolume\": 100,\n    \"musicVolume\": 0\n  },\n  \"videoEdit\": {\n    \"trim\": { \"startMs\": 0, \"endMs\": 8000 },\n    \"filter\": \"none\",\n    \"effect\": \"none\",\n    \"exposure\": 50,\n    \"contrast\": 50\n  }\n}"
+        },
+        "description": "Music ছাড়া publish। trim endMs video duration-এর বেশি হবে না।"
+      }
+    },
+    {
+      "name": "05b Create Reel (With Music)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('idempotencyKey', 'reel-music-' + Date.now());",
+              "if (!pm.collectionVariables.get('musicId')) {",
+              "  console.warn('musicId empty — first run 01 Search Music');",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "pm.test('reel with music accepted', () => {",
+              "  pm.expect([200, 202]).to.include(pm.response.code);",
+              "  pm.expect(json.success).to.eql(true);",
+              "});",
+              "if (json.data && json.data.reelId) {",
+              "  pm.collectionVariables.set('reelId', json.data.reelId);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{baseUrl}}/reels",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"rawMediaKey\": \"{{mediaKey}}\",\n  \"mediaType\": \"video\",\n  \"caption\": \"Postman reel with music\",\n  \"visibility\": \"public\",\n  \"forKids\": false,\n  \"audio\": {\n    \"originalVolume\": 40,\n    \"musicVolume\": 90,\n    \"musicId\": \"{{musicId}}\",\n    \"musicTrim\": {\n      \"startMs\": 0,\n      \"endMs\": 8000\n    }\n  },\n  \"videoEdit\": {\n    \"trim\": { \"startMs\": 0, \"endMs\": 8000 },\n    \"filter\": \"vivid\",\n    \"effect\": \"none\",\n    \"exposure\": 55,\n    \"contrast\": 60,\n    \"overlayText\": \"Hello world\"\n  }\n}"
+        },
+        "description": "আগে 01 Search Music চালাও। musicTrim length >= video trim length হতে হবে।"
+      }
+    },
+    {
+      "name": "06 Get Reel Status (poll)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "pm.test('status fetched', () => pm.expect(json.success).to.eql(true));",
+              "console.log('status:', json.data.status, 'progress:', json.data.progress);",
+              "if (json.data.status === 'ready') {",
+              "  console.log('processedUrl:', json.data.media.processedUrl);",
+              "  console.log('thumbnailUrl:', json.data.media.thumbnailUrl);",
+              "}",
+              "if (json.data.status === 'failed') {",
+              "  console.error('error:', json.data.error);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/reels/{{reelId}}",
+        "description": "queued → processing → ready। 2–5 sec পর পর Send চাপো।"
+      }
+    },
+    {
+      "name": "07 Retry Reel (if failed)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/reels/{{reelId}}/retry"
+      }
+    },
+    {
+      "name": "08 Feed",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "pm.test('feed ok', () => pm.expect(json.success).to.eql(true));",
+              "console.log('items:', (json.data.items || []).length);",
+              "if (json.data.items && json.data.items[0]) {",
+              "  console.log('first viewerState:', json.data.items[0].viewerState);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/reels/feed?limit=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["reels", "feed"],
+          "query": [
+            { "key": "limit", "value": "20" },
+            { "key": "cursor", "value": "", "disabled": true }
+          ]
+        },
+        "description": "শুধু ready reels। Token থাকলে viewerState.isLiked / isSaved আসে।"
+      }
+    },
+    {
+      "name": "09 Engagement",
+      "item": [
+        {
+          "name": "Like Reel",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/engagements/reels/{{reelId}}/like"
+          }
+        },
+        {
+          "name": "Unlike Reel",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/engagements/reels/{{reelId}}/like"
+          }
+        },
+        {
+          "name": "Save Reel",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/engagements/reels/{{reelId}}/save"
+          }
+        },
+        {
+          "name": "Unsave Reel",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/engagements/reels/{{reelId}}/save"
+          }
+        },
+        {
+          "name": "Share Reel",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/engagements/reels/{{reelId}}/share",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"copy_link\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Comment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.test('comment created', () => pm.expect(pm.response.code).to.eql(201));",
+                  "if (json.data && json.data.id) pm.collectionVariables.set('commentId', json.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/engagements/reels/{{reelId}}/comments",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"ভিডিওটা সুন্দর হয়েছে\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List Comments",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/engagements/reels/{{reelId}}/comments?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["engagements", "reels", "{{reelId}}", "comments"],
+              "query": [
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Edit Comment",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/comments/{{commentId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Updated comment\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Comment",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/comments/{{commentId}}"
+          }
+        },
+        {
+          "name": "My Saved",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/me/saved?type=reel&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["me", "saved"],
+              "query": [
+                { "key": "type", "value": "reel" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 Delete Reel",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/reels/{{reelId}}"
+      }
+    }
+  ]
+}

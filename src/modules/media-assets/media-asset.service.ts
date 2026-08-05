@@ -83,7 +83,11 @@ export class MediaAssetService {
     };
   }
 
-  async complete(ownerId: string, uploadId: string): Promise<MediaAssetDto> {
+  async complete(
+    ownerId: string,
+    uploadId: string,
+    hints?: { durationSeconds?: number },
+  ): Promise<MediaAssetDto> {
     const asset = await this.repository.findById(uploadId);
 
     if (!asset) {
@@ -119,6 +123,7 @@ export class MediaAssetService {
     const storedAsset = await this.resolveStoredAssetForVerification(
       asset.publicId,
       asset.mediaType,
+      hints?.durationSeconds,
     );
     const verified = this.validateStoredAsset(storedAsset, asset);
     const sessionTtlMinutes =
@@ -255,6 +260,7 @@ export class MediaAssetService {
   private async resolveStoredAssetForVerification(
     publicId: string,
     mediaType: MediaType,
+    durationHintSeconds?: number,
   ): Promise<StoredAsset> {
     let latestAsset: StoredAsset | undefined;
 
@@ -287,13 +293,34 @@ export class MediaAssetService {
     }
 
     if (mediaType === MediaType.VIDEO && !hasValidVideoDuration(latestAsset.duration)) {
-      return this.enrichStoredAssetWithRemoteProbe(latestAsset);
+      return this.enrichStoredAssetWithDurationFallbacks(latestAsset, durationHintSeconds);
     }
 
     return latestAsset;
   }
 
-  private async enrichStoredAssetWithRemoteProbe(asset: StoredAsset): Promise<StoredAsset> {
+  private async enrichStoredAssetWithDurationFallbacks(
+    asset: StoredAsset,
+    durationHintSeconds?: number,
+  ): Promise<StoredAsset> {
+    const getInfoDuration = await this.tryCloudinaryGetInfoDuration(asset.publicId);
+
+    if (hasValidVideoDuration(getInfoDuration)) {
+      logger.info(
+        { publicId: asset.publicId, durationSeconds: getInfoDuration },
+        'Resolved missing Cloudinary duration via fl_getinfo',
+      );
+      return { ...asset, duration: getInfoDuration };
+    }
+
+    if (hasValidVideoDuration(durationHintSeconds)) {
+      logger.info(
+        { publicId: asset.publicId, durationSeconds: durationHintSeconds },
+        'Resolved missing Cloudinary duration via client upload hint',
+      );
+      return { ...asset, duration: durationHintSeconds };
+    }
+
     try {
       const probe = await runFfprobeSource(asset.secureUrl);
       const durationSeconds = probe.durationMs / 1_000;
@@ -318,7 +345,7 @@ export class MediaAssetService {
           err: error,
           publicId: asset.publicId,
         },
-        'FFprobe fallback failed while verifying uploaded video duration',
+        'All duration fallbacks failed while verifying uploaded video',
       );
 
       throw new AppError(
@@ -326,6 +353,15 @@ export class MediaAssetService {
         422,
         { code: 'UPLOAD_VERIFICATION_FAILED' },
       );
+    }
+  }
+
+  private async tryCloudinaryGetInfoDuration(publicId: string): Promise<number | undefined> {
+    try {
+      return await this.storage.getVideoDurationViaGetInfo(publicId);
+    } catch (error) {
+      logger.warn({ err: error, publicId }, 'Cloudinary fl_getinfo duration lookup failed');
+      return undefined;
     }
   }
 

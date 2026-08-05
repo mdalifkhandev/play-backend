@@ -56,9 +56,50 @@ export class CloudinaryStorage implements StorageProvider {
     const result = (await cloudinaryClient.api.resource(publicId, {
       resource_type: resourceType,
       type: 'upload',
+      ...(resourceType === 'video' ? { media_metadata: true } : {}),
     })) as unknown as CloudinaryAssetPayload;
 
     return this.toStoredAsset(result as unknown as CloudinaryAssetPayload);
+  }
+
+  /**
+   * Uses Cloudinary fl_getinfo delivery to read video duration when Admin API
+   * has not yet populated duration (common right after large uploads).
+   */
+  async getVideoDurationViaGetInfo(publicId: string): Promise<number | undefined> {
+    assertCloudinaryConfigured();
+
+    const infoUrl = cloudinaryClient.url(publicId, {
+      secure: true,
+      resource_type: 'video',
+      flags: 'getinfo',
+    });
+
+    const response = await fetch(infoUrl, {
+      method: 'GET',
+      signal: AbortSignal.timeout(12_000),
+    });
+
+    if (!response.ok) {
+      return undefined;
+    }
+
+    const payload = (await response.json()) as {
+      duration?: unknown;
+      video?: { duration?: unknown };
+      input?: { duration?: unknown };
+    };
+
+    const candidates = [payload.duration, payload.video?.duration, payload.input?.duration];
+
+    for (const candidate of candidates) {
+      const duration = Number(candidate);
+      if (Number.isFinite(duration) && duration > 0) {
+        return duration;
+      }
+    }
+
+    return undefined;
   }
 
   createThumbnailUrl(publicId: string, resourceType: 'image' | 'video'): string {

@@ -82,6 +82,9 @@ describe('media upload verification', () => {
         height: 1920,
         fileSizeBytes: 1_000_000,
         expiresAt: new Date(Date.now() + 60_000),
+        verifiedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
       })),
     };
 
