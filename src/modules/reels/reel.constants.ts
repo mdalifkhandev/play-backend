@@ -17,11 +17,15 @@ export enum ReelFilter {
   COOL = 'cool',
   GRAYSCALE = 'grayscale',
   SEPIA = 'sepia',
+  VINTAGE = 'vintage',
+  BW = 'b&w',
+  MONO = 'mono',
 }
 
 export enum ReelEffect {
   NONE = 'none',
   SPARKLE = 'sparkle',
+  ZOOM = 'zoom',
 }
 
 export enum ReelQueueSubmissionState {
@@ -58,11 +62,14 @@ export const REEL_SAFE_ERROR_CODES = Object.freeze({
 /** Maps UI filter enum to a fixed FFmpeg video filter fragment. Never concatenate client input. */
 export const REEL_FILTER_FFMPEG = Object.freeze({
   [ReelFilter.NONE]: null,
-  [ReelFilter.VIVID]: 'eq=saturation=1.35:contrast=1.08',
+  [ReelFilter.VIVID]: 'eq=saturation=1.5:contrast=1.2',
   [ReelFilter.WARM]: 'colorbalance=rs=0.12:gs=0.02:bs=-0.08',
   [ReelFilter.COOL]: 'colorbalance=rs=-0.08:gs=0.02:bs=0.12',
   [ReelFilter.GRAYSCALE]: 'hue=s=0',
   [ReelFilter.SEPIA]: 'colorchannelmixer=.393:.769:.189:0:.349:.686:.168:0:.272:.534:.131',
+  [ReelFilter.VINTAGE]: 'eq=saturation=0.8:contrast=1.1:brightness=-0.05',
+  [ReelFilter.BW]: 'hue=s=0',
+  [ReelFilter.MONO]: 'hue=s=0',
 } as const);
 
 /**

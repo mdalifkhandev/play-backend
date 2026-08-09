@@ -21,6 +21,10 @@ export interface ReelStatusDto {
   status: string;
   progress: number;
   caption: string | null;
+  hashtags: string[];
+  mentions: string[];
+  location: { name: string | null; latitude: number | null; longitude: number | null } | null;
+  mediaType: 'video' | 'photo';
   visibility: string;
   forKids: boolean;
   media: {
@@ -65,6 +69,11 @@ export interface ReelFeedItemDto {
   thumbnailUrl: string;
   durationMs: number;
   caption: string | null;
+  hashtags: string[];
+  mentions: string[];
+  location: { name: string | null; latitude: number | null; longitude: number | null } | null;
+  mediaType: 'video' | 'photo';
+  forKids: boolean;
   user: {
     id: string;
     username: string | null;
@@ -97,6 +106,16 @@ export function toReelStatusDto(reel: Reel, viewerId?: string): ReelStatusDto {
     status: reel.status,
     progress: reel.progress,
     caption: reel.caption ?? null,
+    hashtags: reel.hashtags ?? [],
+    mentions: (reel.mentions ?? []).map((m) => m.toString()),
+    location: reel.location
+      ? {
+          name: reel.location.name ?? null,
+          latitude: reel.location.latitude ?? null,
+          longitude: reel.location.longitude ?? null,
+        }
+      : null,
+    mediaType: reel.mediaType ?? 'video',
     visibility: reel.visibility,
     forKids: reel.forKids,
     media: {
@@ -149,26 +168,41 @@ export function toReelFeedItemDto(
   const ownerId = owner?._id.toString() ?? reel.ownerId.toString();
   const profile = owner?.profile;
 
+  const videoUrl = reel.processedMedia?.secureUrl || reel.rawMedia?.secureUrl || '';
+  const thumbnailUrl = reel.thumbnail?.secureUrl || reel.rawMedia?.secureUrl || '';
+  const durationMs = reel.processedMedia?.durationMs || reel.rawMedia?.durationMs || 5000;
+
   return {
     id: reel._id.toString(),
-    videoUrl: reel.processedMedia!.secureUrl,
-    thumbnailUrl: reel.thumbnail!.secureUrl,
-    durationMs: reel.processedMedia!.durationMs,
+    videoUrl,
+    thumbnailUrl,
+    durationMs,
     caption: reel.caption ?? null,
+    hashtags: reel.hashtags ?? [],
+    mentions: (reel.mentions ?? []).map((m) => m.toString()),
+    location: reel.location
+      ? {
+          name: reel.location.name ?? null,
+          latitude: reel.location.latitude ?? null,
+          longitude: reel.location.longitude ?? null,
+        }
+      : null,
+    mediaType: reel.mediaType ?? 'video',
+    forKids: reel.forKids ?? false,
     user: {
       id: ownerId,
       username: profile?.username ?? null,
       avatarUrl: profile?.photoUrl ?? null,
     },
     stats: {
-      likes: reel.likeCount,
-      comments: reel.commentCount,
-      shares: reel.shareCount,
-      views: reel.viewCount,
+      likes: reel.likeCount || 0,
+      comments: reel.commentCount || 0,
+      shares: reel.shareCount || 0,
+      views: reel.viewCount || 0,
     },
     viewerState: viewerState ?? null,
-    createdAt: reel.createdAt.toISOString(),
-    publishedAt: reel.publishedAt!.toISOString(),
+    createdAt: reel.createdAt ? reel.createdAt.toISOString() : new Date().toISOString(),
+    publishedAt: (reel.publishedAt ?? reel.createdAt ?? new Date()).toISOString(),
   };
 }
 

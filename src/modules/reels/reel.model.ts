@@ -74,6 +74,12 @@ export interface ReelOverlayText {
   fontSize: number;
 }
 
+export interface ReelLocationSnapshot {
+  name?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
 export interface ReelVideoEdit {
   trimStartMs: number;
   trimEndMs: number;
@@ -104,6 +110,10 @@ export interface Reel {
   status: ReelStatus;
   progress: number;
   caption?: string;
+  hashtags?: string[];
+  mentions?: Types.ObjectId[];
+  location?: ReelLocationSnapshot;
+  mediaType: 'video' | 'photo';
   visibility: ReelVisibility;
   forKids: boolean;
   rawMedia: ReelRawMediaSnapshot;
@@ -259,6 +269,15 @@ const processingSchema = new Schema<ReelProcessingState>(
   { _id: false },
 );
 
+const locationSchema = new Schema<ReelLocationSnapshot>(
+  {
+    name: { type: String, trim: true, maxlength: 100 },
+    latitude: { type: Number },
+    longitude: { type: Number },
+  },
+  { _id: false },
+);
+
 const reelSchema = new Schema<Reel>(
   {
     ownerId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
@@ -270,6 +289,10 @@ const reelSchema = new Schema<Reel>(
     },
     progress: { type: Number, default: 0, min: 0, max: 100, required: true },
     caption: { type: String, trim: true, maxlength: 500 },
+    hashtags: [{ type: String, trim: true, lowercase: true, index: true }],
+    mentions: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    location: { type: locationSchema },
+    mediaType: { type: String, enum: ['video', 'photo'], default: 'video', required: true },
     visibility: {
       type: String,
       enum: Object.values(ReelVisibility),
@@ -307,6 +330,10 @@ reelSchema.index({ status: 1, createdAt: -1 }, { name: 'ix_reels_status_created_
 reelSchema.index(
   { status: 1, visibility: 1, publishedAt: -1, _id: -1 },
   { name: 'ix_reels_feed' },
+);
+reelSchema.index(
+  { hashtags: 1, status: 1, publishedAt: -1 },
+  { name: 'ix_reels_hashtags_feed' },
 );
 reelSchema.index({ ownerId: 1, createdAt: -1 }, { name: 'ix_reels_owner_created_at' });
 reelSchema.index(

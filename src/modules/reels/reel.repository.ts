@@ -53,23 +53,24 @@ export class ReelRepository {
     return query.exec();
   }
 
-  async listReadyPublic(limit: number, cursor?: ReelCursor): Promise<ReelWithOwner[]> {
-    const filter = {
-      status: ReelStatus.READY,
+  async listReadyPublic(limit: number, cursor?: ReelCursor, hashtag?: string): Promise<ReelWithOwner[]> {
+    const filter: Record<string, unknown> = {
+      status: { $in: [ReelStatus.READY, ReelStatus.QUEUED, ReelStatus.PROCESSING] },
       visibility: ReelVisibility.PUBLIC,
       deletedAt: { $exists: false },
+      ...(hashtag ? { hashtags: hashtag.toLowerCase() } : {}),
       ...(cursor
         ? {
             $or: [
-              { publishedAt: { $lt: cursor.publishedAt } },
-              { publishedAt: cursor.publishedAt, _id: { $lt: cursor.id } },
+              { createdAt: { $lt: cursor.publishedAt } },
+              { createdAt: cursor.publishedAt, _id: { $lt: cursor.id } },
             ],
           }
         : {}),
     };
 
     return ReelModel.find(filter)
-      .sort({ publishedAt: -1, _id: -1 })
+      .sort({ createdAt: -1, _id: -1 })
       .limit(limit)
       .populate({ path: 'ownerId', select: OWNER_PROJECTION })
       .lean<ReelWithOwner[]>()

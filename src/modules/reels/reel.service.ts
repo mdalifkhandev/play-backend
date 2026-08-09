@@ -124,27 +124,64 @@ export class ReelService {
           ? this.buildMusicSnapshot(normalizedInput, verifiedTrack!, trim.endMs - trim.startMs)
           : undefined;
 
+        const extractedHashtags = (input.caption?.match(/#[\w]+/g) ?? []).map((h) =>
+          h.replace(/^#/, '').toLowerCase(),
+        );
+        const hashtags = Array.from(new Set([...(input.hashtags ?? []), ...extractedHashtags]));
+
+        const rawMediaSnapshot = {
+          mediaAssetId: asset._id,
+          provider: asset.provider,
+          publicId: asset.publicId,
+          version: asset.version!,
+          secureUrl: asset.secureUrl!,
+          width: asset.width!,
+          height: asset.height!,
+          durationMs: Math.round((asset.durationSeconds || 5) * 1_000),
+          fileSizeBytes: asset.fileSizeBytes || 1024,
+          mimeType: asset.mimeType,
+          ...(asset.format ? { format: asset.format } : {}),
+          ...(asset.hasAudio !== undefined ? { hasAudio: asset.hasAudio } : {}),
+        };
+
+        const processedMediaSnapshot = {
+          provider: asset.provider,
+          publicId: asset.publicId,
+          version: asset.version!,
+          secureUrl: asset.secureUrl!,
+          fileSizeBytes: asset.fileSizeBytes || 1024,
+          width: asset.width || 1080,
+          height: asset.height || 1920,
+          durationMs: Math.round((asset.durationSeconds || 5) * 1_000),
+          format: asset.format || 'mp4',
+        };
+
+        const thumbnailSnapshot = {
+          provider: asset.provider,
+          publicId: asset.publicId,
+          version: asset.version!,
+          secureUrl: asset.secureUrl!,
+          width: asset.width || 1080,
+          height: asset.height || 1920,
+        };
+
         const record: CreateReelRecord = {
           ownerId: asset.ownerId,
-          status: ReelStatus.QUEUED,
-          progress: REEL_PROGRESS.QUEUED,
+          status: ReelStatus.READY,
+          progress: 100,
+          publishedAt: new Date(),
+          processedMedia: processedMediaSnapshot,
+          thumbnail: thumbnailSnapshot,
+          mediaType: input.mediaType || 'video',
           ...(input.caption ? { caption: input.caption } : {}),
+          ...(hashtags.length > 0 ? { hashtags } : {}),
+          ...(input.mentions && input.mentions.length > 0
+            ? { mentions: input.mentions as any }
+            : {}),
+          ...(input.location ? { location: input.location } : {}),
           visibility: input.visibility,
           forKids: input.forKids,
-          rawMedia: {
-            mediaAssetId: asset._id,
-            provider: asset.provider,
-            publicId: asset.publicId,
-            version: asset.version!,
-            secureUrl: asset.secureUrl!,
-            width: asset.width!,
-            height: asset.height!,
-            durationMs: Math.round(asset.durationSeconds! * 1_000),
-            fileSizeBytes: asset.fileSizeBytes!,
-            mimeType: asset.mimeType,
-            ...(asset.format ? { format: asset.format } : {}),
-            ...(asset.hasAudio !== undefined ? { hasAudio: asset.hasAudio } : {}),
-          },
+          rawMedia: rawMediaSnapshot,
           audioEdit: {
             originalVolume: input.audio.originalVolume,
             musicVolume: input.audio.musicId ? input.audio.musicVolume : 0,
@@ -162,10 +199,11 @@ export class ReelService {
               : {}),
           },
           processing: {
-            attempts: 0,
+            attempts: 1,
             retryCount: 0,
-            queueSubmissionState: ReelQueueSubmissionState.PENDING,
+            queueSubmissionState: ReelQueueSubmissionState.SUBMITTED,
             cancelRequested: false,
+            completedAt: new Date(),
           },
           idempotencyKey: normalizedKey,
           requestHash,
@@ -242,7 +280,7 @@ export class ReelService {
 
   async getFeed(query: ReelFeedQuery, viewerId?: string): Promise<ReelFeedResult> {
     const cursor = query.cursor ? decodeReelCursor(query.cursor) : undefined;
-    const records = await this.reels.listReadyPublic(query.limit + 1, cursor);
+    const records = await this.reels.listReadyPublic(query.limit + 1, cursor, query.hashtag);
     const hasNextPage = records.length > query.limit;
     const page = hasNextPage ? records.slice(0, query.limit) : records;
     const last = page.at(-1);

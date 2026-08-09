@@ -16,6 +16,8 @@ import {
   savedRouter,
 } from '../modules/engagement/engagement.routes.js';
 import { storyRouter } from '../modules/stories/story.route.js';
+import { liveStreamRouter } from '../modules/live-streams/live-stream.route.js';
+import { conversationRouter } from '../modules/conversations/conversation.route.js';
 import {
   supportRequestAdminRouter,
   supportRequestRouter,
@@ -32,6 +34,8 @@ apiRouter.use('/uploads', mediaAssetRouter);
 apiRouter.use('/media', mediaRouter);
 apiRouter.use('/music', musicRouter);
 apiRouter.use('/reels', reelRouter);
+apiRouter.use('/live-streams', liveStreamRouter);
+apiRouter.use('/conversations', conversationRouter);
 apiRouter.use('/engagements', engagementRouter);
 apiRouter.use('/comments', commentRouter);
 apiRouter.use('/me', savedRouter);
@@ -39,3 +43,4 @@ apiRouter.use('/stories', storyRouter);
 apiRouter.use('/support-requests', supportRequestRouter);
 apiRouter.use('/admin/content-pages', contentPageAdminRouter);
 apiRouter.use('/admin/support-requests', supportRequestAdminRouter);
+

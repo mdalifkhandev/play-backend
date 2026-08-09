@@ -1,0 +1,165 @@
+{
+  "info": {
+    "name": "Jesusname7 Live Streams API",
+    "description": "Complete Postman Collection for Facebook / TikTok style Live Streaming APIs.\n\nFlow:\n1) Auth Login (set accessToken)\n2) Create Live Stream (POST /live-streams)\n3) Get Stream Token (POST /live-streams/:id/token)\n4) Start Live Broadcast (POST /live-streams/:id/start)\n5) Get Live Stream Feed Grid (GET /live-streams?tab=live|all|recent|top_like)\n6) Join Stream & Viewers Count (POST /live-streams/:id/join)\n7) Post Live Comment (POST /live-streams/:id/comments)\n8) Send Heart Reaction (POST /live-streams/:id/like)\n9) End Live Broadcast (POST /live-streams/:id/end)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api/v1" },
+    { "key": "accessToken", "value": "" },
+    { "key": "streamId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 Create Live Stream",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "pm.test('Create stream success', () => pm.expect(json.success).to.eql(true));",
+              "if (json.data && json.data.id) {",
+              "  pm.collectionVariables.set('streamId', json.data.id);",
+              "  console.log('Saved streamId:', json.data.id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Gaming Finals & DJ Music Set 🎧🔥\",\n  \"description\": \"Join the live stream performance!\",\n  \"category\": \"Gaming\",\n  \"coverImage\": \"https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4\"\n}"
+        },
+        "url": "{{baseUrl}}/live-streams",
+        "description": "Creates a scheduled live stream session and generates channel name & stream key."
+      }
+    },
+    {
+      "name": "02 Get Stream Token",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/live-streams/{{streamId}}/token",
+        "description": "Generates WebRTC / RTC token for publisher or audience."
+      }
+    },
+    {
+      "name": "03 Start Live Broadcast",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/live-streams/{{streamId}}/start",
+        "description": "Host starts the broadcast (updates status to LIVE)."
+      }
+    },
+    {
+      "name": "04 Get Live Streams Feed (Grid View)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/live-streams?tab=live&category=Gaming&page=1&limit=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["live-streams"],
+          "query": [
+            { "key": "tab", "value": "live", "description": "Tabs: all, live, watch, recent, top_like" },
+            { "key": "category", "value": "Gaming" },
+            { "key": "page", "value": "1" },
+            { "key": "limit", "value": "20" }
+          ]
+        },
+        "description": "Fetches discovery feed grid for active/scheduled live streams."
+      }
+    },
+    {
+      "name": "05 Get Stream Details",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/live-streams/{{streamId}}",
+        "description": "Get real-time details of live stream by ID."
+      }
+    },
+    {
+      "name": "06 Join Live Stream",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/live-streams/{{streamId}}/join",
+        "description": "Increments viewer count when user joins room."
+      }
+    },
+    {
+      "name": "07 Post Live Comment",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"Awesome clutch! 👌🔥\"\n}"
+        },
+        "url": "{{baseUrl}}/live-streams/{{streamId}}/comments",
+        "description": "Posts a comment to the live stream chat."
+      }
+    },
+    {
+      "name": "08 Get Recent Comments",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/live-streams/{{streamId}}/comments",
+        "description": "Fetches live stream comment chat history."
+      }
+    },
+    {
+      "name": "09 Send Heart Reaction",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/live-streams/{{streamId}}/like",
+        "description": "Sends a floating heart reaction and increments like counter."
+      }
+    },
+    {
+      "name": "10 Leave Live Stream",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/live-streams/{{streamId}}/leave",
+        "description": "Decrements active viewer count when user leaves stream room."
+      }
+    },
+    {
+      "name": "11 End Live Broadcast",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/live-streams/{{streamId}}/end",
+        "description": "Host ends broadcast (updates status to ENDED)."
+      }
+    }
+  ]
+}

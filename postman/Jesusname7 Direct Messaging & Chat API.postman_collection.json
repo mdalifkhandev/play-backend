@@ -1,0 +1,127 @@
+{
+  "info": {
+    "name": "Jesusname7 Direct Messaging & Inbox Chat API",
+    "description": "Postman collection for 1-on-1 Direct Messaging, Inbox listing with unread counts, deleting conversations, blocking users, and recommended contacts feed matching UI screenshots.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api/v1" },
+    { "key": "accessToken", "value": "" },
+    { "key": "targetUserId", "value": "" },
+    { "key": "conversationId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 Get User Inbox (Conversation List with Unread Badges & Last Message)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/conversations",
+          "host": ["{{baseUrl}}"],
+          "path": ["conversations"]
+        }
+      }
+    },
+    {
+      "name": "02 Initialize / Get 1-on-1 Direct Conversation",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"targetUserId\": \"{{targetUserId}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/conversations",
+          "host": ["{{baseUrl}}"],
+          "path": ["conversations"]
+        }
+      }
+    },
+    {
+      "name": "03 Send Chat Message (Text / Media Attachment)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"Hey! How was the new design project coming along?\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/conversations/{{conversationId}}/messages",
+          "host": ["{{baseUrl}}"],
+          "path": ["conversations", "{{conversationId}}", "messages"]
+        }
+      }
+    },
+    {
+      "name": "04 Fetch Chat Message History (Auto Marks as Read)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/conversations/{{conversationId}}/messages?page=1&limit=30",
+          "host": ["{{baseUrl}}"],
+          "path": ["conversations", "{{conversationId}}", "messages"],
+          "query": [
+            { "key": "page", "value": "1" },
+            { "key": "limit", "value": "30" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "05 Delete Conversation",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/conversations/{{conversationId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["conversations", "{{conversationId}}"]
+        }
+      }
+    },
+    {
+      "name": "06 Block User",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/conversations/block/{{targetUserId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["conversations", "block", "{{targetUserId}}"]
+        }
+      }
+    },
+    {
+      "name": "07 Get Recommended Users ('People you may know')",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/conversations/recommended",
+          "host": ["{{baseUrl}}"],
+          "path": ["conversations", "recommended"]
+        }
+      }
+    }
+  ]
+}

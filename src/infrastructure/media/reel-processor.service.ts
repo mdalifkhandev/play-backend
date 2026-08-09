@@ -60,10 +60,11 @@ export class ReelProcessorService {
       await this.setProgress(claimed, REEL_PROGRESS.INSPECTED);
 
       let musicPath: string | undefined;
+      const audioUrl = claimed.audioEdit.music?.audioSourceUrl || (claimed.audioEdit as any).soundUri;
 
-      if (claimed.audioEdit.music) {
+      if (audioUrl) {
         musicPath = path.join(workDir, 'music.mp3');
-        await downloadToFile(claimed.audioEdit.music.audioSourceUrl, musicPath);
+        await downloadToFile(audioUrl, musicPath);
         await this.setProgress(claimed, REEL_PROGRESS.MUSIC_PREPARED);
       } else {
         await this.setProgress(claimed, REEL_PROGRESS.MUSIC_PREPARED);

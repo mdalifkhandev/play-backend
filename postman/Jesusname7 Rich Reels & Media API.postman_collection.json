@@ -1,0 +1,60 @@
+{
+  "info": {
+    "name": "Jesusname7 Rich Reels & Media Edit API",
+    "description": "Postman Collection for Reels & Photo/Video Post Publishing matching UI Screenshots (Audio volume sliders, video trimming, text overlays Tt, hashtags #nightlife, user mentions @user, location tagging 📍 Park, and audience forKids).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api/v1" },
+    { "key": "accessToken", "value": "" },
+    { "key": "mediaAssetId", "value": "" },
+    { "key": "musicId", "value": "" },
+    { "key": "reelId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 Create Post with Full Edit Payload (Video/Photo, Hashtags, Mentions, Location, Audio Mix, Text Overlay)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"mediaAssetId\": \"{{mediaAssetId}}\",\n  \"mediaType\": \"video\",\n  \"caption\": \"Awesome day at the park! #nightlife #dance #noir\",\n  \"hashtags\": [\"nightlife\", \"dance\", \"noir\"],\n  \"mentions\": [\"640000000000000000000102\"],\n  \"location\": {\n    \"name\": \"Central Park, NY\",\n    \"latitude\": 40.785091,\n    \"longitude\": -73.968285\n  },\n  \"forKids\": false,\n  \"audio\": {\n    \"originalVolume\": 50,\n    \"musicVolume\": 50,\n    \"musicId\": \"{{musicId}}\",\n    \"musicTrim\": {\n      \"startMs\": 0,\n      \"endMs\": 15000\n    }\n  },\n  \"videoEdit\": {\n    \"trim\": {\n      \"startMs\": 0,\n      \"endMs\": 15000\n    },\n    \"filter\": \"none\",\n    \"effect\": \"none\",\n    \"exposure\": 50,\n    \"contrast\": 50,\n    \"overlayText\": {\n      \"text\": \"Good morning\",\n      \"x\": 0.5,\n      \"y\": 0.2,\n      \"fontSize\": 42\n    }\n  }\n}"
+        },
+        "url": "{{baseUrl}}/reels",
+        "description": "Creates a video/photo post with complete editing details (audio mixing, video trimming, text overlay, hashtags, mentions, location)."
+      }
+    },
+    {
+      "name": "02 Get Feed Filtered by Hashtag",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/reels/feed?hashtag=nightlife&limit=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["reels", "feed"],
+          "query": [
+            { "key": "hashtag", "value": "nightlife" },
+            { "key": "limit", "value": "20" }
+          ]
+        },
+        "description": "Fetches public feed items filtered by specific hashtag."
+      }
+    },
+    {
+      "name": "03 Get Reel Details & Edit State",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/reels/{{reelId}}",
+        "description": "Fetches reel processing status, media URLs, hashtags, mentions, location, and edit details."
+      }
+    }
+  ]
+}

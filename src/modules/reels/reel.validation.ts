@@ -33,32 +33,60 @@ export const musicTrimSchema = z
     }
   });
 
-export const videoTrimSchema = z
-  .object({
-    startMs: msSchema,
-    endMs: z.number().int().positive(),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    if (value.endMs <= value.startMs) {
-      context.addIssue({
-        code: 'custom',
-        path: ['endMs'],
-        message: 'endMs must be greater than startMs.',
-      });
+export const videoTrimSchema = z.preprocess(
+  (val: any) => {
+    if (typeof val === 'object' && val !== null) {
+      const startMs =
+        val.startMs ??
+        (val.startSec !== undefined ? Math.round(Number(val.startSec) * 1_000) : 0);
+      const endMs =
+        val.endMs ??
+        (val.endSec !== undefined ? Math.round(Number(val.endSec) * 1_000) : 15_000);
+      return { startMs, endMs };
     }
-  });
+    return val;
+  },
+  z
+    .object({
+      startMs: msSchema,
+      endMs: z.number().int().positive(),
+    })
+    .superRefine((value, context) => {
+      if (value.endMs <= value.startMs) {
+        context.addIssue({
+          code: 'custom',
+          path: ['endMs'],
+          message: 'endMs must be greater than startMs.',
+        });
+      }
+    }),
+);
 
-const overlayTextObjectSchema = z
-  .object({
+const overlayTextObjectSchema = z.preprocess(
+  (val: any) => {
+    if (typeof val === 'object' && val !== null) {
+      const x =
+        val.x !== undefined
+          ? Number(val.x)
+          : val.xPercent !== undefined
+            ? Number(val.xPercent) / 100
+            : 0.5;
+      const y =
+        val.y !== undefined
+          ? Number(val.y)
+          : val.yPercent !== undefined
+            ? Number(val.yPercent) / 100
+            : 0.2;
+      return { ...val, x, y };
+    }
+    return val;
+  },
+  z.object({
     text: z
       .string()
       .trim()
       .min(1)
       .max(80)
-      .refine((value) => (value.match(/\n/g) ?? []).length <= 2, {
-        message: 'Overlay text may contain at most 2 newlines.',
-      })
       .transform((value) =>
         value
           .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
@@ -69,8 +97,8 @@ const overlayTextObjectSchema = z
     x: z.number().finite().min(0).max(1).default(0.5),
     y: z.number().finite().min(0).max(1).default(0.2),
     fontSize: z.number().int().min(12).max(96).default(42),
-  })
-  .strict();
+  }),
+);
 
 export const overlayTextSchema = z.union([
   z
@@ -91,58 +119,80 @@ export const overlayTextSchema = z.union([
   overlayTextObjectSchema,
 ]);
 
-export const createReelAudioSchema = z
-  .object({
+export const createReelAudioSchema = z.preprocess(
+  (val: any) => {
+    if (typeof val === 'object' && val !== null) {
+      const originalVolume = val.originalVolume ?? 100;
+      const musicVolume = val.musicVolume ?? val.addedVolume ?? 100;
+      const soundUri = val.soundUri ?? val.audioUrl ?? undefined;
+      return { ...val, originalVolume, musicVolume, soundUri };
+    }
+    return val;
+  },
+  z.object({
     originalVolume: volumeSchema.default(100),
     musicVolume: volumeSchema.default(100),
     musicId: z.string().trim().min(1).max(100).optional(),
+    soundUri: z.string().url().optional(),
     musicTrim: musicTrimSchema.optional(),
-  })
-  .strict()
-  .superRefine((value, context) => {
-    if (value.musicId && !value.musicTrim) {
-      context.addIssue({
-        code: 'custom',
-        path: ['musicTrim'],
-        message: 'musicTrim is required when musicId is provided.',
-      });
-    }
+  }),
+);
 
-    if (!value.musicId && value.musicTrim) {
-      context.addIssue({
-        code: 'custom',
-        path: ['musicId'],
-        message: 'musicId is required when musicTrim is provided.',
-      });
+export const createReelVideoEditSchema = z.preprocess(
+  (val: any) => {
+    if (typeof val === 'object' && val !== null) {
+      const overlayText = val.overlayText ?? val.textOverlay;
+      return { ...val, overlayText };
     }
-  });
+    return val;
+  },
+  z
+    .object({
+      trim: videoTrimSchema.optional(),
+      filter: filterSchema.default(ReelFilter.NONE),
+      effect: effectSchema.default(ReelEffect.NONE),
+      exposure: z.number().int().min(0).max(100).default(50),
+      contrast: z.number().int().min(0).max(100).default(50),
+      overlayText: overlayTextSchema.optional(),
+    })
+    .superRefine((value, context) => {
+      if (value.effect === ReelEffect.SPARKLE) {
+        context.addIssue({
+          code: 'custom',
+          path: ['effect'],
+          message: 'Effect sparkle is not available in this deployment.',
+        });
+      }
+    }),
+);
 
-export const createReelVideoEditSchema = z
+export const locationSchema = z
   .object({
-    trim: videoTrimSchema.optional(),
-    filter: filterSchema.default(ReelFilter.NONE),
-    effect: effectSchema.default(ReelEffect.NONE),
-    exposure: z.number().int().min(0).max(100).default(50),
-    contrast: z.number().int().min(0).max(100).default(50),
-    overlayText: overlayTextSchema.optional(),
+    name: z.string().trim().max(100).optional(),
+    latitude: z.number().optional(),
+    longitude: z.number().optional(),
   })
-  .strict()
-  .superRefine((value, context) => {
-    if (value.effect === ReelEffect.SPARKLE) {
-      context.addIssue({
-        code: 'custom',
-        path: ['effect'],
-        message: 'Effect sparkle is not available in this deployment.',
-      });
-    }
-  });
+  .strict();
 
 export const createReelBodySchema = z
   .object({
     mediaAssetId: objectIdSchema.optional(),
     rawMediaKey: z.string().trim().min(1).max(500).optional(),
-    mediaType: z.literal('video').optional(),
+    mediaType: z.enum(['video', 'photo']).default('video'),
     caption: z.string().trim().max(500).optional(),
+    hashtags: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1)
+          .max(30)
+          .transform((str) => str.replace(/^#/, '').toLowerCase()),
+      )
+      .max(20)
+      .optional(),
+    mentions: z.array(objectIdSchema).max(20).optional(),
+    location: locationSchema.optional(),
     visibility: z.enum(ReelVisibility).default(ReelVisibility.PUBLIC),
     forKids: z.boolean().default(false),
     audio: createReelAudioSchema.default({
@@ -177,6 +227,7 @@ export const reelFeedQuerySchema = z
   .object({
     limit: z.coerce.number().int().min(1).max(50).default(20),
     cursor: z.string().trim().min(1).max(300).optional(),
+    hashtag: z.string().trim().transform((str) => str.replace(/^#/, '').toLowerCase()).optional(),
   })
   .strict();
 

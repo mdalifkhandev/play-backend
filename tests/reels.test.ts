@@ -301,7 +301,7 @@ describe('reel contracts and services', () => {
     });
 
     expect(result.reelId).toBe(reelId.toString());
-    expect(result.status).toBe(ReelStatus.QUEUED);
+    expect(result.status).toBe(ReelStatus.READY);
     expect(reels.create).toHaveBeenCalledOnce();
     expect(mediaAssets.attachToReel).toHaveBeenCalledOnce();
     expect(enqueue).toHaveBeenCalledWith(reelId.toString());

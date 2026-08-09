@@ -67,11 +67,11 @@ export function buildReelFfmpegGraph(input: FfmpegGraphInput): FfmpegGraph {
   }
 
   const music = reel.audioEdit.music;
-  const useMusic = Boolean(musicPath && music && musicVolume > 0);
+  const useMusic = Boolean(musicPath && musicVolume > 0);
   const useOriginal = hasOriginalAudio && originalVolume > 0;
+  const musicStart = ((music?.trimStartMs ?? 0) / 1_000).toFixed(3);
 
-  if (useOriginal && useMusic && music) {
-    const musicStart = (music.trimStartMs / 1_000).toFixed(3);
+  if (useOriginal && useMusic) {
     filterComplex.push(
       `[0:a]atrim=start=${startSeconds}:duration=${durationSeconds},asetpts=PTS-STARTPTS,volume=${originalVolume}[aori]`,
       `[1:a]atrim=start=${musicStart}:duration=${durationSeconds},asetpts=PTS-STARTPTS,volume=${musicVolume}[amus]`,
@@ -81,8 +81,7 @@ export function buildReelFfmpegGraph(input: FfmpegGraphInput): FfmpegGraph {
     filterComplex.push(
       `[0:a]atrim=start=${startSeconds}:duration=${durationSeconds},asetpts=PTS-STARTPTS,volume=${originalVolume}[aout]`,
     );
-  } else if (useMusic && music) {
-    const musicStart = (music.trimStartMs / 1_000).toFixed(3);
+  } else if (useMusic) {
     filterComplex.push(
       `[1:a]atrim=start=${musicStart}:duration=${durationSeconds},asetpts=PTS-STARTPTS,volume=${musicVolume},aformat=sample_rates=48000:channel_layouts=stereo[aout]`,
     );
