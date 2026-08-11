@@ -132,12 +132,28 @@ export class LiveStreamRepository {
     );
   }
 
+  async incrementSharesCount(id: string): Promise<ILiveStream | null> {
+    if (!mongoose.Types.ObjectId.isValid(id)) return null;
+
+    return LiveStreamModel.findByIdAndUpdate(
+      id,
+      {
+        $inc: { sharesCount: 1 },
+      },
+      { new: true },
+    );
+  }
+
   async addComment(streamId: string, userId: string, text: string): Promise<ILiveStreamComment> {
     const comment = await LiveStreamCommentModel.create({
       streamId: new mongoose.Types.ObjectId(streamId),
       userId: new mongoose.Types.ObjectId(userId),
       text,
     });
+
+    await LiveStreamModel.findByIdAndUpdate(streamId, {
+      $inc: { commentsCount: 1 },
+    }).exec();
 
     return comment.populate('userId', 'username displayName avatarUrl isVerified');
   }

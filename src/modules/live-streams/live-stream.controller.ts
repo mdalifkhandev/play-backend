@@ -75,6 +75,12 @@ export class LiveStreamController {
     const result = await this.service.addLike(id as string);
     sendSuccess(res, 200, 'Reaction sent.', result);
   };
+
+  share = async (req: Request, res: Response): Promise<void> => {
+    const { id } = req.params;
+    const result = await this.service.addShare(id as string);
+    sendSuccess(res, 200, 'Live stream shared.', result);
+  };
 }
 
 export const liveStreamController = new LiveStreamController();

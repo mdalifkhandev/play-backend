@@ -16,8 +16,10 @@ export interface LiveStreamFeedQueryDTO {
 }
 
 export interface StreamTokenResponseDTO {
+  appId: string;
   token: string;
   channelName: string;
+  uid: number;
   role: LiveStreamRole;
   expiresInSeconds: number;
 }
@@ -41,6 +43,8 @@ export interface LiveStreamResponseDTO {
   viewerCount: number;
   peakViewerCount: number;
   likesCount: number;
+  commentsCount: number;
+  sharesCount: number;
   giftsCount: number;
   category?: string;
   startedAt?: string;

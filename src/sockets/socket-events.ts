@@ -3,6 +3,8 @@ export const SOCKET_EVENTS = {
   LIVE_LEAVE: 'live:leave',
   LIVE_COMMENT: 'live:comment',
   LIVE_LIKE: 'live:like',
+  LIVE_GIFT: 'live:gift',
+  LIVE_SHARE: 'live:share',
   LIVE_STATUS: 'live:status',
 
   // Server broadcast events
@@ -10,6 +12,8 @@ export const SOCKET_EVENTS = {
   USER_LEFT: 'live:user_left',
   NEW_COMMENT: 'live:new_comment',
   NEW_REACTION: 'live:new_reaction',
+  NEW_GIFT: 'live:new_gift',
+  NEW_SHARE: 'live:new_share',
   VIEWER_COUNT_UPDATE: 'live:viewer_count_update',
   STREAM_STATUS_CHANGED: 'live:status_changed',
 

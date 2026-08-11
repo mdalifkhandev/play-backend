@@ -87,3 +87,9 @@ liveStreamRouter.post(
   validateRequest({ params: liveStreamIdParamsSchema }),
   liveStreamController.like,
 );
+
+liveStreamRouter.post(
+  '/:id/share',
+  validateRequest({ params: liveStreamIdParamsSchema }),
+  liveStreamController.share,
+);

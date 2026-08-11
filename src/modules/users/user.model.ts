@@ -28,6 +28,9 @@ export interface User {
   lastLoginAt?: Date;
   failedLoginAttempts: number;
   lockedUntil?: Date;
+  coinBalance: number;
+  stripeConnectAccountId?: string;
+  stripeConnectOnboardingComplete: boolean;
   profile: UserProfile;
   createdAt: Date;
   updatedAt: Date;
@@ -80,6 +83,9 @@ const userSchema = new Schema<User>(
     lastLoginAt: { type: Date },
     failedLoginAttempts: { type: Number, default: 0, min: 0, required: true },
     lockedUntil: { type: Date },
+    coinBalance: { type: Number, default: 0, min: 0, required: true },
+    stripeConnectAccountId: { type: String, trim: true, sparse: true },
+    stripeConnectOnboardingComplete: { type: Boolean, default: false, required: true },
     profile: { type: userProfileSchema, default: () => ({ isSetupComplete: false }) },
   },
   {

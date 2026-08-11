@@ -13,6 +13,8 @@ export interface ILiveStream extends Document {
   viewerCount: number;
   peakViewerCount: number;
   likesCount: number;
+  commentsCount: number;
+  sharesCount: number;
   giftsCount: number;
   category?: string;
   startedAt?: Date;
@@ -72,6 +74,16 @@ const liveStreamSchema = new Schema<ILiveStream>(
       min: 0,
     },
     likesCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    commentsCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    sharesCount: {
       type: Number,
       default: 0,
       min: 0,

@@ -81,6 +81,8 @@ const environmentSchema = z
     CLOUDINARY_API_SECRET: z.string().trim().min(1).optional(),
     CLOUDINARY_UPLOAD_FOLDER: z.string().trim().min(1).default('jesusname7'),
     JAMENDO_CLIENT_ID: z.string().trim().min(1).optional(),
+    AGORA_APP_ID: z.string().trim().min(1).optional(),
+    AGORA_APP_CERTIFICATE: z.string().trim().min(1).optional(),
     STORY_DURATION_HOURS: z.coerce.number().int().positive().max(168).default(24),
     STORY_IMAGE_MAX_BYTES: z.coerce.number().int().positive().default(10 * 1024 * 1024),
     STORY_VIDEO_MAX_BYTES: z.coerce.number().int().positive().default(100 * 1024 * 1024),
@@ -108,6 +110,9 @@ const environmentSchema = z
     FFPROBE_PATH: z.string().trim().min(1).default('ffprobe'),
     MEDIA_TEMP_DIRECTORY: z.string().trim().min(1).default('./tmp/media'),
     REEL_FONT_FILE: z.string().trim().min(1).optional(),
+    STRIPE_SECRET_KEY: z.string().trim().min(1).optional(),
+    STRIPE_PUBLISHABLE_KEY: z.string().trim().min(1).optional(),
+    STRIPE_WEBHOOK_SECRET: z.string().trim().optional(),
   })
   .superRefine((value, context) => {
     if (value.DATABASE_MIN_POOL_SIZE > value.DATABASE_MAX_POOL_SIZE) {

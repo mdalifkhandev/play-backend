@@ -22,12 +22,14 @@ import {
   supportRequestAdminRouter,
   supportRequestRouter,
 } from '../modules/support-requests/support-request.route.js';
+import { coinRouter } from '../modules/coins/coin.route.js';
 import { healthRouter } from './health.route.js';
 
 export const apiRouter = Router();
 
 apiRouter.use('/health', healthRouter);
 apiRouter.use('/auth', authRouter);
+apiRouter.use('/coins', coinRouter);
 apiRouter.use('/content-pages', contentPageRouter);
 apiRouter.use('/legal-consents', legalConsentRouter);
 apiRouter.use('/uploads', mediaAssetRouter);

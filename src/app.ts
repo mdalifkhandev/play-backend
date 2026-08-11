@@ -13,6 +13,15 @@ export const app = express();
 app.use(requestIdMiddleware);
 applySecurityMiddleware(app);
 app.use(globalRateLimiter);
+app.use(
+  '/api/v1/coins/stripe/webhook',
+  express.raw({
+    type: 'application/json',
+    verify: (req, _res, buf) => {
+      (req as unknown as { rawBody: Buffer }).rawBody = buf;
+    },
+  }),
+);
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());

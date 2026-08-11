@@ -1,5 +1,5 @@
-import crypto from 'node:crypto';
-
+import { RtcTokenBuilder, RtcRole } from 'agora-token';
+import { env } from '../../config/env.config.js';
 import { AppError } from '../../common/errors/app-error.js';
 import { LIVE_STREAM_ROLE, LIVE_STREAM_STATUS } from './live-stream.constants.js';
 import { liveStreamRepository, LiveStreamRepository } from './live-stream.repository.js';
@@ -110,13 +110,36 @@ export class LiveStreamService {
     const isHost = hostIdStr === userId;
     const role = isHost ? LIVE_STREAM_ROLE.HOST : LIVE_STREAM_ROLE.VIEWER;
 
-    const expiresInSeconds = 3600;
-    const rawToken = `${stream.channelName}:${userId}:${role}:${Date.now() + expiresInSeconds * 1000}`;
-    const token = Buffer.from(rawToken).toString('base64url');
+    const appId = env.AGORA_APP_ID || 'aa36a82bb91e42e6bf7684cd143cd42a';
+    const appCertificate = env.AGORA_APP_CERTIFICATE || '429f9ca1570b4c7aa7004d6dc621a735';
+
+    const rtcRole = isHost ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
+    const expiresInSeconds = 86400; // 24 hours
+    const currentTimestamp = Math.floor(Date.now() / 1000);
+    const privilegeExpiredTs = currentTimestamp + expiresInSeconds;
+    const uid = stringToNumericUid(userId);
+
+    let token = '';
+    if (appId && appCertificate) {
+      token = RtcTokenBuilder.buildTokenWithUid(
+        appId,
+        appCertificate,
+        stream.channelName,
+        uid,
+        rtcRole,
+        privilegeExpiredTs,
+        privilegeExpiredTs,
+      );
+    } else {
+      const rawToken = `${stream.channelName}:${userId}:${role}:${privilegeExpiredTs}`;
+      token = Buffer.from(rawToken).toString('base64url');
+    }
 
     return {
+      appId,
       token,
       channelName: stream.channelName,
+      uid,
       role,
       expiresInSeconds,
     };
@@ -205,6 +228,14 @@ export class LiveStreamService {
     return { likesCount: updated.likesCount };
   }
 
+  async addShare(streamId: string): Promise<{ sharesCount: number }> {
+    const updated = await this.repository.incrementSharesCount(streamId);
+    if (!updated) {
+      throw new AppError('Live stream not found.', 404, { code: 'STREAM_NOT_FOUND' });
+    }
+    return { sharesCount: updated.sharesCount };
+  }
+
   private mapToResponse(stream: ILiveStream): LiveStreamResponseDTO {
     const hostDoc = stream.hostId as any;
 
@@ -227,6 +258,8 @@ export class LiveStreamService {
       viewerCount: Math.max(0, stream.viewerCount || 0),
       peakViewerCount: stream.peakViewerCount || 0,
       likesCount: stream.likesCount || 0,
+      commentsCount: stream.commentsCount || 0,
+      sharesCount: stream.sharesCount || 0,
       giftsCount: stream.giftsCount || 0,
       createdAt: stream.createdAt.toISOString(),
     };
@@ -264,3 +297,12 @@ export class LiveStreamService {
 }
 
 export const liveStreamService = new LiveStreamService();
+
+function stringToNumericUid(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash) || 1;
+}

@@ -128,6 +128,8 @@ export interface Reel {
   likeCount: number;
   commentCount: number;
   shareCount: number;
+  giftsCount: number;
+  giftsTotalCoins: number;
   publishedAt?: Date;
   deletedAt?: Date;
   createdAt: Date;
@@ -144,6 +146,8 @@ export type CreateReelRecord = Omit<
   | 'likeCount'
   | 'commentCount'
   | 'shareCount'
+  | 'giftsCount'
+  | 'giftsTotalCoins'
   | 'processedMedia'
   | 'thumbnail'
   | 'publishedAt'
@@ -312,6 +316,8 @@ const reelSchema = new Schema<Reel>(
     likeCount: { type: Number, default: 0, min: 0, required: true },
     commentCount: { type: Number, default: 0, min: 0, required: true },
     shareCount: { type: Number, default: 0, min: 0, required: true },
+    giftsCount: { type: Number, default: 0, min: 0, required: true },
+    giftsTotalCoins: { type: Number, default: 0, min: 0, required: true },
     publishedAt: { type: Date },
     deletedAt: { type: Date },
   },

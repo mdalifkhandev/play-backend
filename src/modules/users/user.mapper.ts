@@ -8,6 +8,9 @@ export interface PublicUserDto {
   role: string;
   status: string;
   isEmailVerified: boolean;
+  coinBalance: number;
+  stripeConnectAccountId?: string;
+  stripeConnectOnboardingComplete: boolean;
   profile: {
     username?: string;
     displayName?: string;
@@ -32,6 +35,9 @@ export function toPublicUser(user: UserDocument): PublicUserDto {
     role: user.role,
     status: user.status,
     isEmailVerified: user.isEmailVerified,
+    coinBalance: user.coinBalance ?? 0,
+    ...(user.stripeConnectAccountId ? { stripeConnectAccountId: user.stripeConnectAccountId } : {}),
+    stripeConnectOnboardingComplete: user.stripeConnectOnboardingComplete ?? false,
     profile: {
       ...(profile.username ? { username: profile.username } : {}),
       ...(profile.displayName ? { displayName: profile.displayName } : {}),
