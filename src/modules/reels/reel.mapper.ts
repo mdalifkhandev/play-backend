@@ -73,6 +73,20 @@ export interface ReelFeedItemDto {
   mentions: string[];
   location: { name: string | null; latitude: number | null; longitude: number | null } | null;
   mediaType: 'video' | 'photo';
+  upload: {
+    mediaAssetId: string;
+    provider: 'cloudinary';
+    publicId: string;
+    version: number;
+    secureUrl: string;
+    width: number;
+    height: number;
+    durationMs: number;
+    fileSizeBytes: number;
+    mimeType: string;
+    format: string | null;
+    hasAudio: boolean | null;
+  };
   forKids: boolean;
   user: {
     id: string;
@@ -188,6 +202,20 @@ export function toReelFeedItemDto(
         }
       : null,
     mediaType: reel.mediaType ?? 'video',
+    upload: {
+      mediaAssetId: reel.rawMedia.mediaAssetId.toString(),
+      provider: reel.rawMedia.provider,
+      publicId: reel.rawMedia.publicId,
+      version: reel.rawMedia.version,
+      secureUrl: reel.rawMedia.secureUrl,
+      width: reel.rawMedia.width,
+      height: reel.rawMedia.height,
+      durationMs: reel.rawMedia.durationMs,
+      fileSizeBytes: reel.rawMedia.fileSizeBytes,
+      mimeType: reel.rawMedia.mimeType,
+      format: reel.rawMedia.format ?? null,
+      hasAudio: reel.rawMedia.hasAudio ?? null,
+    },
     forKids: reel.forKids ?? false,
     user: {
       id: ownerId,

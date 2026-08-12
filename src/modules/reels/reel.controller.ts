@@ -3,7 +3,7 @@ import type { Request, Response } from 'express';
 import { sendSuccess } from '../../common/responses/api-response.js';
 import { asyncHandler } from '../../common/utils/async-handler.js';
 import { reelService } from './reel.service.js';
-import type { CreateReelInput, ReelFeedQuery } from './reel.validation.js';
+import type { CreateReelInput, ReelFeedQuery, UserReelsParams } from './reel.validation.js';
 
 export class ReelController {
   create = asyncHandler(async (request: Request, response: Response) => {
@@ -31,6 +31,17 @@ export class ReelController {
     const viewerId = request.user?.userId;
     const result = await reelService.getFeed(request.query as unknown as ReelFeedQuery, viewerId);
     return sendSuccess(response, 200, 'Reels retrieved successfully', result);
+  });
+
+  userReels = asyncHandler(async (request: Request, response: Response) => {
+    const { userId } = request.params as UserReelsParams;
+    const viewerId = request.user?.userId;
+    const result = await reelService.getUserReels(
+      userId,
+      request.query as unknown as ReelFeedQuery,
+      viewerId,
+    );
+    return sendSuccess(response, 200, 'User reels retrieved successfully', result);
   });
 
   getById = asyncHandler(async (request: Request, response: Response) => {

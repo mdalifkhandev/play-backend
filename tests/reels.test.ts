@@ -466,7 +466,7 @@ describe('reel contracts and services', () => {
     expect(reels.markQueueSubmissionFailed).toHaveBeenCalledOnce();
   });
 
-  it('excludes non-ready reels from feed mapping expectations', async () => {
+  it('requests only engageable reels for the public feed', async () => {
     const readyId = new Types.ObjectId();
     const reels = {
       listReadyPublic: vi.fn().mockResolvedValue([
@@ -483,6 +483,18 @@ describe('reel contracts and services', () => {
           viewCount: 3,
           createdAt: new Date(),
           publishedAt: new Date(),
+          rawMedia: {
+            mediaAssetId: new Types.ObjectId(),
+            provider: 'cloudinary',
+            publicId: 'raw_ready',
+            version: 1,
+            secureUrl: 'https://cdn.example.com/raw-ready.mp4',
+            width: 1080,
+            height: 1920,
+            durationMs: 8000,
+            fileSizeBytes: 1024,
+            mimeType: 'video/mp4',
+          },
           processedMedia: {
             secureUrl: 'https://cdn.example.com/ready.mp4',
             durationMs: 8000,
@@ -502,8 +514,67 @@ describe('reel contracts and services', () => {
     );
 
     const feed = await service.getFeed({ limit: 20 });
+    expect(reels.listReadyPublic).toHaveBeenCalledWith(21, undefined, undefined);
     expect(feed.items).toHaveLength(1);
     expect(feed.items[0]?.videoUrl).toContain('ready.mp4');
     expect(feed.items[0]?.videoUrl).not.toContain('raw');
   });
+
+  it('lists public reels for a profile owner', async () => {
+    const ownerId = new Types.ObjectId();
+    const reelId = new Types.ObjectId();
+    const reels = {
+      listPublicByOwner: vi.fn().mockResolvedValue([
+        {
+          _id: reelId,
+          ownerId: {
+            _id: ownerId,
+            profile: { username: 'ratul', photoUrl: 'https://cdn.example.com/avatar.jpg' },
+          },
+          caption: 'Profile reel',
+          likeCount: 4,
+          commentCount: 2,
+          shareCount: 1,
+          viewCount: 12_000,
+          createdAt: new Date('2026-08-12T00:00:00.000Z'),
+          publishedAt: new Date('2026-08-12T00:00:00.000Z'),
+          rawMedia: {
+            mediaAssetId: new Types.ObjectId(),
+            provider: 'cloudinary',
+            publicId: 'raw_profile',
+            version: 1,
+            secureUrl: 'https://cdn.example.com/raw-profile.mp4',
+            width: 1080,
+            height: 1920,
+            durationMs: 9000,
+            fileSizeBytes: 2048,
+            mimeType: 'video/mp4',
+          },
+          processedMedia: {
+            secureUrl: 'https://cdn.example.com/profile.mp4',
+            durationMs: 9000,
+          },
+          thumbnail: { secureUrl: 'https://cdn.example.com/profile.jpg' },
+        },
+      ]),
+    };
+
+    const service = new ReelService(
+      reels as never,
+      {} as never,
+      {} as never,
+      async (operation) => operation({} as never),
+      vi.fn(),
+      vi.fn(),
+    );
+
+    const result = await service.getUserReels(ownerId.toString(), { limit: 20 });
+
+    expect(reels.listPublicByOwner).toHaveBeenCalledWith(ownerId.toString(), 21, undefined);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.user.id).toBe(ownerId.toString());
+    expect(result.items[0]?.thumbnailUrl).toContain('profile.jpg');
+    expect(result.items[0]?.stats.views).toBe(12_000);
+  });
+
 });

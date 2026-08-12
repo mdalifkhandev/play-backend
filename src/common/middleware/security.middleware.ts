@@ -7,6 +7,15 @@ import { corsOrigins } from '../../config/env.config.js';
 import { AppError } from '../errors/app-error.js';
 
 const allowedOriginSet = new Set(corsOrigins);
+const csrfExemptPaths = new Set([
+  '/api/v1/auth/sign-up',
+  '/api/v1/auth/login',
+  '/api/v1/auth/verify-email',
+  '/api/v1/auth/resend-verification',
+  '/api/v1/auth/forgot-password',
+  '/api/v1/auth/verify-reset-code',
+  '/api/v1/auth/reset-password',
+]);
 
 export function applySecurityMiddleware(app: Express): void {
   app.disable('x-powered-by');
@@ -44,6 +53,11 @@ export function applySecurityMiddleware(app: Express): void {
 
 export const verifyTrustedOrigin: RequestHandler = (request, _response, next) => {
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
+    next();
+    return;
+  }
+
+  if (csrfExemptPaths.has(request.path)) {
     next();
     return;
   }

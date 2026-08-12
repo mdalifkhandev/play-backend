@@ -51,13 +51,9 @@ async function attachAuthenticatedUser(
     const session = await authRepository.findActiveSessionById(payload.sessionId);
 
     if (!session) {
-      if (required) {
-        throw new UnauthorizedError('Access token session is no longer active.', {
-          code: 'SESSION_REVOKED',
-        });
-      }
-
-      return;
+      throw new UnauthorizedError('Access token session is no longer active.', {
+        code: 'SESSION_REVOKED',
+      });
     }
 
     request.user = {
@@ -73,11 +69,9 @@ async function attachAuthenticatedUser(
       throw error;
     }
 
-    if (required) {
-      throw new UnauthorizedError('Access token is invalid or expired.', {
-        code: 'ACCESS_TOKEN_INVALID',
-      });
-    }
+    throw new UnauthorizedError('Access token is invalid or expired.', {
+      code: 'ACCESS_TOKEN_INVALID',
+    });
   }
 }
 

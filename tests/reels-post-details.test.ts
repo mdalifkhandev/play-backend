@@ -123,6 +123,9 @@ describe('Reels Post Details & Media Edit Schema', () => {
 
     const feedDto = toReelFeedItemDto(mockReel as any);
     expect(feedDto.mediaType).toBe('photo');
+    expect(feedDto.upload.mediaAssetId).toBe(mockReel.rawMedia.mediaAssetId.toString());
+    expect(feedDto.upload.publicId).toBe('test_raw');
+    expect(feedDto.upload.secureUrl).toBe('https://example.com/raw.jpg');
     expect(feedDto.hashtags).toEqual(['world', 'nightlife']);
     expect(feedDto.location?.name).toBe('Times Square');
   });

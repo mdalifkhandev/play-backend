@@ -312,6 +312,44 @@ export class ReelService {
     };
   }
 
+  async getUserReels(
+    userId: string,
+    query: ReelFeedQuery,
+    viewerId?: string,
+  ): Promise<ReelFeedResult> {
+    const cursor = query.cursor ? decodeReelCursor(query.cursor) : undefined;
+    const records = await this.reels.listPublicByOwner(userId, query.limit + 1, cursor);
+    const hasNextPage = records.length > query.limit;
+    const page = hasNextPage ? records.slice(0, query.limit) : records;
+    const last = page.at(-1);
+
+    let viewerStateMap: Map<string, { isLiked: boolean; isSaved: boolean }> | undefined;
+
+    if (viewerId && page.length > 0) {
+      const { engagementRepository: engRepo } = await import(
+        '../engagement/engagement.repository.js'
+      );
+      const ids = page.map((r) => r._id.toString());
+      viewerStateMap = await engRepo.getBulkViewerState(viewerId, 'reel', ids);
+    }
+
+    const nextCursorValue =
+      hasNextPage && last?.publishedAt
+        ? encodeReelCursor({ publishedAt: last.publishedAt, id: last._id })
+        : null;
+
+    return {
+      items: page.map((r) =>
+        toReelFeedItemDto(r, viewerStateMap?.get(r._id.toString())),
+      ),
+      nextCursor: nextCursorValue,
+      pagination: {
+        nextCursor: nextCursorValue,
+        hasNextPage,
+      },
+    };
+  }
+
   async retry(reelId: string, ownerId: string): Promise<CreateReelResult> {
     const existing = await this.reels.findByIdForOwner(reelId, ownerId);
 

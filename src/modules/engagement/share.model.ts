@@ -39,8 +39,8 @@ shareSchema.index(
   { name: 'ix_shares_target_created' },
 );
 shareSchema.index(
-  { userId: 1, targetType: 1, targetId: 1, createdAt: -1 },
-  { name: 'ix_shares_user_target' },
+  { userId: 1, targetType: 1, targetId: 1 },
+  { unique: true, name: 'uq_shares_user_target' },
 );
 
 export const ShareModel: Model<Share> =

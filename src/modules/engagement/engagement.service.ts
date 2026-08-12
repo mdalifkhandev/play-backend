@@ -49,8 +49,8 @@ function decodeEngagementCursor(
 async function requireEngageableReel(reelId: string): Promise<void> {
   const reel = await ReelModel.findOne({
     _id: reelId,
-    status: ReelStatus.READY,
-    visibility: ReelVisibility.PUBLIC,
+    status: { $in: [ReelStatus.READY, ReelStatus.QUEUED, ReelStatus.PROCESSING, 'READY'] },
+    visibility: { $in: [ReelVisibility.PUBLIC, 'PUBLIC'] },
     deletedAt: { $exists: false },
   })
     .select('_id')
@@ -162,8 +162,12 @@ export class EngagementService {
 
   async shareReel(userId: string, reelId: string, input: ShareInput): Promise<{ shareCount: number }> {
     await requireEngageableReel(reelId);
-    await this.repo.insertShare(userId, 'reel', reelId, input.channel as ShareChannel);
-    await atomicCounterUpdate(reelId, 'shareCount', 1);
+    const inserted = await this.repo.insertShare(userId, 'reel', reelId, input.channel as ShareChannel);
+
+    if (inserted) {
+      await atomicCounterUpdate(reelId, 'shareCount', 1);
+    }
+
     const reel = await ReelModel.findById(reelId).select('shareCount').lean().exec();
     return { shareCount: reel?.shareCount ?? 0 };
   }

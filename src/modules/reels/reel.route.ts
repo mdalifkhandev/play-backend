@@ -11,11 +11,19 @@ import {
   createReelBodySchema,
   reelFeedQuerySchema,
   reelIdParamsSchema,
+  userReelsParamsSchema,
 } from './reel.validation.js';
 
 export const reelRouter = Router();
 
 reelRouter.get('/feed', optionalAuthenticate, validateRequest({ query: reelFeedQuerySchema }), reelController.feed);
+
+reelRouter.get(
+  '/users/:userId',
+  optionalAuthenticate,
+  validateRequest({ params: userReelsParamsSchema, query: reelFeedQuerySchema }),
+  reelController.userReels,
+);
 
 reelRouter.get(
   '/:reelId',

@@ -55,10 +55,38 @@ export class ReelRepository {
 
   async listReadyPublic(limit: number, cursor?: ReelCursor, hashtag?: string): Promise<ReelWithOwner[]> {
     const filter: Record<string, unknown> = {
-      status: ReelStatus.READY,
+      status: { $in: [ReelStatus.READY, ReelStatus.QUEUED, ReelStatus.PROCESSING, 'READY'] },
       visibility: ReelVisibility.PUBLIC,
       deletedAt: { $exists: false },
       ...(hashtag ? { hashtags: hashtag.toLowerCase() } : {}),
+      ...(cursor
+        ? {
+            $or: [
+              { createdAt: { $lt: cursor.publishedAt } },
+              { createdAt: cursor.publishedAt, _id: { $lt: cursor.id } },
+            ],
+          }
+        : {}),
+    };
+
+    return ReelModel.find(filter)
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit)
+      .populate({ path: 'ownerId', select: OWNER_PROJECTION })
+      .lean<ReelWithOwner[]>()
+      .exec();
+  }
+
+  async listPublicByOwner(
+    ownerId: string,
+    limit: number,
+    cursor?: ReelCursor,
+  ): Promise<ReelWithOwner[]> {
+    const filter: Record<string, unknown> = {
+      ownerId,
+      status: { $in: [ReelStatus.READY, ReelStatus.QUEUED, ReelStatus.PROCESSING, 'READY'] },
+      visibility: ReelVisibility.PUBLIC,
+      deletedAt: { $exists: false },
       ...(cursor
         ? {
             $or: [

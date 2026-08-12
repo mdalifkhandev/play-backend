@@ -223,6 +223,12 @@ export const reelIdParamsSchema = z
   })
   .strict();
 
+export const userReelsParamsSchema = z
+  .object({
+    userId: objectIdSchema,
+  })
+  .strict();
+
 export const reelFeedQuerySchema = z
   .object({
     limit: z.coerce.number().int().min(1).max(50).default(20),
@@ -233,6 +239,7 @@ export const reelFeedQuerySchema = z
 
 export type CreateReelInput = z.infer<typeof createReelBodySchema>;
 export type ReelFeedQuery = z.infer<typeof reelFeedQuerySchema>;
+export type UserReelsParams = z.infer<typeof userReelsParamsSchema>;
 
 export function assertReelDurationBounds(durationMs: number): void {
   if (durationMs < env.REEL_MIN_DURATION_MS) {

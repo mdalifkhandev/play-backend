@@ -1,4 +1,4 @@
-import { RtcTokenBuilder, RtcRole } from 'agora-token';
+import agoraToken from 'agora-token';
 import { env } from '../../config/env.config.js';
 import { AppError } from '../../common/errors/app-error.js';
 import { LIVE_STREAM_ROLE, LIVE_STREAM_STATUS } from './live-stream.constants.js';
@@ -13,6 +13,8 @@ import type {
 } from './live-stream.types.js';
 import type { ILiveStream } from './live-stream.model.js';
 import type { ILiveStreamComment } from './live-stream-comment.model.js';
+
+const { RtcTokenBuilder, RtcRole } = agoraToken;
 
 export class LiveStreamService {
   constructor(private readonly repository: LiveStreamRepository = liveStreamRepository) {}

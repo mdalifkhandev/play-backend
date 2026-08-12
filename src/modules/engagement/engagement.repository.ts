@@ -18,6 +18,10 @@ export class EngagementRepository {
     targetType: EngagementTargetType,
     targetId: string,
   ): Promise<boolean> {
+    if (await this.isLiked(userId, targetType, targetId)) {
+      return false;
+    }
+
     try {
       await LikeModel.create({ userId, targetType, targetId });
       return true;
@@ -69,6 +73,10 @@ export class EngagementRepository {
     targetType: EngagementTargetType,
     targetId: string,
   ): Promise<boolean> {
+    if (await this.isSaved(userId, targetType, targetId)) {
+      return false;
+    }
+
     try {
       await SaveModel.create({ userId, targetType, targetId });
       return true;
@@ -143,8 +151,20 @@ export class EngagementRepository {
     targetType: EngagementTargetType,
     targetId: string,
     channel: ShareChannel,
-  ): Promise<void> {
-    await ShareModel.create({ userId, targetType, targetId, channel });
+  ): Promise<boolean> {
+    const existing = await ShareModel.exists({ userId, targetType, targetId }).exec();
+
+    if (existing) {
+      return false;
+    }
+
+    try {
+      await ShareModel.create({ userId, targetType, targetId, channel });
+      return true;
+    } catch (error) {
+      if (isDuplicateKeyError(error)) return false;
+      throw error;
+    }
   }
 
   // ── Bulk viewer state ───────────────────────────────────────────────────
