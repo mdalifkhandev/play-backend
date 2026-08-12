@@ -87,8 +87,8 @@ export class ConversationRepository {
     const message = await MessageModel.create({
       conversationId: convObjId,
       senderId: senderObjId,
-      text,
-      mediaUrl,
+      ...(text ? { text } : {}),
+      ...(mediaUrl ? { mediaUrl } : {}),
     });
 
     const conversation = await ConversationModel.findById(conversationId);
@@ -109,8 +109,8 @@ export class ConversationRepository {
           $set: {
             lastMessage: {
               messageId: message._id,
-              text,
-              mediaUrl,
+              ...(text ? { text } : {}),
+              ...(mediaUrl ? { mediaUrl } : {}),
               senderId: senderObjId,
               createdAt: message.createdAt,
             },
@@ -149,10 +149,49 @@ export class ConversationRepository {
     return { messages, total };
   }
 
-  async markAsRead(conversationId: string, userId: string): Promise<void> {
-    if (!mongoose.Types.ObjectId.isValid(conversationId)) return;
+  async markAsDelivered(
+    conversationId: string,
+    userId: string,
+  ): Promise<{ messageIds: string[]; deliveredAt: Date }> {
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return { messageIds: [], deliveredAt: new Date() };
+    }
+
     const convObjId = new mongoose.Types.ObjectId(conversationId);
     const userObjId = new mongoose.Types.ObjectId(userId);
+    const deliveredAt = new Date();
+    const messages = await MessageModel.find({
+      conversationId: convObjId,
+      senderId: { $ne: userObjId },
+      deliveredAt: { $exists: false },
+    })
+      .select('_id')
+      .lean()
+      .exec();
+
+    if (messages.length > 0) {
+      await MessageModel.updateMany(
+        { _id: { $in: messages.map((message) => message._id) } },
+        { $set: { deliveredAt } },
+      ).exec();
+    }
+
+    return {
+      messageIds: messages.map((message) => message._id.toString()),
+      deliveredAt,
+    };
+  }
+
+  async markAsRead(
+    conversationId: string,
+    userId: string,
+  ): Promise<{ messageIds: string[]; readAt: Date }> {
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return { messageIds: [], readAt: new Date() };
+    }
+    const convObjId = new mongoose.Types.ObjectId(conversationId);
+    const userObjId = new mongoose.Types.ObjectId(userId);
+    const readAt = new Date();
 
     const conversation = await ConversationModel.findById(conversationId);
     if (conversation) {
@@ -165,10 +204,24 @@ export class ConversationRepository {
       );
     }
 
+    const messages = await MessageModel.find({
+      conversationId: convObjId,
+      senderId: { $ne: userObjId },
+      isRead: false,
+    })
+      .select('_id')
+      .lean()
+      .exec();
+
     await MessageModel.updateMany(
       { conversationId: convObjId, senderId: { $ne: userObjId }, isRead: false },
-      { $set: { isRead: true, readAt: new Date() } },
-    );
+      { $set: { isRead: true, readAt, deliveredAt: readAt } },
+    ).exec();
+
+    return {
+      messageIds: messages.map((message) => message._id.toString()),
+      readAt,
+    };
   }
 
   async softDeleteConversation(conversationId: string, userId: string): Promise<void> {

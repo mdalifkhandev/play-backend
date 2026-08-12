@@ -33,6 +33,13 @@ reelRouter.get(
 );
 
 reelRouter.get(
+  '/:reelId/views',
+  optionalAuthenticate,
+  validateRequest({ params: reelIdParamsSchema }),
+  reelController.getViews,
+);
+
+reelRouter.get(
   '/:reelId',
   optionalAuthenticate,
   validateRequest({ params: reelIdParamsSchema }),
@@ -46,6 +53,12 @@ reelRouter.post(
   reelPublishRateLimiter,
   validateRequest({ body: createReelBodySchema }),
   reelController.create,
+);
+
+reelRouter.post(
+  '/:reelId/views',
+  validateRequest({ params: reelIdParamsSchema }),
+  reelController.recordView,
 );
 
 reelRouter.post(

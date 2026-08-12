@@ -5,8 +5,10 @@ import { app } from './app.js';
 import { connectDatabase, disconnectDatabase } from './infrastructure/database/mongoose.connection.js';
 import { connectRedis, disconnectRedis } from './infrastructure/cache/redis.client.js';
 import { logger } from './infrastructure/logger/logger.js';
+import { initializeSocketServer } from './sockets/socket.server.js';
 
 const server = createServer(app);
+const io = initializeSocketServer(server);
 
 try {
   await connectDatabase();
@@ -32,12 +34,7 @@ for (const signal of shutdownSignals) {
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   logger.info({ signal }, 'Shutting down HTTP server');
 
-  server.close(async (error) => {
-    if (error) {
-      logger.error({ err: error }, 'HTTP server close failed');
-      process.exitCode = 1;
-    }
-
+  io.close(async () => {
     await closeInfrastructure();
     process.exit();
   });

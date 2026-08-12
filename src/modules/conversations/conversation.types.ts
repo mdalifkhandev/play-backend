@@ -41,6 +41,7 @@ export interface MessageResponseDTO {
   sender: ConversationParticipantDTO;
   text?: string;
   mediaUrl?: string;
+  deliveredAt?: string;
   isRead: boolean;
   readAt?: string;
   createdAt: string;

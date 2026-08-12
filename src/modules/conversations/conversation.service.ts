@@ -80,6 +80,18 @@ export class ConversationService {
       });
     }
 
+    const recipientId = this.getParticipantIds(conversation).find((id) => id !== senderId);
+    if (recipientId) {
+      const isBlocked =
+        (await this.repository.isBlocked(senderId, recipientId)) ||
+        (await this.repository.isBlocked(recipientId, senderId));
+      if (isBlocked) {
+        throw new AppError('Cannot send a message to this user.', 403, {
+          code: 'USER_BLOCKED',
+        });
+      }
+    }
+
     const message = await this.repository.addMessage(
       conversationId,
       senderId,
@@ -88,6 +100,34 @@ export class ConversationService {
     );
 
     return this.mapToMessageResponse(message);
+  }
+
+  async joinConversation(
+    conversationId: string,
+    userId: string,
+  ): Promise<{ participantIds: string[]; messageIds: string[]; deliveredAt: string }> {
+    const conversation = await this.requireParticipant(conversationId, userId);
+    const delivery = await this.repository.markAsDelivered(conversationId, userId);
+
+    return {
+      participantIds: this.getParticipantIds(conversation),
+      messageIds: delivery.messageIds,
+      deliveredAt: delivery.deliveredAt.toISOString(),
+    };
+  }
+
+  async markConversationRead(
+    conversationId: string,
+    userId: string,
+  ): Promise<{ participantIds: string[]; messageIds: string[]; readAt: string }> {
+    const conversation = await this.requireParticipant(conversationId, userId);
+    const receipt = await this.repository.markAsRead(conversationId, userId);
+
+    return {
+      participantIds: this.getParticipantIds(conversation),
+      messageIds: receipt.messageIds,
+      readAt: receipt.readAt.toISOString(),
+    };
   }
 
   async getMessages(
@@ -161,9 +201,9 @@ export class ConversationService {
 
     return users.map((u) => ({
       id: u._id.toString(),
-      username: u.username || 'user',
-      displayName: u.displayName || u.username || 'User',
-      avatarUrl: (u as any).photoUrl || (u as any).avatarUrl,
+      username: u.profile.username || 'user',
+      displayName: u.profile.displayName || u.profile.username || 'User',
+      ...(u.profile.photoUrl ? { avatarUrl: u.profile.photoUrl } : {}),
       reason: 'People you may know',
       isFollowing: false,
     }));
@@ -199,9 +239,9 @@ export class ConversationService {
 
     if (conv.lastMessage) {
       response.lastMessage = {
-        id: conv.lastMessage.messageId?.toString(),
-        text: conv.lastMessage.text,
-        mediaUrl: conv.lastMessage.mediaUrl,
+        ...(conv.lastMessage.messageId ? { id: conv.lastMessage.messageId.toString() } : {}),
+        ...(conv.lastMessage.text ? { text: conv.lastMessage.text } : {}),
+        ...(conv.lastMessage.mediaUrl ? { mediaUrl: conv.lastMessage.mediaUrl } : {}),
         senderId: conv.lastMessage.senderId.toString(),
         createdAt: conv.lastMessage.createdAt.toISOString(),
       };
@@ -231,9 +271,34 @@ export class ConversationService {
 
     if (message.text) response.text = message.text;
     if (message.mediaUrl) response.mediaUrl = message.mediaUrl;
+    if (message.deliveredAt) response.deliveredAt = message.deliveredAt.toISOString();
     if (message.readAt) response.readAt = message.readAt.toISOString();
 
     return response;
+  }
+
+  private async requireParticipant(
+    conversationId: string,
+    userId: string,
+  ): Promise<IConversation> {
+    const conversation = await this.repository.findById(conversationId);
+    if (!conversation) {
+      throw new AppError('Conversation not found.', 404, { code: 'CONVERSATION_NOT_FOUND' });
+    }
+
+    if (!this.getParticipantIds(conversation).includes(userId)) {
+      throw new AppError('You are not a participant in this conversation.', 403, {
+        code: 'FORBIDDEN',
+      });
+    }
+
+    return conversation;
+  }
+
+  private getParticipantIds(conversation: IConversation): string[] {
+    return conversation.participants.map((participant: any) =>
+      (participant._id?.toString() || participant.toString()),
+    );
   }
 }
 

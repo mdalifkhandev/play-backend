@@ -163,9 +163,11 @@ describe('Direct Messaging, Inbox & Chat Subsystem', () => {
 
     const mockSocket: any = {
       user: { userId: userAId },
+      rooms: new Set([`chat:${conversationId}`]),
       on: (event: string, fn: Function) => {
         handlers[event] = fn;
       },
+      emit: () => undefined,
       to: (room: string) => ({
         emit: (event: string, payload: any) => {
           emittedEvents.push({ room, event, payload });
@@ -178,14 +180,14 @@ describe('Direct Messaging, Inbox & Chat Subsystem', () => {
     expect(handlers['chat:typing_start']).toBeDefined();
     expect(handlers['chat:typing_stop']).toBeDefined();
 
-    handlers['chat:typing_start']({ conversationId });
+    await handlers['chat:typing_start']({ conversationId });
     expect(emittedEvents[0]).toEqual({
       room: `chat:${conversationId}`,
       event: 'chat:user_typing',
       payload: { conversationId, userId: userAId, isTyping: true },
     });
 
-    handlers['chat:typing_stop']({ conversationId });
+    await handlers['chat:typing_stop']({ conversationId });
     expect(emittedEvents[1]).toEqual({
       room: `chat:${conversationId}`,
       event: 'chat:user_typing',

@@ -101,3 +101,15 @@ savedRouter.get(
   validateRequest({ query: savedFeedQuerySchema }),
   engagementController.listSaved,
 );
+
+savedRouter.get(
+  '/saved-reels',
+  validateRequest({ query: savedFeedQuerySchema }),
+  engagementController.listSavedReels,
+);
+
+savedRouter.get(
+  '/liked-reels',
+  validateRequest({ query: savedFeedQuerySchema }),
+  engagementController.listLikedReels,
+);

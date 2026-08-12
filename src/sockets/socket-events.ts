@@ -19,12 +19,18 @@ export const SOCKET_EVENTS = {
 
   // Direct Chat events
   CHAT_JOIN: 'chat:join',
+  CHAT_JOINED: 'chat:joined',
   CHAT_LEAVE: 'chat:leave',
   CHAT_SEND_MESSAGE: 'chat:send_message',
   CHAT_NEW_MESSAGE: 'chat:new_message',
+  CHAT_MESSAGE_DELIVERED: 'chat:message_delivered',
   CHAT_TYPING: 'chat:typing',
   CHAT_TYPING_START: 'chat:typing_start',
   CHAT_TYPING_STOP: 'chat:typing_stop',
   USER_TYPING: 'chat:user_typing',
   CHAT_READ: 'chat:read',
+  CHAT_READ_RECEIPT: 'chat:read_receipt',
+  CHAT_ERROR: 'chat:error',
+  USER_ONLINE: 'user:online',
+  USER_OFFLINE: 'user:offline',
 } as const;

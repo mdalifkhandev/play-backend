@@ -5,6 +5,11 @@ import { ForbiddenError } from '../../common/errors/forbidden-error.js';
 import { NotFoundError } from '../../common/errors/not-found-error.js';
 import { ReelStatus, ReelVisibility } from '../reels/reel.constants.js';
 import { ReelModel, type Reel } from '../reels/reel.model.js';
+import {
+  toReelFeedItemDto,
+  type ReelFeedItemDto,
+  type ReelWithOwner,
+} from '../reels/reel.mapper.js';
 import { commentRepository, type CommentRepository } from './comment/comment.repository.js';
 import { engagementRepository, type EngagementRepository } from './engagement.repository.js';
 import type {
@@ -64,6 +69,22 @@ async function requireEngageableReel(reelId: string): Promise<void> {
       code: 'REEL_NOT_FOUND',
     });
   }
+}
+
+async function listVisibleReelsByIds(ids: string[]): Promise<ReelWithOwner[]> {
+  if (ids.length === 0) {
+    return [];
+  }
+
+  return ReelModel.find({
+    _id: { $in: ids },
+    status: { $in: [ReelStatus.READY, ReelStatus.QUEUED, ReelStatus.PROCESSING, 'READY'] },
+    visibility: { $in: [ReelVisibility.PUBLIC, 'PUBLIC'] },
+    deletedAt: { $exists: false },
+  })
+    .populate({ path: 'ownerId', select: '_id profile.displayName profile.username profile.photoUrl' })
+    .lean<ReelWithOwner[]>()
+    .exec();
 }
 
 async function atomicCounterUpdate(
@@ -154,13 +175,70 @@ export class EngagementService {
       })),
       nextCursor:
         hasNextPage && last
-          ? encodeEngagementCursor(last.createdAt, last.targetId)
+          ? encodeEngagementCursor(last.createdAt, last._id)
           : null,
       hasNextPage,
     };
   }
 
   // ── Share ─────────────────────────────────────────────────────────────────
+
+  async listSavedReels(
+    userId: string,
+    query: SavedFeedQuery,
+  ): Promise<{
+    items: ReelFeedItemDto[];
+    nextCursor: string | null;
+    pagination: { nextCursor: string | null; hasNextPage: boolean };
+  }> {
+    const cursor = query.cursor ? decodeEngagementCursor(query.cursor) : undefined;
+    const rows = await this.repo.listSavedByUser(userId, 'reel', query.limit + 1, cursor);
+    return this.mapEngagedReels(userId, rows, query.limit);
+  }
+
+  async listLikedReels(
+    userId: string,
+    query: SavedFeedQuery,
+  ): Promise<{
+    items: ReelFeedItemDto[];
+    nextCursor: string | null;
+    pagination: { nextCursor: string | null; hasNextPage: boolean };
+  }> {
+    const cursor = query.cursor ? decodeEngagementCursor(query.cursor) : undefined;
+    const rows = await this.repo.listLikedByUser(userId, 'reel', query.limit + 1, cursor);
+    return this.mapEngagedReels(userId, rows, query.limit);
+  }
+
+  private async mapEngagedReels(
+    userId: string,
+    rows: Array<{ _id: Types.ObjectId; targetId: Types.ObjectId; createdAt: Date }>,
+    limit: number,
+  ): Promise<{
+    items: ReelFeedItemDto[];
+    nextCursor: string | null;
+    pagination: { nextCursor: string | null; hasNextPage: boolean };
+  }> {
+    const hasNextPage = rows.length > limit;
+    const page = hasNextPage ? rows.slice(0, limit) : rows;
+    const ids = page.map((row) => row.targetId.toString());
+    const reels = await listVisibleReelsByIds(ids);
+    const reelById = new Map(reels.map((reel) => [reel._id.toString(), reel]));
+    const viewerStateMap = await this.repo.getBulkViewerState(userId, 'reel', ids);
+    const last = page.at(-1);
+    const nextCursor =
+      hasNextPage && last ? encodeEngagementCursor(last.createdAt, last._id) : null;
+
+    return {
+      items: ids
+        .map((id) => {
+          const reel = reelById.get(id);
+          return reel ? toReelFeedItemDto(reel, viewerStateMap.get(id)) : null;
+        })
+        .filter((item): item is ReelFeedItemDto => item !== null),
+      nextCursor,
+      pagination: { nextCursor, hasNextPage },
+    };
+  }
 
   async shareReel(userId: string, reelId: string, input: ShareInput): Promise<{ shareCount: number }> {
     await requireEngageableReel(reelId);

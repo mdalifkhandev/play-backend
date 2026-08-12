@@ -5,6 +5,7 @@ export interface IMessage extends Document {
   senderId: mongoose.Types.ObjectId;
   text?: string;
   mediaUrl?: string;
+  deliveredAt?: Date;
   isRead: boolean;
   readAt?: Date;
   createdAt: Date;
@@ -33,6 +34,9 @@ const messageSchema = new Schema<IMessage>(
     mediaUrl: {
       type: String,
       trim: true,
+    },
+    deliveredAt: {
+      type: Date,
     },
     isRead: {
       type: Boolean,

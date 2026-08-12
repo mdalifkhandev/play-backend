@@ -71,6 +71,32 @@ export class EngagementController {
 
   // ── Share ─────────────────────────────────────────────────────────────────
 
+  async listSavedReels(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user!.userId;
+      const result = await engagementService.listSavedReels(
+        userId,
+        req.query as unknown as SavedFeedQuery,
+      );
+      sendSuccess(res, 200, 'Saved reels fetched.', result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async listLikedReels(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user!.userId;
+      const result = await engagementService.listLikedReels(
+        userId,
+        req.query as unknown as SavedFeedQuery,
+      );
+      sendSuccess(res, 200, 'Liked reels fetched.', result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async shareReel(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.userId;

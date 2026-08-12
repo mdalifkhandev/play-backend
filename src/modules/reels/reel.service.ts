@@ -65,6 +65,11 @@ export interface ReelFeedResult {
   };
 }
 
+export interface ReelViewResult {
+  viewCount: number;
+  counted: boolean;
+}
+
 export class ReelService {
   constructor(
     private readonly reels: ReelRepository = reelRepository,
@@ -348,6 +353,41 @@ export class ReelService {
         hasNextPage,
       },
     };
+  }
+
+  async getViews(reelId: string): Promise<{ viewCount: number }> {
+    const reel = await this.reels.findViewableById(reelId);
+
+    if (!reel) {
+      throw new NotFoundError('Reel was not found or is not available.', {
+        code: 'REEL_NOT_FOUND',
+      });
+    }
+
+    return { viewCount: reel.viewCount || 0 };
+  }
+
+  async recordView(reelId: string, viewerId: string): Promise<ReelViewResult> {
+    const reel = await this.reels.findViewableById(reelId);
+
+    if (!reel) {
+      throw new NotFoundError('Reel was not found or is not available.', {
+        code: 'REEL_NOT_FOUND',
+      });
+    }
+
+    if (reel.ownerId.toString() === viewerId) {
+      return { viewCount: reel.viewCount || 0, counted: false };
+    }
+
+    const inserted = await this.reels.createViewIfAbsent(reel._id, viewerId);
+
+    if (!inserted) {
+      return { viewCount: reel.viewCount || 0, counted: false };
+    }
+
+    const viewCount = await this.reels.incrementViewCount(reel._id);
+    return { viewCount, counted: true };
   }
 
   async retry(reelId: string, ownerId: string): Promise<CreateReelResult> {

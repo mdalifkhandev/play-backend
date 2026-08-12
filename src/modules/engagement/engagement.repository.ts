@@ -66,6 +66,29 @@ export class EngagementRepository {
     return new Set(docs.map((d) => d.targetId.toString()));
   }
 
+  async listLikedByUser(
+    userId: string,
+    targetType: EngagementTargetType,
+    limit: number,
+    cursor?: { createdAt: Date; id: Types.ObjectId },
+  ): Promise<Array<{ _id: Types.ObjectId; targetId: Types.ObjectId; createdAt: Date }>> {
+    const filter: Record<string, unknown> = { userId, targetType };
+
+    if (cursor) {
+      filter.$or = [
+        { createdAt: { $lt: cursor.createdAt } },
+        { createdAt: cursor.createdAt, _id: { $lt: cursor.id } },
+      ];
+    }
+
+    return LikeModel.find(filter)
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit)
+      .select('_id targetId createdAt')
+      .lean()
+      .exec();
+  }
+
   // ── Save ────────────────────────────────────────────────────────────────
 
   async insertSave(
@@ -126,7 +149,7 @@ export class EngagementRepository {
     targetType: EngagementTargetType,
     limit: number,
     cursor?: { createdAt: Date; id: Types.ObjectId },
-  ): Promise<Array<{ targetId: Types.ObjectId; createdAt: Date }>> {
+  ): Promise<Array<{ _id: Types.ObjectId; targetId: Types.ObjectId; createdAt: Date }>> {
     const filter: Record<string, unknown> = { userId, targetType };
 
     if (cursor) {
@@ -139,7 +162,7 @@ export class EngagementRepository {
     return SaveModel.find(filter)
       .sort({ createdAt: -1, _id: -1 })
       .limit(limit)
-      .select('targetId createdAt')
+      .select('_id targetId createdAt')
       .lean()
       .exec();
   }

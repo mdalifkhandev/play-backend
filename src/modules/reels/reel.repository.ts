@@ -10,6 +10,7 @@ import {
   type ReelProcessedMediaSnapshot,
   type ReelThumbnailSnapshot,
 } from './reel.model.js';
+import { ReelViewModel } from './reel-view.model.js';
 
 const OWNER_PROJECTION = '_id profile.displayName profile.username profile.photoUrl';
 
@@ -39,6 +40,15 @@ export class ReelRepository {
     ownerId: string,
   ): Promise<ReelDocument | null> {
     return ReelModel.findOne({ _id: reelId, ownerId }).exec();
+  }
+
+  async findViewableById(reelId: string): Promise<ReelDocument | null> {
+    return ReelModel.findOne({
+      _id: reelId,
+      status: { $in: [ReelStatus.READY, ReelStatus.QUEUED, ReelStatus.PROCESSING, 'READY'] },
+      visibility: { $in: [ReelVisibility.PUBLIC, 'PUBLIC'] },
+      deletedAt: { $exists: false },
+    }).exec();
   }
 
   async findByIdempotencyKey(
@@ -323,6 +333,44 @@ export class ReelRepository {
       { $unset: { processedMedia: 1, thumbnail: 1 } },
     ).exec();
   }
+
+  async createViewIfAbsent(reelId: Types.ObjectId, viewerId: string): Promise<boolean> {
+    const existing = await ReelViewModel.exists({ reelId, viewerId }).exec();
+
+    if (existing) {
+      return false;
+    }
+
+    try {
+      await ReelViewModel.create({ reelId, viewerId });
+      return true;
+    } catch (error) {
+      if (isMongoDuplicateKeyError(error)) return false;
+      throw error;
+    }
+  }
+
+  async incrementViewCount(reelId: Types.ObjectId): Promise<number> {
+    const reel = await ReelModel.findByIdAndUpdate(
+      reelId,
+      { $inc: { viewCount: 1 } },
+      { new: true },
+    )
+      .select('viewCount')
+      .lean()
+      .exec();
+
+    return reel?.viewCount ?? 0;
+  }
 }
 
 export const reelRepository = new ReelRepository();
+
+function isMongoDuplicateKeyError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 11_000
+  );
+}
