@@ -55,7 +55,7 @@ export class ReelRepository {
 
   async listReadyPublic(limit: number, cursor?: ReelCursor, hashtag?: string): Promise<ReelWithOwner[]> {
     const filter: Record<string, unknown> = {
-      status: { $in: [ReelStatus.READY, ReelStatus.QUEUED, ReelStatus.PROCESSING] },
+      status: ReelStatus.READY,
       visibility: ReelVisibility.PUBLIC,
       deletedAt: { $exists: false },
       ...(hashtag ? { hashtags: hashtag.toLowerCase() } : {}),
