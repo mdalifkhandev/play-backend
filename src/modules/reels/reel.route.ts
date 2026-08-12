@@ -19,6 +19,13 @@ export const reelRouter = Router();
 reelRouter.get('/feed', optionalAuthenticate, validateRequest({ query: reelFeedQuerySchema }), reelController.feed);
 
 reelRouter.get(
+  '/me',
+  authenticate,
+  validateRequest({ query: reelFeedQuerySchema }),
+  reelController.myReels,
+);
+
+reelRouter.get(
   '/users/:userId',
   optionalAuthenticate,
   validateRequest({ params: userReelsParamsSchema, query: reelFeedQuerySchema }),

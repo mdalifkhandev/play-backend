@@ -1,10 +1,10 @@
-import { Types } from 'mongoose';
+import { Types, type FilterQuery } from 'mongoose';
 
 import { AppError } from '../../common/errors/app-error.js';
 import { ForbiddenError } from '../../common/errors/forbidden-error.js';
 import { NotFoundError } from '../../common/errors/not-found-error.js';
 import { ReelStatus, ReelVisibility } from '../reels/reel.constants.js';
-import { ReelModel } from '../reels/reel.model.js';
+import { ReelModel, type Reel } from '../reels/reel.model.js';
 import { commentRepository, type CommentRepository } from './comment/comment.repository.js';
 import { engagementRepository, type EngagementRepository } from './engagement.repository.js';
 import type {
@@ -47,12 +47,14 @@ function decodeEngagementCursor(
 // ── Reel guard ─────────────────────────────────────────────────────────────────
 
 async function requireEngageableReel(reelId: string): Promise<void> {
-  const reel = await ReelModel.findOne({
+  const filter: FilterQuery<Reel> = {
     _id: reelId,
     status: { $in: [ReelStatus.READY, ReelStatus.QUEUED, ReelStatus.PROCESSING, 'READY'] },
     visibility: { $in: [ReelVisibility.PUBLIC, 'PUBLIC'] },
     deletedAt: { $exists: false },
-  })
+  };
+
+  const reel = await ReelModel.findOne(filter)
     .select('_id')
     .lean()
     .exec();
