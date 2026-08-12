@@ -305,9 +305,13 @@ export class EngagementService {
     items: CommentDto[];
     nextCursor: string | null;
     hasNextPage: boolean;
+    totalCount: number;
   }> {
     const cursor = query.cursor ? decodeEngagementCursor(query.cursor) : undefined;
-    const rows = await this.comments.listForTarget('reel', reelId, query.limit + 1, cursor);
+    const [rows, totalCount] = await Promise.all([
+      this.comments.listForTarget('reel', reelId, query.limit + 1, cursor),
+      this.comments.countForTarget('reel', reelId),
+    ]);
     const hasNextPage = rows.length > query.limit;
     const page = hasNextPage ? rows.slice(0, query.limit) : rows;
     const last = page.at(-1);
@@ -319,6 +323,7 @@ export class EngagementService {
           ? encodeEngagementCursor(last.createdAt, last._id)
           : null,
       hasNextPage,
+      totalCount,
     };
   }
 

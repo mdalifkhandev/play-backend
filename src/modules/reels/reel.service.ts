@@ -24,6 +24,7 @@ import {
   mediaAssetRepository,
   type MediaAssetRepository,
 } from '../media-assets/media-asset.repository.js';
+import { commentRepository } from '../engagement/comment/comment.repository.js';
 import { musicService, type MusicService } from '../music/music.service.js';
 import type { MusicTrack } from '../music/music.types.js';
 import {
@@ -283,15 +284,21 @@ export class ReelService {
       viewerStateMap = await engRepo.getBulkViewerState(viewerId, 'reel', ids);
     }
 
+    const commentCountMap = await this.getCommentCountMap(page.map((r) => r._id.toString()));
+
     const nextCursorValue =
       hasNextPage && last?.publishedAt
         ? encodeReelCursor({ publishedAt: last.publishedAt, id: last._id })
         : null;
 
     return {
-      items: page.map((r) =>
-        toReelFeedItemDto(r, viewerStateMap?.get(r._id.toString())),
-      ),
+      items: page.map((r) => {
+        const item = toReelFeedItemDto(r, viewerStateMap?.get(r._id.toString()));
+        const actualCommentCount = commentCountMap.get(r._id.toString());
+        return actualCommentCount === undefined
+          ? item
+          : { ...item, stats: { ...item.stats, comments: actualCommentCount } };
+      }),
       nextCursor: nextCursorValue,
       pagination: {
         nextCursor: nextCursorValue,
@@ -321,15 +328,21 @@ export class ReelService {
       viewerStateMap = await engRepo.getBulkViewerState(viewerId, 'reel', ids);
     }
 
+    const commentCountMap = await this.getCommentCountMap(page.map((r) => r._id.toString()));
+
     const nextCursorValue =
       hasNextPage && last?.publishedAt
         ? encodeReelCursor({ publishedAt: last.publishedAt, id: last._id })
         : null;
 
     return {
-      items: page.map((r) =>
-        toReelFeedItemDto(r, viewerStateMap?.get(r._id.toString())),
-      ),
+      items: page.map((r) => {
+        const item = toReelFeedItemDto(r, viewerStateMap?.get(r._id.toString()));
+        const actualCommentCount = commentCountMap.get(r._id.toString());
+        return actualCommentCount === undefined
+          ? item
+          : { ...item, stats: { ...item.stats, comments: actualCommentCount } };
+      }),
       nextCursor: nextCursorValue,
       pagination: {
         nextCursor: nextCursorValue,
@@ -531,6 +544,19 @@ export class ReelService {
       throw new ConflictError('Idempotency-Key was already used for a different request.', {
         code: 'REEL_IDEMPOTENCY_CONFLICT',
       });
+    }
+  }
+
+  private async getCommentCountMap(reelIds: string[]): Promise<Map<string, number>> {
+    if (reelIds.length === 0) {
+      return new Map();
+    }
+
+    try {
+      return await commentRepository.countForTargets('reel', reelIds);
+    } catch (error) {
+      logger.warn({ err: error }, 'Failed to load Reel comment counts; falling back to stored counters');
+      return new Map();
     }
   }
 

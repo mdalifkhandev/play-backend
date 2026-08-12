@@ -43,6 +43,34 @@ export class CommentRepository {
       .exec();
   }
 
+  async countForTarget(targetType: string, targetId: string): Promise<number> {
+    return CommentModel.countDocuments()
+      .where('targetType')
+      .equals(targetType)
+      .where('targetId')
+      .equals(targetId)
+      .where('status')
+      .equals('active')
+      .where('parentCommentId')
+      .exists(false)
+      .exec();
+  }
+
+  async countForTargets(targetType: string, targetIds: string[]): Promise<Map<string, number>> {
+    if (targetIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await Promise.all(
+      targetIds.map(async (targetId) => ({
+        targetId,
+        count: await this.countForTarget(targetType, targetId),
+      })),
+    );
+
+    return new Map(rows.map((row) => [row.targetId, row.count]));
+  }
+
   async listReplies(
     parentCommentId: string,
     limit: number,

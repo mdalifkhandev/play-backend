@@ -12,7 +12,7 @@ export const reelCommentParamsSchema = z
 
 export const shareBodySchema = z
   .object({
-    channel: z.enum(['copy_link', 'whatsapp', 'facebook', 'messenger', 'other']).default('copy_link'),
+    channel: z.enum(['profile', 'copy_link', 'whatsapp', 'facebook', 'messenger', 'other']).default('copy_link'),
   })
   .strict();
 

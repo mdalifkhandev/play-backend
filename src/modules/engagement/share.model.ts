@@ -3,6 +3,7 @@ import mongoose, { Schema, model, type HydratedDocument, type Model, type Types 
 import type { EngagementTargetType } from './like.model.js';
 
 export type ShareChannel =
+  | 'profile'
   | 'copy_link'
   | 'whatsapp'
   | 'facebook'
@@ -27,7 +28,7 @@ const shareSchema = new Schema<Share>(
     targetId: { type: Schema.Types.ObjectId, required: true },
     channel: {
       type: String,
-      enum: ['copy_link', 'whatsapp', 'facebook', 'messenger', 'other'],
+      enum: ['profile', 'copy_link', 'whatsapp', 'facebook', 'messenger', 'other'],
       required: true,
     },
   },
