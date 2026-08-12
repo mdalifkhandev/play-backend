@@ -20,11 +20,15 @@ export const prepareUploadBodySchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    if (value.purpose === MediaAssetPurpose.REEL && value.mediaType !== MediaType.VIDEO) {
+    if (
+      value.purpose === MediaAssetPurpose.REEL &&
+      value.mediaType !== MediaType.VIDEO &&
+      value.mediaType !== MediaType.IMAGE
+    ) {
       context.addIssue({
         code: 'custom',
         path: ['mediaType'],
-        message: 'Reel uploads require mediaType video.',
+        message: 'Reel uploads require mediaType video or image.',
       });
     }
   });

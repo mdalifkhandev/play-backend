@@ -66,12 +66,6 @@ export class ReelController {
     return sendSuccess(response, 200, 'Reel views retrieved successfully', result);
   });
 
-  recordView = asyncHandler(async (request: Request, response: Response) => {
-    const { reelId } = request.params as { reelId: string };
-    const result = await reelService.recordView(reelId, request.user!.userId);
-    return sendSuccess(response, 200, 'Reel view recorded successfully', result);
-  });
-
   retry = asyncHandler(async (request: Request, response: Response) => {
     const { reelId } = request.params as { reelId: string };
     const result = await reelService.retry(reelId, request.user!.userId);
@@ -80,6 +74,12 @@ export class ReelController {
       status: result.status,
       progress: result.progress,
     });
+  });
+
+  recordView = asyncHandler(async (request: Request, response: Response) => {
+    const { reelId } = request.params as { reelId: string };
+    const result = await reelService.recordView(reelId, request.user!.userId);
+    return sendSuccess(response, 200, 'Reel view recorded.', result);
   });
 
   delete = asyncHandler(async (request: Request, response: Response) => {

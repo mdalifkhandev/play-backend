@@ -90,5 +90,5 @@ export function volumePercentToMultiplier(volume: number): number {
 }
 
 export function reelJobId(reelId: string): string {
-  return `reel:${reelId}`;
+  return `reel-${reelId}`;
 }

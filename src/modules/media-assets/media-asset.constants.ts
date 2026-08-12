@@ -22,6 +22,7 @@ export enum MediaAssetAttachmentStatus {
 
 export const STORY_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 export const STORY_VIDEO_MIME_TYPES = ['video/mp4', 'video/quicktime'] as const;
+export const REEL_IMAGE_MIME_TYPES = STORY_IMAGE_MIME_TYPES;
 export const REEL_VIDEO_MIME_TYPES = ['video/mp4', 'video/quicktime'] as const;
 
 export const CLOUDINARY_FORMAT_MIME_TYPES = Object.freeze({

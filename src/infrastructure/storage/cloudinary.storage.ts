@@ -213,6 +213,8 @@ export class CloudinaryStorage implements StorageProvider {
   }
 
   private toStoredAsset(result: CloudinaryAssetPayload): StoredAsset {
+    const duration = parseCloudinaryDuration(result);
+
     return {
       assetId: result.asset_id,
       publicId: result.public_id,
@@ -224,7 +226,7 @@ export class CloudinaryStorage implements StorageProvider {
       ...(result.format ? { format: result.format } : {}),
       ...(typeof result.width === 'number' ? { width: result.width } : {}),
       ...(typeof result.height === 'number' ? { height: result.height } : {}),
-      ...(parseCloudinaryDuration(result) !== undefined ? { duration: parseCloudinaryDuration(result) } : {}),
+      ...(duration !== undefined ? { duration } : {}),
     };
   }
 

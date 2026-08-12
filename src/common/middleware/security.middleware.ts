@@ -15,6 +15,8 @@ const csrfExemptPaths = new Set([
   '/api/v1/auth/forgot-password',
   '/api/v1/auth/verify-reset-code',
   '/api/v1/auth/reset-password',
+  '/api/v1/auth/refresh',
+  '/api/v1/auth/logout',
 ]);
 
 export function applySecurityMiddleware(app: Express): void {
@@ -57,15 +59,16 @@ export const verifyTrustedOrigin: RequestHandler = (request, _response, next) =>
     return;
   }
 
-  if (csrfExemptPaths.has(request.path)) {
+  if (isCsrfExemptPath(request.path) || isCsrfExemptPath(request.originalUrl)) {
     next();
     return;
   }
 
   const cookies = request.cookies as Record<string, unknown> | undefined;
   const usesCookieAuth = typeof cookies?.['refreshToken'] === 'string';
+  const usesBearerAuth = /^Bearer\s+\S+$/i.test(request.get('authorization') ?? '');
 
-  if (!usesCookieAuth) {
+  if (!usesCookieAuth || usesBearerAuth) {
     next();
     return;
   }
@@ -83,3 +86,8 @@ export const verifyTrustedOrigin: RequestHandler = (request, _response, next) =>
 
   next();
 };
+
+function isCsrfExemptPath(path: string): boolean {
+  const normalized = path.split('?')[0] ?? path;
+  return csrfExemptPaths.has(normalized) || csrfExemptPaths.has(`/api/v1${normalized}`);
+}

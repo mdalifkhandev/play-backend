@@ -1,10 +1,10 @@
-import { Types, type FilterQuery } from 'mongoose';
+import { Types } from 'mongoose';
 
 import { AppError } from '../../common/errors/app-error.js';
 import { ForbiddenError } from '../../common/errors/forbidden-error.js';
 import { NotFoundError } from '../../common/errors/not-found-error.js';
 import { ReelStatus, ReelVisibility } from '../reels/reel.constants.js';
-import { ReelModel, type Reel } from '../reels/reel.model.js';
+import { ReelModel } from '../reels/reel.model.js';
 import {
   toReelFeedItemDto,
   type ReelFeedItemDto,
@@ -52,14 +52,15 @@ function decodeEngagementCursor(
 // ── Reel guard ─────────────────────────────────────────────────────────────────
 
 async function requireEngageableReel(reelId: string): Promise<void> {
-  const filter: FilterQuery<Reel> = {
-    _id: reelId,
-    status: { $in: [ReelStatus.READY, ReelStatus.QUEUED, ReelStatus.PROCESSING, 'READY'] },
-    visibility: { $in: [ReelVisibility.PUBLIC, 'PUBLIC'] },
-    deletedAt: { $exists: false },
-  };
-
-  const reel = await ReelModel.findOne(filter)
+  const reel = await ReelModel.findOne()
+    .where('_id')
+    .equals(reelId)
+    .where('status')
+    .in([ReelStatus.READY, ReelStatus.QUEUED, ReelStatus.PROCESSING, 'READY'])
+    .where('visibility')
+    .in([ReelVisibility.PUBLIC, 'PUBLIC'])
+    .where('deletedAt')
+    .exists(false)
     .select('_id')
     .lean()
     .exec();
@@ -76,12 +77,15 @@ async function listVisibleReelsByIds(ids: string[]): Promise<ReelWithOwner[]> {
     return [];
   }
 
-  return ReelModel.find({
-    _id: { $in: ids },
-    status: { $in: [ReelStatus.READY, ReelStatus.QUEUED, ReelStatus.PROCESSING, 'READY'] },
-    visibility: { $in: [ReelVisibility.PUBLIC, 'PUBLIC'] },
-    deletedAt: { $exists: false },
-  })
+  return ReelModel.find()
+    .where('_id')
+    .in(ids)
+    .where('status')
+    .in([ReelStatus.READY, ReelStatus.QUEUED, ReelStatus.PROCESSING, 'READY'])
+    .where('visibility')
+    .in([ReelVisibility.PUBLIC, 'PUBLIC'])
+    .where('deletedAt')
+    .exists(false)
     .populate({ path: 'ownerId', select: '_id profile.displayName profile.username profile.photoUrl' })
     .lean<ReelWithOwner[]>()
     .exec();

@@ -134,6 +134,8 @@ export const createReelAudioSchema = z.preprocess(
     musicVolume: volumeSchema.default(100),
     musicId: z.string().trim().min(1).max(100).optional(),
     soundUri: z.string().url().optional(),
+    musicTitle: z.string().trim().min(1).max(120).optional(),
+    musicArtist: z.string().trim().min(1).max(120).optional(),
     musicTrim: musicTrimSchema.optional(),
   }),
 );

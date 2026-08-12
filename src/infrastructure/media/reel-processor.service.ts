@@ -13,7 +13,11 @@ import {
   reelRepository,
   type ReelRepository,
 } from '../../modules/reels/reel.repository.js';
-import { buildReelFfmpegGraph, buildThumbnailFfmpegArgs } from './reel-ffmpeg-graph.js';
+import {
+  buildPhotoSourceVideoFfmpegArgs,
+  buildReelFfmpegGraph,
+  buildThumbnailFfmpegArgs,
+} from './reel-ffmpeg-graph.js';
 import { runFfmpeg, runFfprobe } from './ffmpeg.runner.js';
 
 export class ReelProcessorService {
@@ -47,13 +51,29 @@ export class ReelProcessorService {
 
     try {
       workDir = await this.createWorkDirectory(reelId);
+      const isPhotoReel = claimed.mediaType === 'photo';
+      const downloadedRawPath = path.join(
+        workDir,
+        isPhotoReel ? `raw-image.${imageExtension(claimed.rawMedia.format, claimed.rawMedia.mimeType)}` : 'raw.mp4',
+      );
       const rawPath = path.join(workDir, 'raw.mp4');
       const outputPath = path.join(workDir, 'output.mp4');
       const thumbPath = path.join(workDir, 'thumb.jpg');
 
       await this.setProgress(claimed, REEL_PROGRESS.STARTED);
-      await downloadToFile(claimed.rawMedia.secureUrl, rawPath);
+      await downloadToFile(claimed.rawMedia.secureUrl, downloadedRawPath);
       await this.setProgress(claimed, REEL_PROGRESS.RAW_DOWNLOADED);
+
+      if (isPhotoReel) {
+        await runFfmpeg({
+          args: buildPhotoSourceVideoFfmpegArgs(
+            downloadedRawPath,
+            rawPath,
+            claimed.rawMedia.durationMs,
+          ),
+          timeoutMs: env.REEL_PROCESSING_TIMEOUT_MS,
+        });
+      }
 
       const probe = await runFfprobe(rawPath);
       this.assertProbeCompatible(claimed, probe);
@@ -247,6 +267,15 @@ async function downloadToFile(url: string, destination: string): Promise<void> {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function imageExtension(format?: string, mimeType?: string): string {
+  const normalizedFormat = format?.toLowerCase();
+  if (normalizedFormat === 'png' || normalizedFormat === 'webp') return normalizedFormat;
+  if (normalizedFormat === 'jpg' || normalizedFormat === 'jpeg') return 'jpg';
+  if (mimeType === 'image/png') return 'png';
+  if (mimeType === 'image/webp') return 'webp';
+  return 'jpg';
 }
 
 function toSafeProcessingError(error: unknown): { code: string; message: string } {

@@ -15,6 +15,7 @@ import {
   MediaAssetUploadStatus,
   MediaType,
   REEL_VIDEO_MIME_TYPES,
+  REEL_IMAGE_MIME_TYPES,
   STORY_IMAGE_MIME_TYPES,
   STORY_VIDEO_MIME_TYPES,
 } from './media-asset.constants.js';
@@ -183,7 +184,9 @@ export class MediaAssetService {
   private validateDeclaredUpload(input: PrepareUploadInput): void {
     const allowedMimeTypes =
       input.purpose === MediaAssetPurpose.REEL
-        ? REEL_VIDEO_MIME_TYPES
+        ? input.mediaType === MediaType.IMAGE
+          ? REEL_IMAGE_MIME_TYPES
+          : REEL_VIDEO_MIME_TYPES
         : input.mediaType === MediaType.IMAGE
           ? STORY_IMAGE_MIME_TYPES
           : STORY_VIDEO_MIME_TYPES;
@@ -209,7 +212,9 @@ export class MediaAssetService {
 
     const maximumBytes =
       input.purpose === MediaAssetPurpose.REEL
-        ? env.REEL_RAW_VIDEO_MAX_BYTES
+        ? input.mediaType === MediaType.IMAGE
+          ? env.STORY_IMAGE_MAX_BYTES
+          : env.REEL_RAW_VIDEO_MAX_BYTES
         : input.mediaType === MediaType.IMAGE
           ? env.STORY_IMAGE_MAX_BYTES
           : env.STORY_VIDEO_MAX_BYTES;
@@ -474,7 +479,7 @@ export class MediaAssetService {
   }
 }
 
-function hasValidVideoDuration(durationSeconds: number | undefined): boolean {
+function hasValidVideoDuration(durationSeconds: number | undefined): durationSeconds is number {
   return durationSeconds !== undefined && Number.isFinite(durationSeconds) && durationSeconds > 0;
 }
 

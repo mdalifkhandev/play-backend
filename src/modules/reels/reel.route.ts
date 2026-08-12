@@ -56,16 +56,16 @@ reelRouter.post(
 );
 
 reelRouter.post(
-  '/:reelId/views',
-  validateRequest({ params: reelIdParamsSchema }),
-  reelController.recordView,
-);
-
-reelRouter.post(
   '/:reelId/retry',
   reelRetryRateLimiter,
   validateRequest({ params: reelIdParamsSchema }),
   reelController.retry,
+);
+
+reelRouter.post(
+  '/:reelId/views',
+  validateRequest({ params: reelIdParamsSchema }),
+  reelController.recordView,
 );
 
 reelRouter.delete(

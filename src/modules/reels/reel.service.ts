@@ -30,7 +30,6 @@ import {
   ReelQueueSubmissionState,
   ReelStatus,
   ReelVisibility,
-  REEL_PROGRESS,
 } from './reel.constants.js';
 import { decodeReelCursor, encodeReelCursor } from './reel-cursor.js';
 import {
@@ -104,9 +103,7 @@ export class ReelService {
       };
     }
 
-    const verifiedTrack = input.audio.musicId
-      ? await this.verifyProcessableMusic(input.audio.musicId)
-      : undefined;
+    const selectedMusic = await this.resolveProcessableMusic(input.audio);
 
     let transactionResult: { reelId: string; replayed: boolean };
 
@@ -125,14 +122,25 @@ export class ReelService {
 
         const asset = await this.requirePublishableAsset(resolvedMediaAssetId, ownerId, session);
         const trim = this.resolveVideoTrim(normalizedInput, asset);
-        const musicSnapshot = input.audio.musicId
-          ? this.buildMusicSnapshot(normalizedInput, verifiedTrack!, trim.endMs - trim.startMs)
+        const musicSnapshot = selectedMusic
+          ? this.buildMusicSnapshot(normalizedInput, selectedMusic, trim.endMs - trim.startMs)
           : undefined;
 
         const extractedHashtags = (input.caption?.match(/#[\w]+/g) ?? []).map((h) =>
           h.replace(/^#/, '').toLowerCase(),
         );
         const hashtags = Array.from(new Set([...(input.hashtags ?? []), ...extractedHashtags]));
+        const locationSnapshot = input.location
+          ? {
+              ...(input.location.name ? { name: input.location.name } : {}),
+              ...(input.location.latitude !== undefined
+                ? { latitude: input.location.latitude }
+                : {}),
+              ...(input.location.longitude !== undefined
+                ? { longitude: input.location.longitude }
+                : {}),
+            }
+          : undefined;
 
         const rawMediaSnapshot = {
           mediaAssetId: asset._id,
@@ -142,54 +150,30 @@ export class ReelService {
           secureUrl: asset.secureUrl!,
           width: asset.width!,
           height: asset.height!,
-          durationMs: Math.round((asset.durationSeconds || 5) * 1_000),
+          durationMs: Math.round((asset.durationSeconds || 10) * 1_000),
           fileSizeBytes: asset.fileSizeBytes || 1024,
           mimeType: asset.mimeType,
           ...(asset.format ? { format: asset.format } : {}),
           ...(asset.hasAudio !== undefined ? { hasAudio: asset.hasAudio } : {}),
         };
 
-        const processedMediaSnapshot = {
-          provider: asset.provider,
-          publicId: asset.publicId,
-          version: asset.version!,
-          secureUrl: asset.secureUrl!,
-          fileSizeBytes: asset.fileSizeBytes || 1024,
-          width: asset.width || 1080,
-          height: asset.height || 1920,
-          durationMs: Math.round((asset.durationSeconds || 5) * 1_000),
-          format: asset.format || 'mp4',
-        };
-
-        const thumbnailSnapshot = {
-          provider: asset.provider,
-          publicId: asset.publicId,
-          version: asset.version!,
-          secureUrl: asset.secureUrl!,
-          width: asset.width || 1080,
-          height: asset.height || 1920,
-        };
-
         const record: CreateReelRecord = {
           ownerId: asset.ownerId,
-          status: ReelStatus.READY,
-          progress: 100,
-          publishedAt: new Date(),
-          processedMedia: processedMediaSnapshot,
-          thumbnail: thumbnailSnapshot,
+          status: ReelStatus.QUEUED,
+          progress: 0,
           mediaType: input.mediaType || 'video',
           ...(input.caption ? { caption: input.caption } : {}),
           ...(hashtags.length > 0 ? { hashtags } : {}),
           ...(input.mentions && input.mentions.length > 0
             ? { mentions: input.mentions as any }
             : {}),
-          ...(input.location ? { location: input.location } : {}),
+          ...(locationSnapshot ? { location: locationSnapshot } : {}),
           visibility: input.visibility,
           forKids: input.forKids,
           rawMedia: rawMediaSnapshot,
           audioEdit: {
             originalVolume: input.audio.originalVolume,
-            musicVolume: input.audio.musicId ? input.audio.musicVolume : 0,
+            musicVolume: selectedMusic ? input.audio.musicVolume : 0,
             ...(musicSnapshot ? { music: musicSnapshot } : {}),
           },
           videoEdit: {
@@ -204,11 +188,10 @@ export class ReelService {
               : {}),
           },
           processing: {
-            attempts: 1,
+            attempts: 0,
             retryCount: 0,
-            queueSubmissionState: ReelQueueSubmissionState.SUBMITTED,
+            queueSubmissionState: ReelQueueSubmissionState.PENDING,
             cancelRequested: false,
-            completedAt: new Date(),
           },
           idempotencyKey: normalizedKey,
           requestHash,
@@ -596,8 +579,8 @@ export class ReelService {
       });
     }
 
-    if (asset.mediaType !== MediaType.VIDEO) {
-      throw new AppError('Reel media must be a verified video asset.', 422, {
+    if (asset.mediaType !== MediaType.VIDEO && asset.mediaType !== MediaType.IMAGE) {
+      throw new AppError('Reel media must be a verified video or image asset.', 422, {
         code: 'UPLOAD_INVALID_MEDIA_TYPE',
       });
     }
@@ -608,7 +591,7 @@ export class ReelService {
       !asset.fileSizeBytes ||
       !asset.width ||
       !asset.height ||
-      asset.durationSeconds === undefined
+      (asset.mediaType === MediaType.VIDEO && asset.durationSeconds === undefined)
     ) {
       throw new ConflictError('Media asset verification metadata is incomplete.', {
         code: 'UPLOAD_NOT_VERIFIED',
@@ -622,7 +605,7 @@ export class ReelService {
     input: CreateReelInput,
     asset: MediaAssetDocument,
   ): { startMs: number; endMs: number } {
-    const rawDurationMs = Math.round(asset.durationSeconds! * 1_000);
+    const rawDurationMs = Math.round((asset.durationSeconds ?? 10) * 1_000);
     const startMs = input.videoEdit.trim?.startMs ?? 0;
     let endMs = input.videoEdit.trim?.endMs ?? rawDurationMs;
 
@@ -709,24 +692,56 @@ export class ReelService {
     };
   }
 
-  private async verifyProcessableMusic(musicId: string): Promise<MusicTrack> {
-    const track = await this.music.getTrackById(musicId);
-
-    if (!track) {
-      throw new NotFoundError('Jamendo music track was not found.', {
-        code: 'MUSIC_TRACK_NOT_FOUND',
-      });
+  private async resolveProcessableMusic(input: CreateReelInput['audio']): Promise<MusicTrack | undefined> {
+    if (!input.musicId && !input.soundUri) {
+      return undefined;
     }
 
-    if (!track.downloadAllowed || !track.downloadUrl) {
-      throw new AppError(
-        'Selected music cannot be downloaded for FFmpeg processing.',
-        422,
-        { code: 'MUSIC_PROCESSING_NOT_ALLOWED' },
+    if (input.musicId) {
+      const track = await this.music.getTrackById(input.musicId);
+
+      if (track?.downloadAllowed && track.downloadUrl) {
+        return track;
+      }
+
+      if (!input.soundUri) {
+        if (!track) {
+          throw new NotFoundError('Jamendo music track was not found.', {
+            code: 'MUSIC_TRACK_NOT_FOUND',
+          });
+        }
+
+        throw new AppError(
+          'Selected music cannot be downloaded for FFmpeg processing.',
+          422,
+          { code: 'MUSIC_PROCESSING_NOT_ALLOWED' },
+        );
+      }
+
+      logger.warn(
+        { musicId: input.musicId },
+        'Jamendo track lookup failed; falling back to submitted sound URL',
       );
     }
 
-    return track;
+    if (!input.soundUri) {
+      return undefined;
+    }
+
+    return {
+      provider: 'jamendo',
+      providerTrackId: input.musicId || `url-${createHash('sha1').update(input.soundUri).digest('hex').slice(0, 16)}`,
+      title: input.musicTitle || 'Added music',
+      artistName: input.musicArtist || 'Original audio',
+      albumName: null,
+      coverImageUrl: null,
+      audioPreviewUrl: input.soundUri,
+      durationSeconds: 24 * 60 * 60,
+      shareUrl: null,
+      licenseUrl: null,
+      downloadAllowed: true,
+      downloadUrl: input.soundUri,
+    };
   }
 }
 

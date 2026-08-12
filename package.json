@@ -10,6 +10,7 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch --clear-screen=false src/server.ts",
     "worker:dev": "tsx watch --clear-screen=false src/worker.ts",
+    "dev:all": "node scripts/dev-all.mjs",
     "start": "node dist/server.js",
     "worker:start": "node dist/worker.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",

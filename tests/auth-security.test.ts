@@ -79,7 +79,7 @@ describe('auth API security contract', () => {
 
   it('rejects cookie-authenticated mutations without a trusted origin', async () => {
     const response = await request(app)
-      .post('/api/v1/auth/logout')
+      .patch('/api/v1/auth/setup-profile')
       .set('Cookie', 'refreshToken=test-refresh-token')
       .send({});
 

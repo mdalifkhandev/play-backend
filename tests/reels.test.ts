@@ -46,7 +46,7 @@ beforeAll(async () => {
 });
 
 describe('reel contracts and services', () => {
-  it('prepares reel uploads with purpose and rejects non-video', () => {
+  it('prepares reel uploads with purpose and accepts video or photo', () => {
     expect(
       prepareUploadBodySchema.parse({
         fileName: 'my reel.mp4',
@@ -68,7 +68,7 @@ describe('reel contracts and services', () => {
         fileSizeBytes: 1000,
         purpose: 'reel',
       }).success,
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('rejects client musicUrl, arbitrary media URLs, invalid volumes, and unknown filters', () => {
@@ -150,7 +150,7 @@ describe('reel contracts and services', () => {
     const cursor = encodeReelCursor({ id, publishedAt });
 
     expect(decodeReelCursor(cursor)).toEqual({ id, publishedAt });
-    expect(reelJobId(id.toString())).toBe(`reel:${id.toString()}`);
+    expect(reelJobId(id.toString())).toBe(`reel-${id.toString()}`);
   });
 
   it('builds ffmpeg argv arrays without shell concatenation', () => {
@@ -301,7 +301,7 @@ describe('reel contracts and services', () => {
     });
 
     expect(result.reelId).toBe(reelId.toString());
-    expect(result.status).toBe(ReelStatus.READY);
+    expect(result.status).toBe(ReelStatus.QUEUED);
     expect(reels.create).toHaveBeenCalledOnce();
     expect(mediaAssets.attachToReel).toHaveBeenCalledOnce();
     expect(enqueue).toHaveBeenCalledWith(reelId.toString());

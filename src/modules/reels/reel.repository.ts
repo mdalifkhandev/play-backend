@@ -43,12 +43,16 @@ export class ReelRepository {
   }
 
   async findViewableById(reelId: string): Promise<ReelDocument | null> {
-    return ReelModel.findOne({
-      _id: reelId,
-      status: { $in: [ReelStatus.READY, ReelStatus.QUEUED, ReelStatus.PROCESSING, 'READY'] },
-      visibility: { $in: [ReelVisibility.PUBLIC, 'PUBLIC'] },
-      deletedAt: { $exists: false },
-    }).exec();
+    return ReelModel.findOne()
+      .where('_id')
+      .equals(reelId)
+      .where('status')
+      .in([ReelStatus.READY, ReelStatus.QUEUED, ReelStatus.PROCESSING, 'READY'])
+      .where('visibility')
+      .in([ReelVisibility.PUBLIC, 'PUBLIC'])
+      .where('deletedAt')
+      .exists(false)
+      .exec();
   }
 
   async findByIdempotencyKey(
@@ -65,7 +69,7 @@ export class ReelRepository {
 
   async listReadyPublic(limit: number, cursor?: ReelCursor, hashtag?: string): Promise<ReelWithOwner[]> {
     const filter: Record<string, unknown> = {
-      status: { $in: [ReelStatus.READY, ReelStatus.QUEUED, ReelStatus.PROCESSING, 'READY'] },
+      status: ReelStatus.READY,
       visibility: ReelVisibility.PUBLIC,
       deletedAt: { $exists: false },
       ...(hashtag ? { hashtags: hashtag.toLowerCase() } : {}),
@@ -357,7 +361,7 @@ export class ReelRepository {
       { new: true },
     )
       .select('viewCount')
-      .lean()
+      .lean<{ viewCount: number }>()
       .exec();
 
     return reel?.viewCount ?? 0;

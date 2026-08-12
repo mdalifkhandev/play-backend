@@ -142,6 +142,62 @@ export function buildThumbnailFfmpegArgs(
   ];
 }
 
+export function buildPhotoSourceVideoFfmpegArgs(
+  imagePath: string,
+  outputVideoPath: string,
+  durationMs: number,
+): string[] {
+  const durationSeconds = (Math.max(1_000, durationMs) / 1_000).toFixed(3);
+  const maxW = env.REEL_OUTPUT_MAX_WIDTH;
+  const maxH = env.REEL_OUTPUT_MAX_HEIGHT;
+
+  return [
+    '-y',
+    '-loop',
+    '1',
+    '-framerate',
+    '30',
+    '-t',
+    durationSeconds,
+    '-i',
+    imagePath,
+    '-f',
+    'lavfi',
+    '-t',
+    durationSeconds,
+    '-i',
+    'anullsrc=channel_layout=stereo:sample_rate=48000',
+    '-vf',
+    `scale=${maxW}:${maxH}:force_original_aspect_ratio=decrease,pad=${maxW}:${maxH}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p`,
+    '-map',
+    '0:v:0',
+    '-map',
+    '1:a:0',
+    '-c:v',
+    'libx264',
+    '-pix_fmt',
+    'yuv420p',
+    '-profile:v',
+    'main',
+    '-b:v',
+    env.REEL_OUTPUT_VIDEO_BITRATE,
+    '-r',
+    '30',
+    '-c:a',
+    'aac',
+    '-b:a',
+    env.REEL_OUTPUT_AUDIO_BITRATE,
+    '-ar',
+    '48000',
+    '-ac',
+    '2',
+    '-movflags',
+    '+faststart',
+    '-shortest',
+    outputVideoPath,
+  ];
+}
+
 function buildScaleFilter(): string {
   const maxW = env.REEL_OUTPUT_MAX_WIDTH;
   const maxH = env.REEL_OUTPUT_MAX_HEIGHT;
@@ -167,6 +223,7 @@ function resolveFontFile(preferred?: string): string | undefined {
     preferred,
     env.REEL_FONT_FILE,
     '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+    '/usr/share/fonts/dejavu/DejaVuSans.ttf',
     '/usr/share/fonts/TTF/DejaVuSans.ttf',
     'C:\\Windows\\Fonts\\arial.ttf',
   ].filter(Boolean) as string[];

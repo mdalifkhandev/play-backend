@@ -622,7 +622,16 @@ export class CoinService {
   }
 
   async updateAdminCoinSettings(adminUserId: string, input: UpdateCoinSettingsInput) {
-    const updated = await coinRepository.updateCoinSettings(input, adminUserId);
+    const update = {
+      coinsPerDollar: input.coinsPerDollar,
+      ...(input.minWithdrawalCoins !== undefined
+        ? { minWithdrawalCoins: input.minWithdrawalCoins }
+        : {}),
+      ...(input.maxWithdrawalCoins !== undefined
+        ? { maxWithdrawalCoins: input.maxWithdrawalCoins }
+        : {}),
+    };
+    const updated = await coinRepository.updateCoinSettings(update, adminUserId);
     return {
       coinsPerDollar: updated.coinsPerDollar,
       minWithdrawalCoins: updated.minWithdrawalCoins,
