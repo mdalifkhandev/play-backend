@@ -13,7 +13,7 @@ import {
 } from './reel.model.js';
 import { ReelViewModel } from './reel-view.model.js';
 
-const OWNER_PROJECTION = '_id profile.displayName profile.username profile.photoUrl';
+const OWNER_PROJECTION = '_id email profile.displayName profile.username profile.photoUrl';
 const FOR_YOU_REPORT_THRESHOLD = 3;
 
 export interface ReelPreferenceSignals {

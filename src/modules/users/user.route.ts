@@ -6,6 +6,7 @@ import { searchConversationUsersQuerySchema } from '../conversations/conversatio
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
 import { followController } from './follow.controller.js';
 import { followListQuerySchema, followUserParamsSchema } from './follow.validation.js';
+import { userController } from './user.controller.js';
 
 export const userRouter = Router();
 
@@ -14,6 +15,13 @@ userRouter.get(
   authenticate,
   validateRequest({ query: searchConversationUsersQuerySchema }),
   conversationController.searchUsers,
+);
+
+userRouter.get(
+  '/:userId/profile',
+  optionalAuthenticate,
+  validateRequest({ params: followUserParamsSchema }),
+  userController.profile,
 );
 
 userRouter.get(

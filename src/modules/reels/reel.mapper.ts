@@ -5,6 +5,7 @@ import type { Reel } from './reel.model.js';
 
 export interface PopulatedReelOwner {
   _id: Types.ObjectId;
+  email?: string;
   profile?: {
     displayName?: string;
     username?: string;
@@ -90,6 +91,7 @@ export interface ReelFeedItemDto {
   forKids: boolean;
   user: {
     id: string;
+    email: string | null;
     username: string | null;
     avatarUrl: string | null;
   };
@@ -219,6 +221,7 @@ export function toReelFeedItemDto(
     forKids: reel.forKids ?? false,
     user: {
       id: ownerId,
+      email: owner?.email ?? null,
       username: profile?.username ?? null,
       avatarUrl: profile?.photoUrl ?? null,
     },
