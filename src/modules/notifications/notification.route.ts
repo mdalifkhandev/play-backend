@@ -1,0 +1,39 @@
+import { Router } from 'express';
+
+import { UserRole } from '../../common/enums/user-role.enum.js';
+import { authenticate } from '../../common/middleware/auth.middleware.js';
+import { authorize } from '../../common/middleware/authorization.middleware.js';
+import { validateRequest } from '../../common/middleware/validation.middleware.js';
+import { notificationController } from './notification.controller.js';
+import {
+  adminSendPushNotificationBodySchema,
+  deletePushTokenBodySchema,
+  registerPushTokenBodySchema,
+  sendPushNotificationBodySchema,
+} from './notification.validation.js';
+
+export const notificationRouter = Router();
+
+notificationRouter.use(authenticate);
+
+notificationRouter.post(
+  '/tokens',
+  validateRequest({ body: registerPushTokenBodySchema }),
+  notificationController.registerToken,
+);
+notificationRouter.delete(
+  '/tokens',
+  validateRequest({ body: deletePushTokenBodySchema }),
+  notificationController.deleteToken,
+);
+notificationRouter.post(
+  '/send',
+  validateRequest({ body: sendPushNotificationBodySchema }),
+  notificationController.sendToMe,
+);
+notificationRouter.post(
+  '/admin/send',
+  authorize(UserRole.ADMIN),
+  validateRequest({ body: adminSendPushNotificationBodySchema }),
+  notificationController.adminSendToUser,
+);

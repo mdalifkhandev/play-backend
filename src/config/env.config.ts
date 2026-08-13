@@ -113,6 +113,9 @@ const environmentSchema = z
     STRIPE_SECRET_KEY: z.string().trim().min(1).optional(),
     STRIPE_PUBLISHABLE_KEY: z.string().trim().min(1).optional(),
     STRIPE_WEBHOOK_SECRET: z.string().trim().optional(),
+    FIREBASE_PROJECT_ID: z.string().trim().min(1).optional(),
+    FIREBASE_CLIENT_EMAIL: z.string().trim().email().optional(),
+    FIREBASE_PRIVATE_KEY: z.string().trim().min(1).optional(),
   })
   .superRefine((value, context) => {
     if (value.DATABASE_MIN_POOL_SIZE > value.DATABASE_MAX_POOL_SIZE) {

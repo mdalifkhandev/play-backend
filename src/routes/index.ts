@@ -25,12 +25,14 @@ import {
 import { coinRouter } from '../modules/coins/coin.route.js';
 import { healthRouter } from './health.route.js';
 import { userRouter } from '../modules/users/user.route.js';
+import { notificationRouter } from '../modules/notifications/notification.route.js';
 
 export const apiRouter = Router();
 
 apiRouter.use('/health', healthRouter);
 apiRouter.use('/auth', authRouter);
 apiRouter.use('/users', userRouter);
+apiRouter.use('/notifications', notificationRouter);
 apiRouter.use('/coins', coinRouter);
 apiRouter.use('/content-pages', contentPageRouter);
 apiRouter.use('/legal-consents', legalConsentRouter);
