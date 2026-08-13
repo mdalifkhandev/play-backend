@@ -88,6 +88,12 @@ conversationRouter.post(
   conversationController.blockUser,
 );
 
+conversationRouter.get(
+  '/block/:targetUserId',
+  validateRequest({ params: targetUserIdParamSchema }),
+  conversationController.getBlockStatus,
+);
+
 conversationRouter.delete(
   '/block/:targetUserId',
   validateRequest({ params: targetUserIdParamSchema }),

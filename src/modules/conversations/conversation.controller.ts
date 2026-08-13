@@ -73,6 +73,13 @@ export class ConversationController {
     sendSuccess(res, 200, 'User blocked.', result);
   };
 
+  getBlockStatus = async (req: Request, res: Response): Promise<void> => {
+    const userId = req.user!.userId;
+    const { targetUserId } = req.params;
+    const result = await this.service.getBlockStatus(userId, targetUserId as string);
+    sendSuccess(res, 200, 'Block status retrieved.', result);
+  };
+
   unblockUser = async (req: Request, res: Response): Promise<void> => {
     const userId = req.user!.userId;
     const { targetUserId } = req.params;

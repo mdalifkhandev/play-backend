@@ -28,6 +28,11 @@ interface TypingPayload extends ConversationPayload {
   isTyping?: boolean;
 }
 
+interface BlockUserPayload {
+  conversationId?: string;
+  targetUserId: string;
+}
+
 export function registerChatSocketHandlers(
   io: Server,
   socket: AuthenticatedSocket,
@@ -157,6 +162,28 @@ export function registerChatSocketHandlers(
       });
     },
   );
+
+  socket.on(
+    SOCKET_EVENTS.CHAT_BLOCK_USER,
+    async (data: BlockUserPayload, ack?: SocketAck): Promise<void> => {
+      await handleSocketAction(socket, SOCKET_EVENTS.CHAT_BLOCK_USER, ack, async () => {
+        const targetUserId = requireTargetUserId(data);
+        await service.blockUser(socket.user.userId, targetUserId);
+        return emitBlockStatuses(io, service, socket.user.userId, targetUserId, data.conversationId);
+      });
+    },
+  );
+
+  socket.on(
+    SOCKET_EVENTS.CHAT_UNBLOCK_USER,
+    async (data: BlockUserPayload, ack?: SocketAck): Promise<void> => {
+      await handleSocketAction(socket, SOCKET_EVENTS.CHAT_UNBLOCK_USER, ack, async () => {
+        const targetUserId = requireTargetUserId(data);
+        await service.unblockUser(socket.user.userId, targetUserId);
+        return emitBlockStatuses(io, service, socket.user.userId, targetUserId, data.conversationId);
+      });
+    },
+  );
 }
 
 async function handleSocketAction<T>(
@@ -182,6 +209,42 @@ function requireConversationId(data: ConversationPayload | undefined): string {
     throw new AppError('conversationId is required.', 400, { code: 'VALIDATION_ERROR' });
   }
   return conversationId;
+}
+
+function requireTargetUserId(data: BlockUserPayload | undefined): string {
+  const targetUserId = data?.targetUserId?.trim();
+  if (!targetUserId) {
+    throw new AppError('targetUserId is required.', 400, { code: 'VALIDATION_ERROR' });
+  }
+  return targetUserId;
+}
+
+async function emitBlockStatuses(
+  io: Server,
+  service: ConversationService,
+  actorUserId: string,
+  targetUserId: string,
+  conversationId?: string,
+) {
+  const [actorStatus, targetStatus] = await Promise.all([
+    service.getBlockStatus(actorUserId, targetUserId),
+    service.getBlockStatus(targetUserId, actorUserId),
+  ]);
+  const actorPayload = {
+    userId: targetUserId,
+    ...(conversationId ? { conversationId } : {}),
+    ...actorStatus,
+  };
+  const targetPayload = {
+    userId: actorUserId,
+    ...(conversationId ? { conversationId } : {}),
+    ...targetStatus,
+  };
+
+  io.to(getUserRoom(actorUserId)).emit(SOCKET_EVENTS.CHAT_BLOCK_STATUS_CHANGED, actorPayload);
+  io.to(getUserRoom(targetUserId)).emit(SOCKET_EVENTS.CHAT_BLOCK_STATUS_CHANGED, targetPayload);
+
+  return actorPayload;
 }
 
 function normalizeMessage(data: SendMessagePayload): {

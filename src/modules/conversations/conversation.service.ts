@@ -11,6 +11,7 @@ import type {
   MessageResponseDTO,
   RecommendedUserDTO,
   SendMessageDTO,
+  BlockStatusDTO,
 } from './conversation.types.js';
 import type { IConversation } from './conversation.model.js';
 import type { IMessage } from './message.model.js';
@@ -270,6 +271,23 @@ export class ConversationService {
   async unblockUser(userId: string, targetUserId: string): Promise<{ blocked: boolean }> {
     await this.repository.unblockUser(userId, targetUserId);
     return { blocked: false };
+  }
+
+  async getBlockStatus(userId: string, targetUserId: string): Promise<BlockStatusDTO> {
+    if (userId === targetUserId) {
+      return { blockedByMe: false, blockedMe: false, canUnblock: false };
+    }
+
+    const [blockedByMe, blockedMe] = await Promise.all([
+      this.repository.isBlocked(userId, targetUserId),
+      this.repository.isBlocked(targetUserId, userId),
+    ]);
+
+    return {
+      blockedByMe,
+      blockedMe,
+      canUnblock: blockedByMe,
+    };
   }
 
   async getRecommendedUsers(userId: string): Promise<RecommendedUserDTO[]> {

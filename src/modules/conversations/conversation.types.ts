@@ -58,3 +58,9 @@ export interface RecommendedUserDTO {
   reason: string;
   isFollowing: boolean;
 }
+
+export interface BlockStatusDTO {
+  blockedByMe: boolean;
+  blockedMe: boolean;
+  canUnblock: boolean;
+}
