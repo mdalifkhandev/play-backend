@@ -209,6 +209,37 @@ export class ConversationService {
     }));
   }
 
+  async searchUsers(
+    userId: string,
+    query: { q: string; limit?: number },
+  ): Promise<RecommendedUserDTO[]> {
+    const search = query.q.trim();
+    const limit = Math.min(50, Math.max(1, query.limit ?? 20));
+    const escapedSearch = escapeRegExp(search);
+    const searchRegex = new RegExp(escapedSearch, 'i');
+
+    const users = await UserModel.find({
+      _id: { $ne: userId },
+      status: 'active',
+      $or: [
+        { email: searchRegex },
+        { 'profile.username': searchRegex },
+        { 'profile.displayName': searchRegex },
+      ],
+    } as any)
+      .limit(limit)
+      .exec();
+
+    return users.map((u) => ({
+      id: u._id.toString(),
+      username: u.profile.username || 'user',
+      displayName: u.profile.displayName || u.profile.username || u.email,
+      ...(u.profile.photoUrl ? { avatarUrl: u.profile.photoUrl } : {}),
+      reason: u.profile.username ? `@${u.profile.username}` : u.email,
+      isFollowing: false,
+    }));
+  }
+
   private mapToConversationResponse(
     conv: IConversation,
     currentUserId: string,
@@ -313,3 +344,7 @@ export class ConversationService {
 }
 
 export const conversationService = new ConversationService();
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}

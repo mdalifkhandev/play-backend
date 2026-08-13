@@ -59,6 +59,12 @@ export class ConversationController {
     const recommendations = await this.service.getRecommendedUsers(userId);
     sendSuccess(res, 200, 'Recommended users retrieved.', recommendations);
   };
+
+  searchUsers = async (req: Request, res: Response): Promise<void> => {
+    const userId = req.user!.userId;
+    const result = await this.service.searchUsers(userId, req.query as any);
+    sendSuccess(res, 200, 'Users retrieved.', result);
+  };
 }
 
 export const conversationController = new ConversationController();

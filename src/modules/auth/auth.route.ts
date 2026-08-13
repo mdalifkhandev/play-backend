@@ -9,6 +9,7 @@ import { authAuditMiddleware } from '../audit/auth-audit.middleware.js';
 import { authController } from './auth.controller.js';
 import {
   emailBodySchema,
+  googleLoginBodySchema,
   loginBodySchema,
   logoutBodySchema,
   refreshTokenBodySchema,
@@ -51,6 +52,7 @@ authRouter.use(authAuditMiddleware);
 
 authRouter.post('/sign-up', authRateLimiter, validateRequest({ body: signUpBodySchema }), authController.signUp);
 authRouter.post('/login', authRateLimiter, validateRequest({ body: loginBodySchema }), authController.login);
+authRouter.post('/google', authRateLimiter, validateRequest({ body: googleLoginBodySchema }), authController.googleLogin);
 authRouter.post('/verify-email', authRateLimiter, validateRequest({ body: verifyCodeBodySchema }), authController.verifyEmail);
 authRouter.post('/resend-verification', authRateLimiter, validateRequest({ body: emailBodySchema }), authController.resendVerification);
 authRouter.post('/forgot-password', authRateLimiter, validateRequest({ body: emailBodySchema }), authController.forgotPassword);

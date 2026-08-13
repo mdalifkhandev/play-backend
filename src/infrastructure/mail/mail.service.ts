@@ -24,10 +24,10 @@ class BrevoMailService implements MailService {
   private client: BrevoClient | undefined;
 
   async sendAuthCode(input: SendAuthCodeInput): Promise<void> {
-    if (env.NODE_ENV !== 'production' && !env.BREVO_API_KEY) {
+    if (env.NODE_ENV !== 'production') {
       logger.info(
         { email: input.to, purpose: input.purpose, devCode: input.code },
-        'Development auth code created',
+        'Development auth email skipped; use this auth code',
       );
       return;
     }
@@ -46,6 +46,15 @@ class BrevoMailService implements MailService {
       logger.info({ email: input.to, purpose: input.purpose, messageId: result.messageId }, 'Brevo auth email sent');
     } catch (error) {
       logger.error({ err: error, email: input.to, purpose: input.purpose }, 'Brevo email send failed');
+
+      if (env.NODE_ENV !== 'production') {
+        logger.warn(
+          { email: input.to, purpose: input.purpose, devCode: input.code },
+          'Development auth email skipped after provider failure',
+        );
+        return;
+      }
+
       throw new AppError('Email could not be sent.', 502, {
         code: 'EMAIL_SEND_FAILED',
         details: error,

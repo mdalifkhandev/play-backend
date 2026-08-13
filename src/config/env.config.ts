@@ -116,6 +116,9 @@ const environmentSchema = z
     FIREBASE_PROJECT_ID: z.string().trim().min(1).optional(),
     FIREBASE_CLIENT_EMAIL: z.string().trim().email().optional(),
     FIREBASE_PRIVATE_KEY: z.string().trim().min(1).optional(),
+    GOOGLE_ANDROID_CLIENT_ID: z.string().trim().min(1).optional(),
+    GOOGLE_IOS_CLIENT_ID: z.string().trim().min(1).optional(),
+    GOOGLE_WEB_CLIENT_ID: z.string().trim().min(1).optional(),
   })
   .superRefine((value, context) => {
     if (value.DATABASE_MIN_POOL_SIZE > value.DATABASE_MAX_POOL_SIZE) {

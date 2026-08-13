@@ -95,6 +95,13 @@ export const loginBodySchema = z.object({
   rememberMe: z.boolean().optional().default(false),
 });
 
+export const googleLoginBodySchema = z
+  .object({
+    idToken: z.string().trim().min(20, 'Google ID token is required.'),
+    rememberMe: z.boolean().optional().default(true),
+  })
+  .strict();
+
 export const emailBodySchema = z.object({
   email: emailSchema,
 });
@@ -145,6 +152,7 @@ export const setupProfileBodySchema = z.object({
 
 export type SignUpInput = z.infer<typeof signUpBodySchema>;
 export type LoginInput = z.infer<typeof loginBodySchema>;
+export type GoogleLoginInput = z.infer<typeof googleLoginBodySchema>;
 export type EmailInput = z.infer<typeof emailBodySchema>;
 export type VerifyCodeInput = z.infer<typeof verifyCodeBodySchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordBodySchema>;

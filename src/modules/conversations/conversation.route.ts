@@ -7,6 +7,7 @@ import {
   conversationIdParamSchema,
   createConversationSchema,
   getMessagesQuerySchema,
+  searchConversationUsersQuerySchema,
   sendMessageSchema,
   targetUserIdParamSchema,
 } from './conversation.validation.js';
@@ -28,6 +29,12 @@ conversationRouter.post(
 );
 
 conversationRouter.get('/recommended', conversationController.getRecommendedUsers);
+
+conversationRouter.get(
+  '/users/search',
+  validateRequest({ query: searchConversationUsersQuerySchema }),
+  conversationController.searchUsers,
+);
 
 conversationRouter.get(
   '/:id/messages',

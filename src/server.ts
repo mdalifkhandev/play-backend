@@ -15,7 +15,19 @@ try {
   await connectRedis();
 
   server.listen(env.PORT, () => {
-    logger.info({ port: env.PORT }, 'HTTP server started');
+    logger.info(
+      {
+        port: env.PORT,
+        autoReload: 'npm run dev uses tsx watch',
+        routes: [
+          'GET /api/v1/users/search?q=...',
+          'GET /api/v1/conversations/users/search?q=...',
+          'POST /api/v1/notifications/tokens',
+          'POST /api/v1/auth/google',
+        ],
+      },
+      'HTTP server started',
+    );
   });
 } catch (error) {
   logger.fatal({ err: error }, 'Failed to start HTTP server');

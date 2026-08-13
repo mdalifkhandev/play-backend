@@ -31,3 +31,11 @@ export const getMessagesQuerySchema = z.object({
     .optional()
     .transform((val) => (val ? Number.parseInt(val, 10) : 30)),
 });
+
+export const searchConversationUsersQuerySchema = z.object({
+  q: z.string().trim().min(1).max(80),
+  limit: z
+    .string()
+    .optional()
+    .transform((val) => (val ? Number.parseInt(val, 10) : 20)),
+});

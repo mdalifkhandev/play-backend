@@ -27,6 +27,7 @@ import type {
 } from './auth.types.js';
 import type {
   EmailInput,
+  GoogleLoginInput,
   LoginInput,
   ResetPasswordInput,
   SetupProfileInput,
@@ -151,6 +152,47 @@ export class AuthService {
           },
         ],
       });
+    }
+
+    await userRepository.recordSuccessfulLogin(user);
+
+    return this.createAuthResult(user, Boolean(input.rememberMe), context);
+  }
+
+  async googleLogin(input: GoogleLoginInput, context: RequestContext): Promise<AuthResult> {
+    const googleUser = await this.verifyGoogleIdToken(input.idToken);
+    let user = await userRepository.findByEmail(googleUser.email);
+
+    if (!user) {
+      const createdUser = await userRepository.create({
+        email: googleUser.email,
+        passwordHash: await hashPassword(createSecureToken()),
+        status: AccountStatus.ACTIVE,
+        isEmailVerified: true,
+      });
+
+      const updatedUser = await userRepository.updateProfile(createdUser._id, {
+        ...(googleUser.name ? { displayName: googleUser.name } : {}),
+        ...(googleUser.picture ? { photoUrl: googleUser.picture } : {}),
+        isSetupComplete: false,
+      });
+
+      user = updatedUser ?? createdUser;
+    } else {
+      this.assertUserCanLogin(user);
+
+      if (!user.isEmailVerified) {
+        user.isEmailVerified = true;
+        user.emailVerifiedAt = new Date();
+      }
+
+      if (!user.profile.displayName && googleUser.name) {
+        user.profile.displayName = googleUser.name;
+      }
+
+      if (!user.profile.photoUrl && googleUser.picture) {
+        user.profile.photoUrl = googleUser.picture;
+      }
     }
 
     await userRepository.recordSuccessfulLogin(user);
@@ -488,6 +530,63 @@ export class AuthService {
       refreshToken,
       accessTokenExpiresInSeconds: env.AUTH_ACCESS_TOKEN_TTL_SECONDS,
       refreshTokenExpiresAt: refreshExpiresAt.toISOString(),
+    };
+  }
+
+  private async verifyGoogleIdToken(idToken: string): Promise<{
+    email: string;
+    name?: string;
+    picture?: string;
+  }> {
+    const allowedAudiences = [
+      env.GOOGLE_ANDROID_CLIENT_ID,
+      env.GOOGLE_IOS_CLIENT_ID,
+      env.GOOGLE_WEB_CLIENT_ID,
+    ].filter((clientId): clientId is string => Boolean(clientId));
+
+    if (allowedAudiences.length === 0) {
+      throw new AppError('Google login is not configured.', 503, {
+        code: 'GOOGLE_LOGIN_NOT_CONFIGURED',
+      });
+    }
+
+    const response = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
+    );
+
+    if (!response.ok) {
+      throw new UnauthorizedError('Google token is invalid.', {
+        code: 'GOOGLE_TOKEN_INVALID',
+      });
+    }
+
+    const payload = (await response.json()) as {
+      aud?: string;
+      email?: string;
+      email_verified?: boolean | string;
+      name?: string;
+      picture?: string;
+    };
+
+    if (!payload.aud || !allowedAudiences.includes(payload.aud)) {
+      throw new UnauthorizedError('Google token audience is not allowed.', {
+        code: 'GOOGLE_TOKEN_AUDIENCE_INVALID',
+      });
+    }
+
+    const isEmailVerified =
+      payload.email_verified === true || payload.email_verified === 'true';
+
+    if (!payload.email || !isEmailVerified) {
+      throw new UnauthorizedError('Google email is not verified.', {
+        code: 'GOOGLE_EMAIL_NOT_VERIFIED',
+      });
+    }
+
+    return {
+      email: payload.email.toLowerCase(),
+      ...(payload.name ? { name: payload.name } : {}),
+      ...(payload.picture ? { picture: payload.picture } : {}),
     };
   }
 
