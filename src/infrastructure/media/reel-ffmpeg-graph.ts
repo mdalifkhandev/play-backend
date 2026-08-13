@@ -1,6 +1,3 @@
-import { existsSync } from 'node:fs';
-import path from 'node:path';
-
 import { env } from '../../config/env.config.js';
 import {
   mapContrastToFfmpeg,
@@ -59,10 +56,6 @@ export function buildReelFfmpegGraph(input: FfmpegGraphInput): FfmpegGraph {
   const effectFilter = buildEffectFilter(reel.videoEdit.effect);
   if (effectFilter) {
     videoFilters.push(effectFilter);
-  }
-
-  if (reel.videoEdit.overlayText) {
-    videoFilters.push(buildDrawTextFilter(reel.videoEdit.overlayText, input.fontFile));
   }
 
   const filterComplex: string[] = [`[0:v]${videoFilters.join(',')}[vout]`];
@@ -226,66 +219,4 @@ function buildEffectFilter(effect: ReelEffect): string | null {
     default:
       return null;
   }
-}
-
-function buildDrawTextFilter(
-  overlay: { text: string; x: number; y: number; fontSize: number },
-  fontFile?: string,
-): string {
-  const escapedText = escapeDrawText(overlay.text);
-  const fontPath = resolveFontFile(fontFile);
-  const fontArg =
-    process.platform === 'win32'
-      ? ':fontfile=/Windows/Fonts/arialbd.ttf'
-      : fontPath
-        ? `:fontfile='${escapeFilterPath(fontPath)}'`
-        : '';
-  const xExpr = `(w-text_w)*${overlay.x.toFixed(4)}`;
-  const yExpr = `(h-text_h)*${overlay.y.toFixed(4)}`;
-
-  return `drawtext=text='${escapedText}'${fontArg}:fontsize=${overlay.fontSize}:fontcolor=white:borderw=2:bordercolor=black@0.6:line_spacing=8:x=${xExpr}:y=${yExpr}`;
-}
-
-function resolveFontFile(preferred?: string): string | undefined {
-  const candidates = [
-    preferred,
-    env.REEL_FONT_FILE,
-    '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
-    '/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf',
-    '/usr/share/fonts/TTF/DejaVuSans-Bold.ttf',
-    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-    '/usr/share/fonts/dejavu/DejaVuSans.ttf',
-    '/usr/share/fonts/TTF/DejaVuSans.ttf',
-    'C:\\Windows\\Fonts\\arialbd.ttf',
-    'C:\\Windows\\Fonts\\arial.ttf',
-  ].filter(Boolean) as string[];
-
-  for (const candidate of candidates) {
-    const resolved = path.resolve(candidate);
-    if (existsSync(resolved)) {
-      return resolved;
-    }
-  }
-
-  return undefined;
-}
-
-function escapeDrawText(value: string): string {
-  const sanitized = value
-    .replace(/\$\([^)]*\)/g, '')
-    .replace(/`/g, '')
-    .replace(/\$\{[^}]*\}/g, '');
-
-  return sanitized
-    .replace(/\\/g, '\\\\')
-    .replace(/:/g, '\\:')
-    .replace(/'/g, "\\'")
-    .replace(/%/g, '\\%')
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .replace(/\n/g, '\\n');
-}
-
-function escapeFilterPath(value: string): string {
-  return value.replace(/\\/g, '/').replace(/'/g, "\\'");
 }

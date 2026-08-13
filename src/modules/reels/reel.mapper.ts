@@ -88,6 +88,16 @@ export interface ReelFeedItemDto {
     format: string | null;
     hasAudio: boolean | null;
   };
+  edit: {
+    filter: string;
+    effect: string;
+    overlayText: {
+      text: string;
+      x: number;
+      y: number;
+      fontSize: number;
+    } | null;
+  };
   forKids: boolean;
   user: {
     id: string;
@@ -217,6 +227,18 @@ export function toReelFeedItemDto(
       mimeType: reel.rawMedia.mimeType,
       format: reel.rawMedia.format ?? null,
       hasAudio: reel.rawMedia.hasAudio ?? null,
+    },
+    edit: {
+      filter: reel.videoEdit.filter,
+      effect: reel.videoEdit.effect,
+      overlayText: reel.videoEdit.overlayText
+        ? {
+            text: reel.videoEdit.overlayText.text,
+            x: reel.videoEdit.overlayText.x,
+            y: reel.videoEdit.overlayText.y,
+            fontSize: reel.videoEdit.overlayText.fontSize,
+          }
+        : null,
     },
     forKids: reel.forKids ?? false,
     user: {
