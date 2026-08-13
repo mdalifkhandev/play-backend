@@ -1,4 +1,6 @@
 import { AppError } from '../../common/errors/app-error.js';
+import { logger } from '../../infrastructure/logger/logger.js';
+import { notificationService } from '../notifications/notification.service.js';
 import { ConversationRepository, conversationRepository } from './conversation.repository.js';
 import type {
   ConversationResponseDTO,
@@ -98,8 +100,13 @@ export class ConversationService {
       dto.text,
       dto.mediaUrl,
     );
+    const mappedMessage = this.mapToMessageResponse(message);
 
-    return this.mapToMessageResponse(message);
+    if (recipientId) {
+      void this.sendMessageNotification(recipientId, mappedMessage);
+    }
+
+    return mappedMessage;
   }
 
   async joinConversation(
@@ -340,6 +347,48 @@ export class ConversationService {
     return conversation.participants.map((participant: any) =>
       (participant._id?.toString() || participant.toString()),
     );
+  }
+
+  private async sendMessageNotification(
+    recipientId: string,
+    message: MessageResponseDTO,
+  ): Promise<void> {
+    const senderName = message.sender.displayName || message.sender.username || 'New message';
+    const body = message.text?.trim() || (message.mediaUrl ? 'Sent a media message' : 'Sent a message');
+
+    try {
+      const result = await notificationService.sendToUser(recipientId, {
+        title: senderName,
+        body,
+        data: {
+          type: 'chat_message',
+          conversationId: message.conversationId,
+          messageId: message.id,
+          senderId: message.sender.id,
+        },
+      });
+
+      logger.info(
+        {
+          recipientId,
+          conversationId: message.conversationId,
+          messageId: message.id,
+          successCount: result.successCount,
+          failureCount: result.failureCount,
+        },
+        'Chat push notification sent',
+      );
+    } catch (error) {
+      logger.warn(
+        {
+          err: error,
+          recipientId,
+          conversationId: message.conversationId,
+          messageId: message.id,
+        },
+        'Chat push notification skipped',
+      );
+    }
   }
 }
 
