@@ -8,6 +8,7 @@ import {
   conversationIdParamSchema,
   createConversationSchema,
   getMessagesQuerySchema,
+  prepareAttachmentUploadSchema,
   searchConversationUsersQuerySchema,
   sendMessageSchema,
   targetUserIdParamSchema,
@@ -43,6 +44,12 @@ conversationRouter.post(
   '/attachments',
   attachmentUpload.single('file'),
   conversationController.uploadAttachment,
+);
+
+conversationRouter.post(
+  '/attachments/prepare',
+  validateRequest({ body: prepareAttachmentUploadSchema }),
+  conversationController.prepareAttachmentUpload,
 );
 
 conversationRouter.get(

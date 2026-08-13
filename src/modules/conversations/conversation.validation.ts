@@ -14,6 +14,14 @@ export const sendMessageSchema = z
     message: 'Either text or mediaUrl is required.',
   });
 
+export const prepareAttachmentUploadSchema = z
+  .object({
+    fileName: z.string().trim().min(1).max(255),
+    mimeType: z.string().trim().toLowerCase().min(1).max(150),
+    attachmentType: z.enum(['image', 'video', 'audio', 'file']),
+  })
+  .strict();
+
 export const conversationIdParamSchema = z.object({
   id: z.string().length(24, 'Invalid conversation identifier.'),
 });

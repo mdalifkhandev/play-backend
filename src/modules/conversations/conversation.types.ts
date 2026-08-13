@@ -22,6 +22,7 @@ export interface LastMessageDTO {
   id?: string;
   text?: string;
   mediaUrl?: string;
+  attachmentType?: 'image' | 'video' | 'audio' | 'file';
   senderId: string;
   createdAt: string;
 }

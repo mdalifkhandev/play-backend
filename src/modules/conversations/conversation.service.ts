@@ -1,4 +1,7 @@
+import { randomUUID } from 'node:crypto';
+
 import { AppError } from '../../common/errors/app-error.js';
+import { env } from '../../config/env.config.js';
 import { logger } from '../../infrastructure/logger/logger.js';
 import { cloudinaryStorage } from '../../infrastructure/storage/index.js';
 import { notificationService } from '../notifications/notification.service.js';
@@ -142,6 +145,39 @@ export class ConversationService {
       mimeType: file.mimetype,
       fileName: file.originalName,
       size: file.size,
+    };
+  }
+
+  prepareAttachmentUpload(
+    userId: string,
+    input: {
+      fileName: string;
+      mimeType: string;
+      attachmentType: 'image' | 'video' | 'audio' | 'file';
+    },
+  ): {
+    uploadUrl: string;
+    apiKey: string;
+    timestamp: number;
+    signature: string;
+    publicId: string;
+    resourceType: 'image' | 'video' | 'raw';
+    attachmentType: 'image' | 'video' | 'audio' | 'file';
+  } {
+    const attachmentType = input.attachmentType || getAttachmentType(input.mimeType);
+    const resourceType =
+      attachmentType === 'image' ? 'image' : attachmentType === 'file' ? 'raw' : 'video';
+    const publicId = `${env.CLOUDINARY_UPLOAD_FOLDER}/chat/${userId}/${randomUUID()}`;
+    const signedUpload = cloudinaryStorage.createSignedUpload(publicId, resourceType);
+
+    return {
+      uploadUrl: signedUpload.uploadUrl,
+      apiKey: signedUpload.apiKey,
+      timestamp: signedUpload.timestamp,
+      signature: signedUpload.signature,
+      publicId: signedUpload.publicId,
+      resourceType,
+      attachmentType,
     };
   }
 
@@ -321,6 +357,7 @@ export class ConversationService {
         ...(conv.lastMessage.messageId ? { id: conv.lastMessage.messageId.toString() } : {}),
         ...(conv.lastMessage.text ? { text: conv.lastMessage.text } : {}),
         ...(conv.lastMessage.mediaUrl ? { mediaUrl: conv.lastMessage.mediaUrl } : {}),
+        ...(conv.lastMessage.attachmentType ? { attachmentType: conv.lastMessage.attachmentType } : {}),
         senderId: conv.lastMessage.senderId.toString(),
         createdAt: conv.lastMessage.createdAt.toISOString(),
       };

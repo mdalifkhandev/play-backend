@@ -30,7 +30,7 @@ export interface StorageSignedUpload {
   timestamp: number;
   signature: string;
   publicId: string;
-  resourceType: 'image' | 'video';
+  resourceType: 'image' | 'video' | 'raw';
   overwrite: false;
   uploadUrl: string;
 }

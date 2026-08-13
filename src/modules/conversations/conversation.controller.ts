@@ -39,6 +39,12 @@ export class ConversationController {
     sendSuccess(res, 201, 'Attachment uploaded successfully.', result);
   };
 
+  prepareAttachmentUpload = async (req: Request, res: Response): Promise<void> => {
+    const userId = req.user!.userId;
+    const result = this.service.prepareAttachmentUpload(userId, req.body);
+    sendSuccess(res, 200, 'Attachment upload prepared.', result);
+  };
+
   sendMessage = async (req: Request, res: Response): Promise<void> => {
     const userId = req.user!.userId;
     const { id } = req.params;

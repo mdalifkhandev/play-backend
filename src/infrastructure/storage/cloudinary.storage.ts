@@ -15,7 +15,7 @@ import type {
 export class CloudinaryStorage implements StorageProvider {
   createSignedUpload(
     publicId: string,
-    resourceType: 'image' | 'video',
+    resourceType: 'image' | 'video' | 'raw',
     timestamp = Math.floor(Date.now() / 1_000),
   ): StorageSignedUpload {
     assertCloudinaryConfigured();

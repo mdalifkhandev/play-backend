@@ -6,6 +6,7 @@ export interface ILastMessageSnapshot {
   messageId?: mongoose.Types.ObjectId;
   text?: string;
   mediaUrl?: string;
+  attachmentType?: 'image' | 'video' | 'audio' | 'file';
   senderId: mongoose.Types.ObjectId;
   createdAt: Date;
 }
@@ -25,6 +26,10 @@ const lastMessageSchema = new Schema<ILastMessageSnapshot>(
     messageId: { type: Schema.Types.ObjectId, ref: 'Message' },
     text: { type: String, trim: true, maxlength: 2000 },
     mediaUrl: { type: String, trim: true },
+    attachmentType: {
+      type: String,
+      enum: ['image', 'video', 'audio', 'file'],
+    },
     senderId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     createdAt: { type: Date, required: true },
   },
