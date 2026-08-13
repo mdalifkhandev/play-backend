@@ -222,9 +222,14 @@ export class ConversationService {
 
     const participant = {
       id: partnerDoc?._id?.toString() || partnerDoc?.toString() || '',
-      username: partnerDoc?.username || 'user',
-      displayName: partnerDoc?.displayName || partnerDoc?.username || 'User',
-      avatarUrl: partnerDoc?.avatarUrl || partnerDoc?.photoUrl,
+      username: partnerDoc?.username || partnerDoc?.profile?.username || 'user',
+      displayName:
+        partnerDoc?.displayName ||
+        partnerDoc?.profile?.displayName ||
+        partnerDoc?.profile?.username ||
+        partnerDoc?.username ||
+        'User',
+      avatarUrl: partnerDoc?.avatarUrl || partnerDoc?.photoUrl || partnerDoc?.profile?.photoUrl,
       isOnline: partnerDoc?.isOnline ?? false,
     };
 
@@ -255,9 +260,14 @@ export class ConversationService {
 
     const sender = {
       id: senderDoc?._id?.toString() || senderDoc?.toString() || '',
-      username: senderDoc?.username || 'user',
-      displayName: senderDoc?.displayName || senderDoc?.username || 'User',
-      avatarUrl: senderDoc?.avatarUrl || senderDoc?.photoUrl,
+      username: senderDoc?.username || senderDoc?.profile?.username || 'user',
+      displayName:
+        senderDoc?.displayName ||
+        senderDoc?.profile?.displayName ||
+        senderDoc?.profile?.username ||
+        senderDoc?.username ||
+        'User',
+      avatarUrl: senderDoc?.avatarUrl || senderDoc?.photoUrl || senderDoc?.profile?.photoUrl,
       isOnline: senderDoc?.isOnline ?? false,
     };
 

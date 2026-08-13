@@ -4,6 +4,8 @@ import { ConversationModel, type IConversation } from './conversation.model.js';
 import { MessageModel, type IMessage } from './message.model.js';
 import { UserBlockModel, type IUserBlock } from './conversation-member.model.js';
 
+const USER_CHAT_PROJECTION = 'profile.username profile.displayName profile.photoUrl username displayName avatarUrl isOnline';
+
 export class ConversationRepository {
   async findOrCreateDirectConversation(userAId: string, userBId: string): Promise<IConversation> {
     const userA = new mongoose.Types.ObjectId(userAId);
@@ -12,7 +14,7 @@ export class ConversationRepository {
     let conversation = await ConversationModel.findOne({
       type: 'direct',
       participants: { $all: [userA, userB], $size: 2 },
-    }).populate('participants', 'username displayName avatarUrl isOnline');
+    }).populate('participants', USER_CHAT_PROJECTION);
 
     if (!conversation) {
       conversation = await ConversationModel.create({
@@ -25,7 +27,7 @@ export class ConversationRepository {
       });
       conversation = await conversation.populate(
         'participants',
-        'username displayName avatarUrl isOnline',
+        USER_CHAT_PROJECTION,
       );
     }
 
@@ -44,7 +46,7 @@ export class ConversationRepository {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
     return ConversationModel.findById(id).populate(
       'participants',
-      'username displayName avatarUrl isOnline',
+      USER_CHAT_PROJECTION,
     );
   }
 
@@ -67,7 +69,7 @@ export class ConversationRepository {
         .sort({ updatedAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate('participants', 'username displayName avatarUrl isOnline')
+        .populate('participants', USER_CHAT_PROJECTION)
         .exec(),
       ConversationModel.countDocuments(filter),
     ]);
@@ -121,7 +123,7 @@ export class ConversationRepository {
       );
     }
 
-    return message.populate('senderId', 'username displayName avatarUrl isOnline');
+    return message.populate('senderId', USER_CHAT_PROJECTION);
   }
 
   async getMessages(
@@ -141,7 +143,7 @@ export class ConversationRepository {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate('senderId', 'username displayName avatarUrl isOnline')
+        .populate('senderId', USER_CHAT_PROJECTION)
         .exec(),
       MessageModel.countDocuments({ conversationId: convObjId }),
     ]);
