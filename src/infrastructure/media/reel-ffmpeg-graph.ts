@@ -7,6 +7,7 @@ import {
   mapExposureToFfmpeg,
   REEL_FILTER_FFMPEG,
   ReelFilter,
+  ReelEffect,
   volumePercentToMultiplier,
 } from '../../modules/reels/reel.constants.js';
 import type { ReelDocument } from '../../modules/reels/reel.model.js';
@@ -53,6 +54,11 @@ export function buildReelFfmpegGraph(input: FfmpegGraphInput): FfmpegGraph {
 
   if (styleFilter && reel.videoEdit.filter !== ReelFilter.NONE) {
     videoFilters.push(styleFilter);
+  }
+
+  const effectFilter = buildEffectFilter(reel.videoEdit.effect);
+  if (effectFilter) {
+    videoFilters.push(effectFilter);
   }
 
   if (reel.videoEdit.overlayText) {
@@ -205,13 +211,33 @@ function buildScaleFilter(): string {
   return `scale='min(iw,min(${maxW},floor(${maxW}*ih/${maxH})))':'-2':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2`;
 }
 
+function buildEffectFilter(effect: ReelEffect): string | null {
+  switch (effect) {
+    case ReelEffect.ZOOM:
+      return 'scale=trunc(iw*1.08/2)*2:trunc(ih*1.08/2)*2,crop=trunc(iw/1.08/2)*2:trunc(ih/1.08/2)*2';
+    case ReelEffect.GLITCH:
+      return 'eq=saturation=1.25:contrast=1.08';
+    case ReelEffect.FLASH:
+      return 'eq=brightness=0.12:saturation=1.08';
+    case ReelEffect.VHS:
+      return 'noise=alls=8:allf=t,hue=s=0.85';
+    default:
+      return null;
+  }
+}
+
 function buildDrawTextFilter(
   overlay: { text: string; x: number; y: number; fontSize: number },
   fontFile?: string,
 ): string {
   const escapedText = escapeDrawText(overlay.text);
   const fontPath = resolveFontFile(fontFile);
-  const fontArg = fontPath ? `:fontfile=${escapeFilterPath(fontPath)}` : '';
+  const fontArg =
+    process.platform === 'win32'
+      ? ':fontfile=/Windows/Fonts/arial.ttf'
+      : fontPath
+        ? `:fontfile='${escapeFilterPath(fontPath)}'`
+        : '';
   const xExpr = `(w-text_w)*${overlay.x.toFixed(4)}`;
   const yExpr = `(h-text_h)*${overlay.y.toFixed(4)}`;
 
@@ -252,5 +278,5 @@ function escapeDrawText(value: string): string {
 }
 
 function escapeFilterPath(value: string): string {
-  return value.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'");
+  return value.replace(/\\/g, '/').replace(/'/g, "\\'");
 }

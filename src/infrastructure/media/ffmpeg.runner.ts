@@ -88,12 +88,23 @@ export interface RunFfmpegOptions {
 }
 
 export async function runFfmpeg(options: RunFfmpegOptions): Promise<void> {
+  console.log('[FFMPEG] start', {
+    binary: env.FFMPEG_PATH,
+    args: options.args,
+    timeoutMs: options.timeoutMs,
+  });
+
   const result = await runProcess(env.FFMPEG_PATH, options.args, {
     timeoutMs: options.timeoutMs,
     onStderrChunk: options.onStderrChunk,
   });
 
   if (result.exitCode !== 0) {
+    console.error('[FFMPEG] failed', {
+      exitCode: result.exitCode,
+      stderrTail: result.stderr.slice(-4_000),
+      args: options.args,
+    });
     logger.warn(
       {
         exitCode: result.exitCode,
@@ -103,8 +114,17 @@ export async function runFfmpeg(options: RunFfmpegOptions): Promise<void> {
     );
     throw new AppError('FFmpeg processing failed.', 500, {
       code: 'REEL_PROCESSING_FAILED',
+      details: {
+        exitCode: result.exitCode,
+        stderrTail: result.stderr.slice(-4_000),
+        args: options.args,
+      },
     });
   }
+
+  console.log('[FFMPEG] success', {
+    stderrTail: result.stderr.slice(-1_000),
+  });
 }
 
 interface RunProcessOptions {
@@ -161,6 +181,11 @@ async function runProcess(
     });
 
     child.on('error', (error) => {
+      console.error('[MEDIA_PROCESS] failed to start', {
+        binary,
+        args,
+        message: error.message,
+      });
       settleReject(
         new AppError(`Failed to start ${binary}.`, 500, {
           code: 'REEL_PROCESSING_FAILED',

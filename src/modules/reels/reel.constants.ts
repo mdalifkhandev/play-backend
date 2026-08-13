@@ -26,6 +26,9 @@ export enum ReelEffect {
   NONE = 'none',
   SPARKLE = 'sparkle',
   ZOOM = 'zoom',
+  GLITCH = 'glitch',
+  FLASH = 'flash',
+  VHS = 'vhs',
 }
 
 export enum ReelQueueSubmissionState {

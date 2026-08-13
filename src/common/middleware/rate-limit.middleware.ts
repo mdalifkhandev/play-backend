@@ -9,7 +9,7 @@ type RedisReply = boolean | number | string | Array<boolean | number | string>;
 function createRedisStore(prefix: string): RedisStore | undefined {
   const client = getRedisClient();
 
-  if (!client) {
+  if (!client || client.status !== 'ready') {
     return undefined;
   }
 

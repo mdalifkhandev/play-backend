@@ -40,9 +40,12 @@ export class ReelProcessorService {
         return;
       }
 
-      throw new AppError('Reel is not processable.', 409, {
-        code: 'REEL_NOT_PROCESSABLE',
-      });
+      logger.warn({
+        reelId,
+        status: existing.status,
+        queueSubmissionState: existing.processing.queueSubmissionState,
+      }, 'Skipping Reel queue job because Reel is not processable');
+      return;
     }
 
     let workDir: string | undefined;
@@ -50,6 +53,24 @@ export class ReelProcessorService {
     let uploadedThumbnailPublicId: string | undefined;
 
     try {
+      console.log('[REEL_PROCESS] start', {
+        reelId,
+        ownerId: claimed.ownerId.toString(),
+        mediaType: claimed.mediaType,
+        status: claimed.status,
+        rawMedia: {
+          secureUrl: claimed.rawMedia.secureUrl,
+          mimeType: claimed.rawMedia.mimeType,
+          format: claimed.rawMedia.format,
+          durationMs: claimed.rawMedia.durationMs,
+          width: claimed.rawMedia.width,
+          height: claimed.rawMedia.height,
+          hasAudio: claimed.rawMedia.hasAudio,
+        },
+        audioEdit: claimed.audioEdit,
+        videoEdit: claimed.videoEdit,
+      });
+
       workDir = await this.createWorkDirectory(reelId);
       const isPhotoReel = claimed.mediaType === 'photo';
       const downloadedRawPath = path.join(
@@ -62,20 +83,24 @@ export class ReelProcessorService {
 
       await this.setProgress(claimed, REEL_PROGRESS.STARTED);
       await downloadToFile(claimed.rawMedia.secureUrl, downloadedRawPath);
+      console.log('[REEL_PROCESS] raw downloaded', { reelId, downloadedRawPath, isPhotoReel });
       await this.setProgress(claimed, REEL_PROGRESS.RAW_DOWNLOADED);
 
       if (isPhotoReel) {
+        const photoArgs = buildPhotoSourceVideoFfmpegArgs(
+          downloadedRawPath,
+          rawPath,
+          claimed.rawMedia.durationMs,
+        );
+        console.log('[REEL_PROCESS] photo source ffmpeg args', { reelId, args: photoArgs });
         await runFfmpeg({
-          args: buildPhotoSourceVideoFfmpegArgs(
-            downloadedRawPath,
-            rawPath,
-            claimed.rawMedia.durationMs,
-          ),
+          args: photoArgs,
           timeoutMs: env.REEL_PROCESSING_TIMEOUT_MS,
         });
       }
 
       const probe = await runFfprobe(rawPath);
+      console.log('[REEL_PROCESS] ffprobe raw', { reelId, probe });
       this.assertProbeCompatible(claimed, probe);
       await this.setProgress(claimed, REEL_PROGRESS.INSPECTED);
 
@@ -84,7 +109,9 @@ export class ReelProcessorService {
 
       if (audioUrl) {
         musicPath = path.join(workDir, 'music.mp3');
+        console.log('[REEL_PROCESS] music download start', { reelId, audioUrl });
         await downloadToFile(audioUrl, musicPath);
+        console.log('[REEL_PROCESS] music downloaded', { reelId, musicPath });
         await this.setProgress(claimed, REEL_PROGRESS.MUSIC_PREPARED);
       } else {
         await this.setProgress(claimed, REEL_PROGRESS.MUSIC_PREPARED);
@@ -106,6 +133,14 @@ export class ReelProcessorService {
         hasOriginalAudio: probe.hasAudio,
         outputVideoPath: outputPath,
       });
+      console.log('[REEL_PROCESS] main ffmpeg graph', {
+        reelId,
+        args: graph.args,
+        audioEdit: claimed.audioEdit,
+        videoEdit: claimed.videoEdit,
+        hasOriginalAudio: probe.hasAudio,
+        musicPath,
+      });
 
       await runFfmpeg({
         args: graph.args,
@@ -113,6 +148,7 @@ export class ReelProcessorService {
       });
 
       await this.setProgress(claimed, REEL_PROGRESS.FFMPEG_DONE);
+      console.log('[REEL_PROCESS] main ffmpeg done', { reelId, outputPath });
       await runFfmpeg({
         args: buildThumbnailFfmpegArgs(outputPath, thumbPath),
         timeoutMs: Math.min(env.REEL_PROCESSING_TIMEOUT_MS, 60_000),
@@ -120,6 +156,7 @@ export class ReelProcessorService {
       await this.setProgress(claimed, REEL_PROGRESS.THUMBNAIL_DONE);
 
       const outputProbe = await runFfprobe(outputPath);
+      console.log('[REEL_PROCESS] ffprobe output', { reelId, outputProbe });
       await this.setProgress(claimed, REEL_PROGRESS.UPLOAD_STARTED);
 
       const processedPublicId = `${env.CLOUDINARY_UPLOAD_FOLDER}/reels/processed/${claimed.ownerId.toString()}/${claimed._id.toString()}`;
@@ -167,7 +204,20 @@ export class ReelProcessorService {
           code: REEL_SAFE_ERROR_CODES.CANCELLED,
         });
       }
+      console.log('[REEL_PROCESS] ready', {
+        reelId,
+        processedUrl: processedUpload.secureUrl,
+        thumbnailUrl: thumbnailUpload.secureUrl,
+      });
     } catch (error) {
+      console.error('[REEL_PROCESS] failed', {
+        reelId,
+        message: error instanceof Error ? error.message : String(error),
+        code: (error as any)?.code,
+        statusCode: (error as any)?.statusCode,
+        details: (error as any)?.details,
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       await this.cleanupPartialUploads(uploadedProcessedPublicId, uploadedThumbnailPublicId);
       const safe = toSafeProcessingError(error);
       await this.reels.markFailed(claimed._id, safe.code, safe.message);

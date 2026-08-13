@@ -11,10 +11,12 @@ export function getRedisClient(): Redis | undefined {
     return undefined;
   }
 
-  redisClient ??= new Redis(redisConfig.url, redisConfig.clientOptions);
-  redisClient.on('error', (error: Error) => {
-    logger.error({ err: error }, 'Redis client error');
-  });
+  if (!redisClient) {
+    redisClient = new Redis(redisConfig.url, redisConfig.clientOptions);
+    redisClient.on('error', (error: Error) => {
+      logger.error({ err: error }, 'Redis client error');
+    });
+  }
 
   return redisClient;
 }
