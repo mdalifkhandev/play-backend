@@ -3,7 +3,13 @@ import type { Request, Response } from 'express';
 import { sendSuccess } from '../../common/responses/api-response.js';
 import { asyncHandler } from '../../common/utils/async-handler.js';
 import { reelService } from './reel.service.js';
-import type { CreateReelInput, ReelFeedQuery, UserReelsParams } from './reel.validation.js';
+import type {
+  CreateReelInput,
+  ReelFeedQuery,
+  ReelForYouQuery,
+  ReportReelInput,
+  UserReelsParams,
+} from './reel.validation.js';
 
 export class ReelController {
   create = asyncHandler(async (request: Request, response: Response) => {
@@ -31,6 +37,14 @@ export class ReelController {
     const viewerId = request.user?.userId;
     const result = await reelService.getFeed(request.query as unknown as ReelFeedQuery, viewerId);
     return sendSuccess(response, 200, 'Reels retrieved successfully', result);
+  });
+
+  forYou = asyncHandler(async (request: Request, response: Response) => {
+    const result = await reelService.getForYouFeed(
+      request.query as unknown as ReelForYouQuery,
+      request.user?.userId,
+    );
+    return sendSuccess(response, 200, 'For You Reels retrieved successfully', result);
   });
 
   userReels = asyncHandler(async (request: Request, response: Response) => {
@@ -80,6 +94,21 @@ export class ReelController {
     const { reelId } = request.params as { reelId: string };
     const result = await reelService.recordView(reelId, request.user!.userId);
     return sendSuccess(response, 200, 'Reel view recorded.', result);
+  });
+
+  report = asyncHandler(async (request: Request, response: Response) => {
+    const { reelId } = request.params as { reelId: string };
+    const result = await reelService.report(
+      reelId,
+      request.user!.userId,
+      request.body as ReportReelInput,
+    );
+    return sendSuccess(
+      response,
+      result.reported ? 201 : 200,
+      result.reported ? 'Reel reported successfully.' : 'Reel was already reported.',
+      result,
+    );
   });
 
   delete = asyncHandler(async (request: Request, response: Response) => {

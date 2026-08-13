@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { env } from '../../config/env.config.js';
 import { ReelEffect, ReelFilter, ReelVisibility } from './reel.constants.js';
+import { ReelReportReason } from './reel-report.model.js';
 
 const objectIdSchema = z.string().trim().regex(/^[a-f\d]{24}$/i, 'Invalid identifier.');
 const volumeSchema = z.number().int().min(0).max(100);
@@ -239,8 +240,24 @@ export const reelFeedQuerySchema = z
   })
   .strict();
 
+export const reelForYouQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(50).default(20),
+    cursor: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict();
+
+export const reportReelBodySchema = z
+  .object({
+    reason: z.enum(ReelReportReason),
+    details: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict();
+
 export type CreateReelInput = z.infer<typeof createReelBodySchema>;
 export type ReelFeedQuery = z.infer<typeof reelFeedQuerySchema>;
+export type ReelForYouQuery = z.infer<typeof reelForYouQuerySchema>;
+export type ReportReelInput = z.infer<typeof reportReelBodySchema>;
 export type UserReelsParams = z.infer<typeof userReelsParamsSchema>;
 
 export function assertReelDurationBounds(durationMs: number): void {

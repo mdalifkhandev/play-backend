@@ -1,0 +1,93 @@
+{
+  "info": {
+    "name": "Jesusname7 For You Feed API",
+    "description": "TikTok-style ranked For You Reel feed. Ranking uses shares, comments, likes, views, freshness, and the authenticated viewer's liked creators/hashtags. Recently viewed Reels are ranked lower; personally reported and heavily reported Reels are hidden.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api/v1" },
+    { "key": "accessToken", "value": "" },
+    { "key": "reelId", "value": "" },
+    { "key": "forYouCursor", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 Get For You Feed",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const json = pm.response.json();",
+              "pm.test('For You feed loaded', () => {",
+              "  pm.expect(pm.response.code).to.eql(200);",
+              "  pm.expect(json.success).to.eql(true);",
+              "  pm.expect(json.data.items).to.be.an('array');",
+              "});",
+              "if (json.data.nextCursor) pm.collectionVariables.set('forYouCursor', json.data.nextCursor);",
+              "if (json.data.items[0]) pm.collectionVariables.set('reelId', json.data.items[0].id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/reels/for-you?limit=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["reels", "for-you"],
+          "query": [{ "key": "limit", "value": "20" }]
+        }
+      }
+    },
+    {
+      "name": "02 Get Next For You Page",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/reels/for-you?limit=20&cursor={{forYouCursor}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["reels", "for-you"],
+          "query": [
+            { "key": "limit", "value": "20" },
+            { "key": "cursor", "value": "{{forYouCursor}}" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "03 Record Reel View",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/reels/{{reelId}}/views",
+        "description": "Call when the viewer actually watches the Reel. It will be de-prioritized from future For You sessions."
+      }
+    },
+    {
+      "name": "04 Report Reel",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": "{{baseUrl}}/reels/{{reelId}}/report",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reason\": \"spam\",\n  \"details\": \"Repeated misleading promotion\"\n}"
+        },
+        "description": "A user can report a Reel once. It disappears from that user's For You feed immediately."
+      }
+    }
+  ]
+}

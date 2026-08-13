@@ -10,13 +10,22 @@ import { reelController } from './reel.controller.js';
 import {
   createReelBodySchema,
   reelFeedQuerySchema,
+  reelForYouQuerySchema,
   reelIdParamsSchema,
+  reportReelBodySchema,
   userReelsParamsSchema,
 } from './reel.validation.js';
 
 export const reelRouter = Router();
 
 reelRouter.get('/feed', optionalAuthenticate, validateRequest({ query: reelFeedQuerySchema }), reelController.feed);
+
+reelRouter.get(
+  '/for-you',
+  optionalAuthenticate,
+  validateRequest({ query: reelForYouQuerySchema }),
+  reelController.forYou,
+);
 
 reelRouter.get(
   '/me',
@@ -66,6 +75,12 @@ reelRouter.post(
   '/:reelId/views',
   validateRequest({ params: reelIdParamsSchema }),
   reelController.recordView,
+);
+
+reelRouter.post(
+  '/:reelId/report',
+  validateRequest({ params: reelIdParamsSchema, body: reportReelBodySchema }),
+  reelController.report,
 );
 
 reelRouter.delete(

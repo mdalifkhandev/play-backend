@@ -128,6 +128,7 @@ export interface Reel {
   likeCount: number;
   commentCount: number;
   shareCount: number;
+  reportCount: number;
   giftsCount: number;
   giftsTotalCoins: number;
   publishedAt?: Date;
@@ -146,6 +147,7 @@ export type CreateReelRecord = Omit<
   | 'likeCount'
   | 'commentCount'
   | 'shareCount'
+  | 'reportCount'
   | 'giftsCount'
   | 'giftsTotalCoins'
   | 'processedMedia'
@@ -316,6 +318,7 @@ const reelSchema = new Schema<Reel>(
     likeCount: { type: Number, default: 0, min: 0, required: true },
     commentCount: { type: Number, default: 0, min: 0, required: true },
     shareCount: { type: Number, default: 0, min: 0, required: true },
+    reportCount: { type: Number, default: 0, min: 0, required: true },
     giftsCount: { type: Number, default: 0, min: 0, required: true },
     giftsTotalCoins: { type: Number, default: 0, min: 0, required: true },
     publishedAt: { type: Date },
@@ -336,6 +339,10 @@ reelSchema.index({ status: 1, createdAt: -1 }, { name: 'ix_reels_status_created_
 reelSchema.index(
   { status: 1, visibility: 1, publishedAt: -1, _id: -1 },
   { name: 'ix_reels_feed' },
+);
+reelSchema.index(
+  { status: 1, visibility: 1, mediaType: 1, reportCount: 1 },
+  { name: 'ix_reels_for_you_candidates' },
 );
 reelSchema.index(
   { hashtags: 1, status: 1, publishedAt: -1 },

@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
 
-import type { ClientSession } from 'mongoose';
+import type { ClientSession, Types } from 'mongoose';
 
 import { AppError } from '../../common/errors/app-error.js';
+import { BadRequestError } from '../../common/errors/bad-request-error.js';
 import { ConflictError } from '../../common/errors/conflict-error.js';
 import { ForbiddenError } from '../../common/errors/forbidden-error.js';
 import { NotFoundError } from '../../common/errors/not-found-error.js';
@@ -34,6 +35,10 @@ import {
 } from './reel.constants.js';
 import { decodeReelCursor, encodeReelCursor } from './reel-cursor.js';
 import {
+  decodeReelForYouCursor,
+  encodeReelForYouCursor,
+} from './reel-for-you-cursor.js';
+import {
   toReelFeedItemDto,
   toReelStatusDto,
   type ReelFeedItemDto,
@@ -45,7 +50,16 @@ import type {
   ReelMusicSnapshot,
 } from './reel.model.js';
 import { reelRepository, type ReelRepository } from './reel.repository.js';
-import type { CreateReelInput, ReelFeedQuery } from './reel.validation.js';
+import {
+  reelReportRepository,
+  type ReelReportRepository,
+} from './reel-report.repository.js';
+import type {
+  CreateReelInput,
+  ReelFeedQuery,
+  ReelForYouQuery,
+  ReportReelInput,
+} from './reel.validation.js';
 
 type TransactionRunner = <T>(operation: (session: ClientSession) => Promise<T>) => Promise<T>;
 
@@ -78,6 +92,7 @@ export class ReelService {
     private readonly runTransaction: TransactionRunner = withDatabaseTransaction,
     private readonly enqueueJob: typeof enqueueProcessReelJob = enqueueProcessReelJob,
     private readonly cancelJob: typeof cancelProcessReelJob = cancelProcessReelJob,
+    private readonly reports: ReelReportRepository = reelReportRepository,
   ) {}
 
   async create(
@@ -305,6 +320,109 @@ export class ReelService {
         hasNextPage,
       },
     };
+  }
+
+  async getForYouFeed(
+    query: ReelForYouQuery,
+    viewerId?: string,
+  ): Promise<ReelFeedResult> {
+    const cursor = query.cursor ? decodeReelForYouCursor(query.cursor) : undefined;
+    const asOf = cursor?.asOf ?? new Date();
+    let excludedReelIds: Types.ObjectId[] = [];
+    let deprioritizedReelIds: Types.ObjectId[] = [];
+    let preferences: { hashtags: string[]; ownerIds: Types.ObjectId[] } = {
+      hashtags: [],
+      ownerIds: [],
+    };
+
+    if (viewerId) {
+      const { engagementRepository: engRepo } = await import(
+        '../engagement/engagement.repository.js'
+      );
+      const [viewedIds, reportedIds, likedRecords] = await Promise.all([
+        this.reels.listRecentlyViewedReelIds(viewerId),
+        this.reports.listReelIdsReportedBy(viewerId),
+        engRepo.listLikedByUser(viewerId, 'reel', 100),
+      ]);
+      excludedReelIds = deduplicateObjectIds(reportedIds);
+      deprioritizedReelIds = deduplicateObjectIds(viewedIds);
+      preferences = await this.reels.getPreferenceSignals(
+        likedRecords.map((record) => record.targetId),
+      );
+    }
+
+    const records = await this.reels.listForYou(
+      query.limit + 1,
+      asOf,
+      cursor,
+      excludedReelIds,
+      deprioritizedReelIds,
+      preferences,
+    );
+    const hasNextPage = records.length > query.limit;
+    const page = hasNextPage ? records.slice(0, query.limit) : records;
+    const last = page.at(-1);
+    const reelIds = page.map(({ reel }) => reel._id.toString());
+    let viewerStateMap: Map<string, { isLiked: boolean; isSaved: boolean }> | undefined;
+
+    if (viewerId && reelIds.length > 0) {
+      const { engagementRepository: engRepo } = await import(
+        '../engagement/engagement.repository.js'
+      );
+      viewerStateMap = await engRepo.getBulkViewerState(viewerId, 'reel', reelIds);
+    }
+
+    const commentCountMap = await this.getCommentCountMap(reelIds);
+    const nextCursorValue =
+      hasNextPage && last
+        ? encodeReelForYouCursor({
+            asOf,
+            score: last.score,
+            publishedAt: last.reel.publishedAt ?? last.reel.createdAt,
+            id: last.reel._id,
+          })
+        : null;
+
+    return {
+      items: page.map(({ reel }) => {
+        const item = toReelFeedItemDto(reel, viewerStateMap?.get(reel._id.toString()));
+        const actualCommentCount = commentCountMap.get(reel._id.toString());
+        return actualCommentCount === undefined
+          ? item
+          : { ...item, stats: { ...item.stats, comments: actualCommentCount } };
+      }),
+      nextCursor: nextCursorValue,
+      pagination: { nextCursor: nextCursorValue, hasNextPage },
+    };
+  }
+
+  async report(
+    reelId: string,
+    reporterId: string,
+    input: ReportReelInput,
+  ): Promise<{ reported: boolean }> {
+    const reel = await this.reels.findViewableById(reelId);
+
+    if (!reel) {
+      throw new NotFoundError('Reel was not found.', { code: 'REEL_NOT_FOUND' });
+    }
+
+    if (reel.ownerId.toString() === reporterId) {
+      throw new BadRequestError('You cannot report your own Reel.', {
+        code: 'REEL_SELF_REPORT_NOT_ALLOWED',
+      });
+    }
+
+    const reported = await this.runTransaction((session) =>
+      this.reports.createIfAbsent(
+        reel._id,
+        reporterId,
+        input.reason,
+        input.details,
+        session,
+      ),
+    );
+    return { reported };
   }
 
   async getUserReels(
@@ -824,6 +942,10 @@ function isMongoDuplicateKeyError(error: unknown): boolean {
     'code' in error &&
     (error as { code?: unknown }).code === 11_000
   );
+}
+
+function deduplicateObjectIds(ids: Types.ObjectId[]): Types.ObjectId[] {
+  return [...new Map(ids.map((id) => [id.toString(), id])).values()];
 }
 
 export const reelService = new ReelService();

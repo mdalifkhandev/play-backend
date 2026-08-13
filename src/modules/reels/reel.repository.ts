@@ -1,7 +1,8 @@
-import type { ClientSession, Types } from 'mongoose';
+import { Types, type ClientSession, type PipelineStage } from 'mongoose';
 
 import { ReelQueueSubmissionState, ReelStatus, ReelVisibility } from './reel.constants.js';
 import type { ReelCursor } from './reel-cursor.js';
+import type { ReelForYouCursor } from './reel-for-you-cursor.js';
 import type { ReelWithOwner } from './reel.mapper.js';
 import {
   ReelModel,
@@ -13,6 +14,17 @@ import {
 import { ReelViewModel } from './reel-view.model.js';
 
 const OWNER_PROJECTION = '_id profile.displayName profile.username profile.photoUrl';
+const FOR_YOU_REPORT_THRESHOLD = 3;
+
+export interface ReelPreferenceSignals {
+  hashtags: string[];
+  ownerIds: Types.ObjectId[];
+}
+
+export interface RankedReel {
+  reel: ReelWithOwner;
+  score: number;
+}
 
 export class ReelRepository {
   async create(input: CreateReelRecord, session: ClientSession): Promise<ReelDocument> {
@@ -89,6 +101,152 @@ export class ReelRepository {
       .populate({ path: 'ownerId', select: OWNER_PROJECTION })
       .lean<ReelWithOwner[]>()
       .exec();
+  }
+
+  async listForYou(
+    limit: number,
+    asOf: Date,
+    cursor?: ReelForYouCursor,
+    excludedReelIds: Types.ObjectId[] = [],
+    deprioritizedReelIds: Types.ObjectId[] = [],
+    preferences: ReelPreferenceSignals = { hashtags: [], ownerIds: [] },
+  ): Promise<RankedReel[]> {
+    const publishedAtExpression = { $ifNull: ['$publishedAt', '$createdAt'] };
+    const ageHoursExpression = {
+      $max: [
+        0,
+        { $divide: [{ $subtract: [asOf, publishedAtExpression] }, 3_600_000] },
+      ],
+    };
+    const scoreExpression = {
+      $round: [
+        {
+          $add: [
+            { $multiply: [{ $ln: { $add: [{ $ifNull: ['$viewCount', 0] }, 1] } }, 1.2] },
+            { $multiply: [{ $ln: { $add: [{ $ifNull: ['$likeCount', 0] }, 1] } }, 4] },
+            { $multiply: [{ $ln: { $add: [{ $ifNull: ['$commentCount', 0] }, 1] } }, 6] },
+            { $multiply: [{ $ln: { $add: [{ $ifNull: ['$shareCount', 0] }, 1] } }, 9] },
+            { $max: [0, { $subtract: [14, { $divide: [ageHoursExpression, 12] }] }] },
+            {
+              $multiply: [
+                {
+                  $size: {
+                    $setIntersection: [{ $ifNull: ['$hashtags', []] }, preferences.hashtags],
+                  },
+                },
+                3,
+              ],
+            },
+            { $cond: [{ $in: ['$ownerId', preferences.ownerIds] }, 4, 0] },
+            { $cond: [{ $in: ['$_id', deprioritizedReelIds] }, -20, 0] },
+          ],
+        },
+        6,
+      ],
+    };
+    const pipeline: PipelineStage[] = [
+      {
+        $match: {
+          status: ReelStatus.READY,
+          visibility: ReelVisibility.PUBLIC,
+          mediaType: 'video',
+          deletedAt: { $exists: false },
+          $expr: {
+            $lt: [{ $ifNull: ['$reportCount', 0] }, FOR_YOU_REPORT_THRESHOLD],
+          },
+          ...(excludedReelIds.length > 0 ? { _id: { $nin: excludedReelIds } } : {}),
+        },
+      },
+      {
+        $addFields: {
+          forYouPublishedAt: publishedAtExpression,
+          forYouScore: scoreExpression,
+        },
+      },
+      ...(cursor
+        ? [
+            {
+              $match: {
+                $or: [
+                  { forYouScore: { $lt: cursor.score } },
+                  {
+                    forYouScore: cursor.score,
+                    forYouPublishedAt: { $lt: cursor.publishedAt },
+                  },
+                  {
+                    forYouScore: cursor.score,
+                    forYouPublishedAt: cursor.publishedAt,
+                    _id: { $lt: cursor.id },
+                  },
+                ],
+              },
+            } as PipelineStage.Match,
+          ]
+        : []),
+      { $sort: { forYouScore: -1, forYouPublishedAt: -1, _id: -1 } },
+      { $limit: limit },
+      { $project: { _id: 1, forYouScore: 1 } },
+    ];
+    const rankedIds = await ReelModel.aggregate<{
+      _id: Types.ObjectId;
+      forYouScore: number;
+    }>(pipeline).exec();
+
+    if (rankedIds.length === 0) return [];
+
+    const reels = await ReelModel.find({ _id: { $in: rankedIds.map((item) => item._id) } })
+      .populate({ path: 'ownerId', select: OWNER_PROJECTION })
+      .lean<ReelWithOwner[]>()
+      .exec();
+    const reelsById = new Map(reels.map((reel) => [reel._id.toString(), reel]));
+
+    return rankedIds.flatMap((ranked) => {
+      const reel = reelsById.get(ranked._id.toString());
+      return reel ? [{ reel, score: ranked.forYouScore }] : [];
+    });
+  }
+
+  async listRecentlyViewedReelIds(viewerId: string, limit = 500): Promise<Types.ObjectId[]> {
+    const views = await ReelViewModel.find({ viewerId })
+      .sort({ viewedAt: -1 })
+      .limit(limit)
+      .select('reelId')
+      .lean<Array<{ reelId: Types.ObjectId }>>()
+      .exec();
+
+    return views.map((view) => view.reelId);
+  }
+
+  async getPreferenceSignals(reelIds: Types.ObjectId[]): Promise<ReelPreferenceSignals> {
+    if (reelIds.length === 0) return { hashtags: [], ownerIds: [] };
+
+    const reels = await ReelModel.find({ _id: { $in: reelIds } })
+      .select('ownerId hashtags')
+      .lean<Array<{ ownerId: Types.ObjectId; hashtags?: string[] }>>()
+      .exec();
+    const hashtagCounts = new Map<string, number>();
+    const ownerCounts = new Map<string, { id: Types.ObjectId; count: number }>();
+
+    for (const reel of reels) {
+      const ownerKey = reel.ownerId.toString();
+      const owner = ownerCounts.get(ownerKey);
+      ownerCounts.set(ownerKey, { id: reel.ownerId, count: (owner?.count ?? 0) + 1 });
+
+      for (const hashtag of reel.hashtags ?? []) {
+        hashtagCounts.set(hashtag, (hashtagCounts.get(hashtag) ?? 0) + 1);
+      }
+    }
+
+    return {
+      hashtags: [...hashtagCounts.entries()]
+        .sort((left, right) => right[1] - left[1])
+        .slice(0, 20)
+        .map(([hashtag]) => hashtag),
+      ownerIds: [...ownerCounts.values()]
+        .sort((left, right) => right.count - left.count)
+        .slice(0, 20)
+        .map((owner) => owner.id),
+    };
   }
 
   async listPublicByOwner(
