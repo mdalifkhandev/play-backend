@@ -82,6 +82,7 @@ export class ConversationRepository {
     senderId: string,
     text?: string,
     mediaUrl?: string,
+    attachmentType?: 'image' | 'video' | 'audio' | 'file',
   ): Promise<IMessage> {
     const convObjId = new mongoose.Types.ObjectId(conversationId);
     const senderObjId = new mongoose.Types.ObjectId(senderId);
@@ -91,6 +92,7 @@ export class ConversationRepository {
       senderId: senderObjId,
       ...(text ? { text } : {}),
       ...(mediaUrl ? { mediaUrl } : {}),
+      ...(attachmentType ? { attachmentType } : {}),
     });
 
     const conversation = await ConversationModel.findById(conversationId);
@@ -113,6 +115,7 @@ export class ConversationRepository {
               messageId: message._id,
               ...(text ? { text } : {}),
               ...(mediaUrl ? { mediaUrl } : {}),
+              ...(attachmentType ? { attachmentType } : {}),
               senderId: senderObjId,
               createdAt: message.createdAt,
             },

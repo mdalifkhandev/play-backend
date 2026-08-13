@@ -1,5 +1,6 @@
 import { AppError } from '../../common/errors/app-error.js';
 import { logger } from '../../infrastructure/logger/logger.js';
+import { cloudinaryStorage } from '../../infrastructure/storage/index.js';
 import { notificationService } from '../notifications/notification.service.js';
 import { ConversationRepository, conversationRepository } from './conversation.repository.js';
 import type {
@@ -99,6 +100,7 @@ export class ConversationService {
       senderId,
       dto.text,
       dto.mediaUrl,
+      dto.attachmentType,
     );
     const mappedMessage = this.mapToMessageResponse(message);
 
@@ -107,6 +109,40 @@ export class ConversationService {
     }
 
     return mappedMessage;
+  }
+
+  async uploadAttachment(
+    userId: string,
+    file: {
+      buffer: Buffer;
+      mimetype: string;
+      originalName: string;
+      size: number;
+    },
+  ): Promise<{
+    url: string;
+    attachmentType: 'image' | 'video' | 'audio' | 'file';
+    mimeType: string;
+    fileName: string;
+    size: number;
+  }> {
+    const attachmentType = getAttachmentType(file.mimetype);
+    const resourceType =
+      attachmentType === 'image' ? 'image' : attachmentType === 'file' ? 'raw' : 'video';
+
+    const uploaded = await cloudinaryStorage.uploadBuffer(file.buffer, {
+      folder: `jesusname7/chat/${userId}`,
+      resourceType,
+      tags: ['chat_attachment'],
+    });
+
+    return {
+      url: uploaded.secureUrl,
+      attachmentType,
+      mimeType: file.mimetype,
+      fileName: file.originalName,
+      size: file.size,
+    };
   }
 
   async joinConversation(
@@ -319,6 +355,7 @@ export class ConversationService {
 
     if (message.text) response.text = message.text;
     if (message.mediaUrl) response.mediaUrl = message.mediaUrl;
+    if (message.attachmentType) response.attachmentType = message.attachmentType;
     if (message.deliveredAt) response.deliveredAt = message.deliveredAt.toISOString();
     if (message.readAt) response.readAt = message.readAt.toISOString();
 
@@ -396,4 +433,11 @@ export const conversationService = new ConversationService();
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getAttachmentType(mimeType: string): 'image' | 'video' | 'audio' | 'file' {
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'video';
+  if (mimeType.startsWith('audio/')) return 'audio';
+  return 'file';
 }

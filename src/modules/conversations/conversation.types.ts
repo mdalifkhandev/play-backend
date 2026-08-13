@@ -7,6 +7,7 @@ export interface CreateConversationDTO {
 export interface SendMessageDTO {
   text?: string;
   mediaUrl?: string;
+  attachmentType?: 'image' | 'video' | 'audio' | 'file';
 }
 
 export interface ConversationParticipantDTO {
@@ -41,6 +42,7 @@ export interface MessageResponseDTO {
   sender: ConversationParticipantDTO;
   text?: string;
   mediaUrl?: string;
+  attachmentType?: 'image' | 'video' | 'audio' | 'file';
   deliveredAt?: string;
   isRead: boolean;
   readAt?: string;

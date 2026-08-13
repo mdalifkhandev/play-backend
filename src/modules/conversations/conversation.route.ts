@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 
 import { authenticate } from '../../common/middleware/auth.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
@@ -13,6 +14,14 @@ import {
 } from './conversation.validation.js';
 
 export const conversationRouter = Router();
+
+const attachmentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 100 * 1024 * 1024,
+    files: 1,
+  },
+});
 
 conversationRouter.use(authenticate);
 
@@ -29,6 +38,12 @@ conversationRouter.post(
 );
 
 conversationRouter.get('/recommended', conversationController.getRecommendedUsers);
+
+conversationRouter.post(
+  '/attachments',
+  attachmentUpload.single('file'),
+  conversationController.uploadAttachment,
+);
 
 conversationRouter.get(
   '/users/search',

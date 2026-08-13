@@ -5,6 +5,7 @@ export interface IMessage extends Document {
   senderId: mongoose.Types.ObjectId;
   text?: string;
   mediaUrl?: string;
+  attachmentType?: 'image' | 'video' | 'audio' | 'file';
   deliveredAt?: Date;
   isRead: boolean;
   readAt?: Date;
@@ -34,6 +35,10 @@ const messageSchema = new Schema<IMessage>(
     mediaUrl: {
       type: String,
       trim: true,
+    },
+    attachmentType: {
+      type: String,
+      enum: ['image', 'video', 'audio', 'file'],
     },
     deliveredAt: {
       type: Date,

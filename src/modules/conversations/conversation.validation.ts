@@ -8,6 +8,7 @@ export const sendMessageSchema = z
   .object({
     text: z.string().trim().max(2000, 'Message cannot exceed 2000 characters.').optional(),
     mediaUrl: z.string().url('Invalid media URL.').optional(),
+    attachmentType: z.enum(['image', 'video', 'audio', 'file']).optional(),
   })
   .refine((data) => Boolean(data.text || data.mediaUrl), {
     message: 'Either text or mediaUrl is required.',

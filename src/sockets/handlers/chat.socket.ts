@@ -21,6 +21,7 @@ interface ConversationPayload {
 interface SendMessagePayload extends ConversationPayload {
   text?: string;
   mediaUrl?: string;
+  attachmentType?: 'image' | 'video' | 'audio' | 'file';
 }
 
 interface TypingPayload extends ConversationPayload {
@@ -183,11 +184,22 @@ function requireConversationId(data: ConversationPayload | undefined): string {
   return conversationId;
 }
 
-function normalizeMessage(data: SendMessagePayload): { text?: string; mediaUrl?: string } {
+function normalizeMessage(data: SendMessagePayload): {
+  text?: string;
+  mediaUrl?: string;
+  attachmentType?: 'image' | 'video' | 'audio' | 'file';
+} {
   const text = typeof data?.text === 'string' ? data.text.trim() : '';
   const mediaUrl = typeof data?.mediaUrl === 'string' ? data.mediaUrl.trim() : '';
+  const attachmentType = data?.attachmentType;
   if (!text && !mediaUrl) {
     throw new AppError('Message text or media is required.', 400, { code: 'EMPTY_MESSAGE' });
+  }
+  if (
+    attachmentType &&
+    !['image', 'video', 'audio', 'file'].includes(attachmentType)
+  ) {
+    throw new AppError('Invalid attachment type.', 400, { code: 'VALIDATION_ERROR' });
   }
   if (text.length > 2_000) {
     throw new AppError('Message text cannot exceed 2000 characters.', 400, {
@@ -197,6 +209,7 @@ function normalizeMessage(data: SendMessagePayload): { text?: string; mediaUrl?:
   return {
     ...(text ? { text } : {}),
     ...(mediaUrl ? { mediaUrl } : {}),
+    ...(attachmentType ? { attachmentType } : {}),
   };
 }
 

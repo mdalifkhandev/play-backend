@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 
+import { BadRequestError } from '../../common/errors/bad-request-error.js';
 import { sendSuccess } from '../../common/responses/api-response.js';
 import { conversationService, ConversationService } from './conversation.service.js';
 
@@ -17,6 +18,25 @@ export class ConversationController {
     const { targetUserId } = req.body;
     const conversation = await this.service.getOrCreateConversation(userId, targetUserId);
     sendSuccess(res, 200, 'Conversation initialized.', conversation);
+  };
+
+  uploadAttachment = async (req: Request, res: Response): Promise<void> => {
+    const userId = req.user!.userId;
+
+    if (!req.file) {
+      throw new BadRequestError('Attachment file is required.', {
+        code: 'ATTACHMENT_FILE_REQUIRED',
+      });
+    }
+
+    const result = await this.service.uploadAttachment(userId, {
+      buffer: req.file.buffer,
+      mimetype: req.file.mimetype,
+      originalName: req.file.originalname,
+      size: req.file.size,
+    });
+
+    sendSuccess(res, 201, 'Attachment uploaded successfully.', result);
   };
 
   sendMessage = async (req: Request, res: Response): Promise<void> => {
