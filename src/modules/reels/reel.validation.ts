@@ -157,15 +157,6 @@ export const createReelVideoEditSchema = z.preprocess(
       exposure: z.number().int().min(0).max(100).default(50),
       contrast: z.number().int().min(0).max(100).default(50),
       overlayText: overlayTextSchema.optional(),
-    })
-    .superRefine((value, context) => {
-      if (value.effect === ReelEffect.SPARKLE) {
-        context.addIssue({
-          code: 'custom',
-          path: ['effect'],
-          message: 'Effect sparkle is not available in this deployment.',
-        });
-      }
     }),
 );
 

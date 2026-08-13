@@ -221,6 +221,8 @@ function buildEffectFilter(effect: ReelEffect): string | null {
       return 'eq=brightness=0.12:saturation=1.08';
     case ReelEffect.VHS:
       return 'noise=alls=8:allf=t,hue=s=0.85';
+    case ReelEffect.SPARKLE:
+      return 'eq=brightness=0.08:saturation=1.35:contrast=1.08';
     default:
       return null;
   }
@@ -234,23 +236,27 @@ function buildDrawTextFilter(
   const fontPath = resolveFontFile(fontFile);
   const fontArg =
     process.platform === 'win32'
-      ? ':fontfile=/Windows/Fonts/arial.ttf'
+      ? ':fontfile=/Windows/Fonts/arialbd.ttf'
       : fontPath
         ? `:fontfile='${escapeFilterPath(fontPath)}'`
         : '';
   const xExpr = `(w-text_w)*${overlay.x.toFixed(4)}`;
   const yExpr = `(h-text_h)*${overlay.y.toFixed(4)}`;
 
-  return `drawtext=text='${escapedText}'${fontArg}:fontsize=${overlay.fontSize}:fontcolor=white:borderw=2:bordercolor=black@0.6:x=${xExpr}:y=${yExpr}`;
+  return `drawtext=text='${escapedText}'${fontArg}:fontsize=${overlay.fontSize}:fontcolor=white:borderw=2:bordercolor=black@0.6:line_spacing=8:x=${xExpr}:y=${yExpr}`;
 }
 
 function resolveFontFile(preferred?: string): string | undefined {
   const candidates = [
     preferred,
     env.REEL_FONT_FILE,
+    '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+    '/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf',
+    '/usr/share/fonts/TTF/DejaVuSans-Bold.ttf',
     '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
     '/usr/share/fonts/dejavu/DejaVuSans.ttf',
     '/usr/share/fonts/TTF/DejaVuSans.ttf',
+    'C:\\Windows\\Fonts\\arialbd.ttf',
     'C:\\Windows\\Fonts\\arial.ttf',
   ].filter(Boolean) as string[];
 
@@ -274,7 +280,10 @@ function escapeDrawText(value: string): string {
     .replace(/\\/g, '\\\\')
     .replace(/:/g, '\\:')
     .replace(/'/g, "\\'")
-    .replace(/%/g, '\\%');
+    .replace(/%/g, '\\%')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/\n/g, '\\n');
 }
 
 function escapeFilterPath(value: string): string {
