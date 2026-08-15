@@ -90,20 +90,21 @@ export class LiveStreamRepository {
   async incrementViewerCount(id: string): Promise<ILiveStream | null> {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
 
-    const stream = await LiveStreamModel.findById(id);
-    if (!stream) return null;
-
-    const newViewerCount = stream.viewerCount + 1;
-    const newPeakCount = Math.max(stream.peakViewerCount, newViewerCount);
-
-    return LiveStreamModel.findByIdAndUpdate(
-      id,
-      {
-        $set: {
-          viewerCount: newViewerCount,
-          peakViewerCount: newPeakCount,
+    return LiveStreamModel.findOneAndUpdate(
+      { _id: id, status: LIVE_STREAM_STATUS.LIVE },
+      [
+        {
+          $set: {
+            viewerCount: { $add: [{ $ifNull: ['$viewerCount', 0] }, 1] },
+            peakViewerCount: {
+              $max: [
+                { $ifNull: ['$peakViewerCount', 0] },
+                { $add: [{ $ifNull: ['$viewerCount', 0] }, 1] },
+              ],
+            },
+          },
         },
-      },
+      ],
       { new: true },
     );
   }
@@ -113,9 +114,7 @@ export class LiveStreamRepository {
 
     return LiveStreamModel.findByIdAndUpdate(
       id,
-      {
-        $inc: { viewerCount: -1 },
-      },
+      [{ $set: { viewerCount: { $max: [0, { $subtract: [{ $ifNull: ['$viewerCount', 0] }, 1] }] } } }],
       { new: true },
     );
   }

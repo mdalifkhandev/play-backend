@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { authenticate, optionalAuthenticate } from '../../common/middleware/auth.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
+import { blockLiveStreamingDuringKidsMode } from '../kids-mode/kids-mode.middleware.js';
 import { liveStreamController } from './live-stream.controller.js';
 import {
   createLiveStreamSchema,
@@ -16,6 +17,7 @@ export const liveStreamRouter = Router();
 liveStreamRouter.get(
   '/',
   optionalAuthenticate,
+  blockLiveStreamingDuringKidsMode,
   validateRequest({ query: liveStreamFeedQuerySchema }),
   liveStreamController.getFeed,
 );
@@ -23,6 +25,7 @@ liveStreamRouter.get(
 liveStreamRouter.get(
   '/:id',
   optionalAuthenticate,
+  blockLiveStreamingDuringKidsMode,
   validateRequest({ params: liveStreamIdParamsSchema }),
   liveStreamController.getById,
 );
@@ -30,12 +33,14 @@ liveStreamRouter.get(
 liveStreamRouter.get(
   '/:id/comments',
   optionalAuthenticate,
+  blockLiveStreamingDuringKidsMode,
   validateRequest({ params: liveStreamIdParamsSchema }),
   liveStreamController.getComments,
 );
 
 // Protected routes (Require login)
 liveStreamRouter.use(authenticate);
+liveStreamRouter.use(blockLiveStreamingDuringKidsMode);
 
 liveStreamRouter.post(
   '/',

@@ -26,6 +26,7 @@ import { coinRouter } from '../modules/coins/coin.route.js';
 import { healthRouter } from './health.route.js';
 import { userRouter } from '../modules/users/user.route.js';
 import { notificationRouter } from '../modules/notifications/notification.route.js';
+import { kidsModeRouter } from '../modules/kids-mode/kids-mode.route.js';
 
 export const apiRouter = Router();
 
@@ -33,6 +34,7 @@ apiRouter.use('/health', healthRouter);
 apiRouter.use('/auth', authRouter);
 apiRouter.use('/users', userRouter);
 apiRouter.use('/notifications', notificationRouter);
+apiRouter.use('/kids-mode', kidsModeRouter);
 apiRouter.use('/coins', coinRouter);
 apiRouter.use('/content-pages', contentPageRouter);
 apiRouter.use('/legal-consents', legalConsentRouter);

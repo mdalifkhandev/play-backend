@@ -2,17 +2,23 @@ import { SOCKET_EVENTS } from '../socket-events.js';
 import { liveStreamService } from '../../modules/live-streams/live-stream.service.js';
 import { coinService } from '../../modules/coins/coin.service.js';
 import { logger } from '../../infrastructure/logger/logger.js';
+import { AppError } from '../../common/errors/app-error.js';
+import { kidsModeService } from '../../modules/kids-mode/kids-mode.service.js';
 
 export function registerLiveStreamSocketHandlers(io: any, socket: any): void {
+  const joinedStreamIds = new Set<string>();
+
   socket.on(SOCKET_EVENTS.LIVE_JOIN, async (data: { streamId: string }) => {
     try {
       const { streamId } = data;
       if (!streamId) return;
+      await assertLiveStreamingAllowed(socket.user?.id);
+      if (joinedStreamIds.has(streamId)) return;
 
       const roomName = `stream:${streamId}`;
-      socket.join(roomName);
-
       const stream = await liveStreamService.joinStream(streamId);
+      await socket.join(roomName);
+      joinedStreamIds.add(streamId);
 
       io.to(roomName).emit(SOCKET_EVENTS.VIEWER_COUNT_UPDATE, {
         streamId,
@@ -33,18 +39,19 @@ export function registerLiveStreamSocketHandlers(io: any, socket: any): void {
       }
     } catch (error) {
       logger.error({ err: error }, 'Error in LIVE_JOIN socket handler');
+      emitLiveError(socket, error);
     }
   });
 
   socket.on(SOCKET_EVENTS.LIVE_LEAVE, async (data: { streamId: string }) => {
     try {
       const { streamId } = data;
-      if (!streamId) return;
+      if (!streamId || !joinedStreamIds.has(streamId)) return;
 
       const roomName = `stream:${streamId}`;
-      socket.leave(roomName);
-
       const stream = await liveStreamService.leaveStream(streamId);
+      await socket.leave(roomName);
+      joinedStreamIds.delete(streamId);
 
       io.to(roomName).emit(SOCKET_EVENTS.VIEWER_COUNT_UPDATE, {
         streamId,
@@ -60,6 +67,7 @@ export function registerLiveStreamSocketHandlers(io: any, socket: any): void {
       }
     } catch (error) {
       logger.error({ err: error }, 'Error in LIVE_LEAVE socket handler');
+      emitLiveError(socket, error);
     }
   });
 
@@ -67,6 +75,7 @@ export function registerLiveStreamSocketHandlers(io: any, socket: any): void {
     try {
       const { streamId, text } = data;
       if (!streamId || !text || !socket.user) return;
+      await assertLiveStreamingAllowed(socket.user.id);
 
       const roomName = `stream:${streamId}`;
       const comment = await liveStreamService.addComment(streamId, socket.user.id, text);
@@ -74,6 +83,7 @@ export function registerLiveStreamSocketHandlers(io: any, socket: any): void {
       io.to(roomName).emit(SOCKET_EVENTS.NEW_COMMENT, comment);
     } catch (error) {
       logger.error({ err: error }, 'Error in LIVE_COMMENT socket handler');
+      emitLiveError(socket, error);
     }
   });
 
@@ -81,6 +91,7 @@ export function registerLiveStreamSocketHandlers(io: any, socket: any): void {
     try {
       const { streamId } = data;
       if (!streamId) return;
+      await assertLiveStreamingAllowed(socket.user?.id);
 
       const roomName = `stream:${streamId}`;
       const result = await liveStreamService.addLike(streamId);
@@ -93,6 +104,7 @@ export function registerLiveStreamSocketHandlers(io: any, socket: any): void {
       });
     } catch (error) {
       logger.error({ err: error }, 'Error in LIVE_LIKE socket handler');
+      emitLiveError(socket, error);
     }
   });
 
@@ -100,6 +112,7 @@ export function registerLiveStreamSocketHandlers(io: any, socket: any): void {
     try {
       const { streamId, giftId, quantity = 1 } = data;
       if (!streamId || !giftId || !socket.user) return;
+      await assertLiveStreamingAllowed(socket.user.id);
 
       const roomName = `stream:${streamId}`;
 
@@ -122,9 +135,7 @@ export function registerLiveStreamSocketHandlers(io: any, socket: any): void {
       });
     } catch (error) {
       logger.error({ err: error }, 'Error in LIVE_GIFT socket handler');
-      socket.emit('live:error', {
-        message: error instanceof Error ? error.message : 'Failed to send gift',
-      });
+      emitLiveError(socket, error);
     }
   });
 
@@ -132,6 +143,7 @@ export function registerLiveStreamSocketHandlers(io: any, socket: any): void {
     try {
       const { streamId } = data;
       if (!streamId) return;
+      await assertLiveStreamingAllowed(socket.user?.id);
 
       const roomName = `stream:${streamId}`;
       const result = await liveStreamService.addShare(streamId);
@@ -143,6 +155,33 @@ export function registerLiveStreamSocketHandlers(io: any, socket: any): void {
       });
     } catch (error) {
       logger.error({ err: error }, 'Error in LIVE_SHARE socket handler');
+      emitLiveError(socket, error);
     }
+  });
+
+  socket.on('disconnect', () => {
+    for (const streamId of joinedStreamIds) {
+      void liveStreamService.leaveStream(streamId).catch((error) => {
+        logger.warn({ err: error, streamId }, 'Failed to clean up disconnected live viewer');
+      });
+    }
+    joinedStreamIds.clear();
+  });
+}
+
+async function assertLiveStreamingAllowed(userId?: string): Promise<void> {
+  if (!userId) return;
+  const status = await kidsModeService.getStatus(userId);
+  if (status.isActive) {
+    throw new AppError('Live streaming is disabled while Kids Mode is active.', 403, {
+      code: 'KIDS_FEATURE_DISABLED',
+    });
+  }
+}
+
+function emitLiveError(socket: any, error: unknown): void {
+  socket.emit('live:error', {
+    code: error instanceof AppError ? error.code : 'LIVE_ACTION_FAILED',
+    message: error instanceof Error ? error.message : 'Live action failed.',
   });
 }

@@ -3,6 +3,7 @@ import multer from 'multer';
 
 import { authenticate } from '../../common/middleware/auth.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
+import { blockMessagingDuringKidsMode } from '../kids-mode/kids-mode.middleware.js';
 import { conversationController } from './conversation.controller.js';
 import {
   conversationIdParamSchema,
@@ -25,6 +26,7 @@ const attachmentUpload = multer({
 });
 
 conversationRouter.use(authenticate);
+conversationRouter.use(blockMessagingDuringKidsMode);
 
 conversationRouter.get(
   '/',

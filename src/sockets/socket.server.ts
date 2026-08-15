@@ -10,6 +10,7 @@ import { SOCKET_EVENTS } from './socket-events.js';
 import { getUserRoom } from './socket-rooms.js';
 import type { AuthenticatedSocket } from './socket.types.js';
 import type { ConversationService } from '../modules/conversations/conversation.service.js';
+import { registerLiveStreamSocketServer } from '../modules/live-streams/live-stream.gateway.js';
 
 interface SocketServerOptions {
   authMiddleware?: (socket: Socket, next: (error?: ExtendedError) => void) => void;
@@ -32,6 +33,7 @@ export function initializeSocketServer(
     pingInterval: 25_000,
     pingTimeout: 20_000,
   });
+  registerLiveStreamSocketServer(io);
 
   io.use(options.authMiddleware ?? socketAuthenticate);
   io.on('connection', async (rawSocket) => {

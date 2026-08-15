@@ -1,8 +1,14 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { liveStreamService } from '../src/modules/live-streams/live-stream.service.js';
+import { LiveStreamService } from '../src/modules/live-streams/live-stream.service.js';
 import { liveStreamRepository } from '../src/modules/live-streams/live-stream.repository.js';
 import { LIVE_STREAM_ROLE, LIVE_STREAM_STATUS } from '../src/modules/live-streams/live-stream.constants.js';
 import mongoose from 'mongoose';
+
+const testAgoraConfig = {
+  appId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  appCertificate: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+  tokenTtlSeconds: 3_600,
+};
 
 describe('Live Video Streams & Agora RTC Integration', () => {
   beforeEach(() => {
@@ -21,13 +27,14 @@ describe('Live Video Streams & Agora RTC Integration', () => {
         status: LIVE_STREAM_STATUS.LIVE,
       } as any);
 
-      const res = await liveStreamService.getStreamToken(streamId, hostUserId);
+      const service = new LiveStreamService(liveStreamRepository, testAgoraConfig);
+      const res = await service.getStreamToken(streamId, hostUserId);
 
       expect(res).toMatchObject({
-        appId: 'aa36a82bb91e42e6bf7684cd143cd42a',
+        appId: testAgoraConfig.appId,
         channelName: 'live_test_channel_123',
         role: LIVE_STREAM_ROLE.HOST,
-        expiresInSeconds: 86400,
+        expiresInSeconds: 3600,
       });
 
       expect(res.token).toBeDefined();
@@ -47,18 +54,57 @@ describe('Live Video Streams & Agora RTC Integration', () => {
         status: LIVE_STREAM_STATUS.LIVE,
       } as any);
 
-      const res = await liveStreamService.getStreamToken(streamId, viewerUserId);
+      const service = new LiveStreamService(liveStreamRepository, testAgoraConfig);
+      const res = await service.getStreamToken(streamId, viewerUserId);
 
       expect(res).toMatchObject({
-        appId: 'aa36a82bb91e42e6bf7684cd143cd42a',
+        appId: testAgoraConfig.appId,
         channelName: 'live_test_channel_123',
         role: LIVE_STREAM_ROLE.VIEWER,
-        expiresInSeconds: 86400,
+        expiresInSeconds: 3600,
       });
 
       expect(res.token).toBeDefined();
       expect(typeof res.token).toBe('string');
       expect(typeof res.uid).toBe('number');
+    });
+
+    it('does not issue viewer tokens before a stream starts', async () => {
+      const hostUserId = new mongoose.Types.ObjectId().toString();
+      const viewerUserId = new mongoose.Types.ObjectId().toString();
+      const streamId = new mongoose.Types.ObjectId().toString();
+      vi.spyOn(liveStreamRepository, 'findById').mockResolvedValueOnce({
+        _id: new mongoose.Types.ObjectId(streamId),
+        hostId: new mongoose.Types.ObjectId(hostUserId),
+        channelName: 'live_scheduled_channel',
+        status: LIVE_STREAM_STATUS.SCHEDULED,
+      } as any);
+
+      const service = new LiveStreamService(liveStreamRepository, testAgoraConfig);
+      await expect(service.getStreamToken(streamId, viewerUserId)).rejects.toMatchObject({
+        statusCode: 409,
+        code: 'STREAM_NOT_LIVE',
+      });
+    });
+
+    it('fails safely when Agora credentials are missing', async () => {
+      const hostUserId = new mongoose.Types.ObjectId().toString();
+      const streamId = new mongoose.Types.ObjectId().toString();
+      vi.spyOn(liveStreamRepository, 'findById').mockResolvedValueOnce({
+        _id: new mongoose.Types.ObjectId(streamId),
+        hostId: new mongoose.Types.ObjectId(hostUserId),
+        channelName: 'live_test_channel',
+        status: LIVE_STREAM_STATUS.LIVE,
+      } as any);
+
+      const service = new LiveStreamService(liveStreamRepository, {
+        appId: undefined,
+        appCertificate: undefined,
+      });
+      await expect(service.getStreamToken(streamId, hostUserId)).rejects.toMatchObject({
+        statusCode: 503,
+        code: 'AGORA_NOT_CONFIGURED',
+      });
     });
   });
 
@@ -88,7 +134,8 @@ describe('Live Video Streams & Agora RTC Integration', () => {
         createdAt: new Date(),
       } as any);
 
-      const stream = await liveStreamService.createStream(hostUserId, {
+      const service = new LiveStreamService(liveStreamRepository, testAgoraConfig);
+      const stream = await service.createStream(hostUserId, {
         title: 'Sunday Worship Service',
         category: 'Worship',
       });
@@ -124,7 +171,8 @@ describe('Live Video Streams & Agora RTC Integration', () => {
         createdAt: new Date(),
       } as any);
 
-      const stream = await liveStreamService.startStream(streamId, hostUserId);
+      const service = new LiveStreamService(liveStreamRepository, testAgoraConfig);
+      const stream = await service.startStream(streamId, hostUserId);
       expect(stream.status).toBe(LIVE_STREAM_STATUS.LIVE);
     });
 
@@ -152,7 +200,8 @@ describe('Live Video Streams & Agora RTC Integration', () => {
         createdAt: new Date(),
       } as any);
 
-      const stream = await liveStreamService.endStream(streamId, hostUserId);
+      const service = new LiveStreamService(liveStreamRepository, testAgoraConfig);
+      const stream = await service.endStream(streamId, hostUserId);
       expect(stream.status).toBe(LIVE_STREAM_STATUS.ENDED);
     });
   });

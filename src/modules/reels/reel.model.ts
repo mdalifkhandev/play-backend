@@ -345,6 +345,10 @@ reelSchema.index(
   { name: 'ix_reels_for_you_candidates' },
 );
 reelSchema.index(
+  { forKids: 1, status: 1, visibility: 1, reportCount: 1, createdAt: -1, _id: -1 },
+  { name: 'ix_reels_kids_feed' },
+);
+reelSchema.index(
   { hashtags: 1, status: 1, publishedAt: -1 },
   { name: 'ix_reels_hashtags_feed' },
 );

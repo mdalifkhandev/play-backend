@@ -103,6 +103,39 @@ export class ReelRepository {
       .exec();
   }
 
+  async listKidsReadyPublic(
+    limit: number,
+    cursor?: ReelCursor,
+    hashtag?: string,
+    excludedReelIds: Types.ObjectId[] = [],
+  ): Promise<ReelWithOwner[]> {
+    const filter: Record<string, unknown> = {
+      forKids: true,
+      status: ReelStatus.READY,
+      visibility: ReelVisibility.PUBLIC,
+      mediaType: 'video',
+      reportCount: { $lt: FOR_YOU_REPORT_THRESHOLD },
+      deletedAt: { $exists: false },
+      ...(hashtag ? { hashtags: hashtag.toLowerCase() } : {}),
+      ...(excludedReelIds.length > 0 ? { _id: { $nin: excludedReelIds } } : {}),
+      ...(cursor
+        ? {
+            $or: [
+              { createdAt: { $lt: cursor.publishedAt } },
+              { createdAt: cursor.publishedAt, _id: { $lt: cursor.id } },
+            ],
+          }
+        : {}),
+    };
+
+    return ReelModel.find(filter)
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit)
+      .populate({ path: 'ownerId', select: OWNER_PROJECTION })
+      .lean<ReelWithOwner[]>()
+      .exec();
+  }
+
   async listForYou(
     limit: number,
     asOf: Date,

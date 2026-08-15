@@ -6,3 +6,4 @@ export * from './live-stream.repository.js';
 export * from './live-stream.service.js';
 export * from './live-stream.controller.js';
 export * from './live-stream.route.js';
+export * from './live-stream.gateway.js';

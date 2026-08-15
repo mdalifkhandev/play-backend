@@ -13,11 +13,25 @@ import type {
 } from './live-stream.types.js';
 import type { ILiveStream } from './live-stream.model.js';
 import type { ILiveStreamComment } from './live-stream-comment.model.js';
+import { broadcastLiveStreamStatus } from './live-stream.gateway.js';
 
 const { RtcTokenBuilder, RtcRole } = agoraToken;
 
+interface AgoraConfig {
+  appId: string | undefined;
+  appCertificate: string | undefined;
+  tokenTtlSeconds?: number;
+}
+
 export class LiveStreamService {
-  constructor(private readonly repository: LiveStreamRepository = liveStreamRepository) {}
+  constructor(
+    private readonly repository: LiveStreamRepository = liveStreamRepository,
+    private readonly agora: AgoraConfig = {
+      appId: env.AGORA_APP_ID,
+      appCertificate: env.AGORA_APP_CERTIFICATE,
+      tokenTtlSeconds: 3_600,
+    },
+  ) {}
 
   async createStream(hostId: string, dto: CreateLiveStreamDTO): Promise<LiveStreamResponseDTO> {
     const channelName = `live_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
@@ -68,6 +82,10 @@ export class LiveStreamService {
       throw new AppError('Cannot start a stream that has already ended.', 400, { code: 'STREAM_ENDED' });
     }
 
+    if (stream.status === LIVE_STREAM_STATUS.LIVE) {
+      return this.mapToResponse(stream);
+    }
+
     const updated = await this.repository.updateStatus(streamId, LIVE_STREAM_STATUS.LIVE, {
       startedAt: new Date(),
     });
@@ -76,7 +94,9 @@ export class LiveStreamService {
       throw new AppError('Failed to update stream status.', 500, { code: 'UPDATE_FAILED' });
     }
 
-    return this.mapToResponse(updated);
+    const response = this.mapToResponse(updated);
+    broadcastLiveStreamStatus(response);
+    return response;
   }
 
   async endStream(streamId: string, hostId: string): Promise<LiveStreamResponseDTO> {
@@ -90,6 +110,11 @@ export class LiveStreamService {
       throw new AppError('Only the stream host can end this live stream.', 403, { code: 'FORBIDDEN' });
     }
 
+
+    if (stream.status === LIVE_STREAM_STATUS.ENDED) {
+      return this.mapToResponse(stream);
+    }
+
     const updated = await this.repository.updateStatus(streamId, LIVE_STREAM_STATUS.ENDED, {
       endedAt: new Date(),
       viewerCount: 0,
@@ -99,7 +124,9 @@ export class LiveStreamService {
       throw new AppError('Failed to end stream.', 500, { code: 'UPDATE_FAILED' });
     }
 
-    return this.mapToResponse(updated);
+    const response = this.mapToResponse(updated);
+    broadcastLiveStreamStatus(response);
+    return response;
   }
 
   async getStreamToken(streamId: string, userId: string): Promise<StreamTokenResponseDTO> {
@@ -112,30 +139,40 @@ export class LiveStreamService {
     const isHost = hostIdStr === userId;
     const role = isHost ? LIVE_STREAM_ROLE.HOST : LIVE_STREAM_ROLE.VIEWER;
 
-    const appId = env.AGORA_APP_ID || 'aa36a82bb91e42e6bf7684cd143cd42a';
-    const appCertificate = env.AGORA_APP_CERTIFICATE || '429f9ca1570b4c7aa7004d6dc621a735';
+    if (stream.status === LIVE_STREAM_STATUS.ENDED) {
+      throw new AppError('Agora token cannot be issued for an ended stream.', 409, {
+        code: 'STREAM_ENDED',
+      });
+    }
+    if (!isHost && stream.status !== LIVE_STREAM_STATUS.LIVE) {
+      throw new AppError('This live stream has not started yet.', 409, {
+        code: 'STREAM_NOT_LIVE',
+      });
+    }
+
+    const appId = this.agora.appId;
+    const appCertificate = this.agora.appCertificate;
+    if (!appId || !appCertificate) {
+      throw new AppError('Agora live streaming is not configured.', 503, {
+        code: 'AGORA_NOT_CONFIGURED',
+      });
+    }
 
     const rtcRole = isHost ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
-    const expiresInSeconds = 86400; // 24 hours
+    const expiresInSeconds = this.agora.tokenTtlSeconds ?? 3_600;
     const currentTimestamp = Math.floor(Date.now() / 1000);
     const privilegeExpiredTs = currentTimestamp + expiresInSeconds;
     const uid = stringToNumericUid(userId);
 
-    let token = '';
-    if (appId && appCertificate) {
-      token = RtcTokenBuilder.buildTokenWithUid(
-        appId,
-        appCertificate,
-        stream.channelName,
-        uid,
-        rtcRole,
-        privilegeExpiredTs,
-        privilegeExpiredTs,
-      );
-    } else {
-      const rawToken = `${stream.channelName}:${userId}:${role}:${privilegeExpiredTs}`;
-      token = Buffer.from(rawToken).toString('base64url');
-    }
+    const token = RtcTokenBuilder.buildTokenWithUid(
+      appId,
+      appCertificate,
+      stream.channelName,
+      uid,
+      rtcRole,
+      privilegeExpiredTs,
+      privilegeExpiredTs,
+    );
 
     return {
       appId,
@@ -186,6 +223,7 @@ export class LiveStreamService {
   }
 
   async joinStream(streamId: string): Promise<LiveStreamResponseDTO> {
+    await this.requireLiveStream(streamId);
     const updated = await this.repository.incrementViewerCount(streamId);
     if (!updated) {
       throw new AppError('Live stream not found.', 404, { code: 'STREAM_NOT_FOUND' });
@@ -208,10 +246,7 @@ export class LiveStreamService {
     userId: string,
     text: string,
   ): Promise<LiveStreamCommentResponseDTO> {
-    const stream = await this.repository.findById(streamId);
-    if (!stream) {
-      throw new AppError('Live stream not found.', 404, { code: 'STREAM_NOT_FOUND' });
-    }
+    await this.requireLiveStream(streamId);
 
     const comment = await this.repository.addComment(streamId, userId, text);
     return this.mapCommentToResponse(comment);
@@ -223,6 +258,7 @@ export class LiveStreamService {
   }
 
   async addLike(streamId: string): Promise<{ likesCount: number }> {
+    await this.requireLiveStream(streamId);
     const updated = await this.repository.incrementLikesCount(streamId);
     if (!updated) {
       throw new AppError('Live stream not found.', 404, { code: 'STREAM_NOT_FOUND' });
@@ -231,11 +267,23 @@ export class LiveStreamService {
   }
 
   async addShare(streamId: string): Promise<{ sharesCount: number }> {
+    await this.requireLiveStream(streamId);
     const updated = await this.repository.incrementSharesCount(streamId);
     if (!updated) {
       throw new AppError('Live stream not found.', 404, { code: 'STREAM_NOT_FOUND' });
     }
     return { sharesCount: updated.sharesCount };
+  }
+
+  private async requireLiveStream(streamId: string): Promise<ILiveStream> {
+    const stream = await this.repository.findById(streamId);
+    if (!stream) {
+      throw new AppError('Live stream not found.', 404, { code: 'STREAM_NOT_FOUND' });
+    }
+    if (stream.status !== LIVE_STREAM_STATUS.LIVE) {
+      throw new AppError('This live stream is not active.', 409, { code: 'STREAM_NOT_LIVE' });
+    }
+    return stream;
   }
 
   private mapToResponse(stream: ILiveStream): LiveStreamResponseDTO {

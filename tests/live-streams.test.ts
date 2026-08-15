@@ -108,7 +108,11 @@ describe('Live Streaming Module', () => {
         getRecentComments: vi.fn().mockResolvedValue([]),
       };
 
-      service = new LiveStreamService(mockRepo);
+      service = new LiveStreamService(mockRepo, {
+        appId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        appCertificate: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        tokenTtlSeconds: 3_600,
+      });
     });
 
     it('creates a live stream with channel name and stream key', async () => {
@@ -148,6 +152,7 @@ describe('Live Streaming Module', () => {
       expect(hostToken.role).toBe('host');
       expect(hostToken.token).toBeDefined();
 
+      mockRepo.findById.mockResolvedValueOnce({ ...mockStream, status: LIVE_STREAM_STATUS.LIVE });
       const viewerToken = await service.getStreamToken('640000000000000000000001', 'viewer789');
       expect(viewerToken.role).toBe('viewer');
     });
@@ -160,6 +165,7 @@ describe('Live Streaming Module', () => {
     });
 
     it('posts comments to a live stream', async () => {
+      mockRepo.findById.mockResolvedValueOnce({ ...mockStream, status: LIVE_STREAM_STATUS.LIVE });
       const comment = await service.addComment(
         '640000000000000000000001',
         'user456',
@@ -170,6 +176,7 @@ describe('Live Streaming Module', () => {
     });
 
     it('increments heart likes on a live stream', async () => {
+      mockRepo.findById.mockResolvedValueOnce({ ...mockStream, status: LIVE_STREAM_STATUS.LIVE });
       const likeResult = await service.addLike('640000000000000000000001');
       expect(likeResult.likesCount).toBe(11);
     });

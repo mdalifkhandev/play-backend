@@ -21,6 +21,7 @@
     "migrate:story-media": "tsx scripts/migrations/002-story-media-indexes.ts",
     "migrate:reels": "tsx scripts/migrations/003-reel-indexes.ts",
     "migrate:engagement": "tsx scripts/migrations/004-engagement-indexes.ts",
+    "migrate:kids-mode": "tsx scripts/migrations/005-kids-mode-indexes.ts",
     "cleanup:story-media": "tsx scripts/cleanup-story-media.ts",
     "cleanup:reels": "tsx scripts/cleanup-reels.ts",
     "reconcile:reels": "tsx scripts/reconcile-reels.ts",

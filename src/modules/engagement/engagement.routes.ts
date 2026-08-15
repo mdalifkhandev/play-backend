@@ -7,6 +7,7 @@ import {
   engagementShareRateLimiter,
 } from '../../common/middleware/rate-limit.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
+import { blockCommentsDuringKidsMode } from '../kids-mode/kids-mode.middleware.js';
 import { engagementController } from './engagement.controller.js';
 import {
   commentFeedQuerySchema,
@@ -63,6 +64,7 @@ engagementRouter.post(
 // Comments on reels
 engagementRouter.post(
   '/reels/:reelId/comments',
+  blockCommentsDuringKidsMode,
   engagementCommentRateLimiter,
   validateRequest({ params: reelIdParamsSchema, body: createCommentBodySchema }),
   engagementController.createComment,
@@ -70,6 +72,7 @@ engagementRouter.post(
 
 engagementRouter.get(
   '/reels/:reelId/comments',
+  blockCommentsDuringKidsMode,
   validateRequest({ params: reelIdParamsSchema, query: commentFeedQuerySchema }),
   engagementController.listComments,
 );
@@ -78,6 +81,7 @@ engagementRouter.get(
 export const commentRouter = Router();
 
 commentRouter.use(authenticate);
+commentRouter.use(blockCommentsDuringKidsMode);
 
 commentRouter.patch(
   '/:commentId',

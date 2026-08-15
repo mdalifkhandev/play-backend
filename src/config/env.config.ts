@@ -121,6 +121,14 @@ const environmentSchema = z
     GOOGLE_WEB_CLIENT_ID: z.string().trim().min(1).optional(),
   })
   .superRefine((value, context) => {
+    if (Boolean(value.AGORA_APP_ID) !== Boolean(value.AGORA_APP_CERTIFICATE)) {
+      context.addIssue({
+        code: 'custom',
+        path: [value.AGORA_APP_ID ? 'AGORA_APP_CERTIFICATE' : 'AGORA_APP_ID'],
+        message: 'AGORA_APP_ID and AGORA_APP_CERTIFICATE must be configured together.',
+      });
+    }
+
     if (value.DATABASE_MIN_POOL_SIZE > value.DATABASE_MAX_POOL_SIZE) {
       context.addIssue({
         code: 'custom',
@@ -210,6 +218,14 @@ const environmentSchema = z
           code: 'custom',
           path: ['JAMENDO_CLIENT_ID'],
           message: 'JAMENDO_CLIENT_ID is required in production.',
+        });
+      }
+
+      if (!value.AGORA_APP_ID || !value.AGORA_APP_CERTIFICATE) {
+        context.addIssue({
+          code: 'custom',
+          path: ['AGORA_APP_ID'],
+          message: 'Agora credentials are required in production.',
         });
       }
     }

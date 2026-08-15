@@ -27,6 +27,7 @@ export interface ReelStatusDto {
   location: { name: string | null; latitude: number | null; longitude: number | null } | null;
   mediaType: 'video' | 'photo';
   visibility: string;
+  kids: boolean;
   forKids: boolean;
   media: {
     rawUrl: string | null;
@@ -98,6 +99,7 @@ export interface ReelFeedItemDto {
       fontSize: number;
     } | null;
   };
+  kids: boolean;
   forKids: boolean;
   user: {
     id: string;
@@ -143,6 +145,7 @@ export function toReelStatusDto(reel: Reel, viewerId?: string): ReelStatusDto {
       : null,
     mediaType: reel.mediaType ?? 'video',
     visibility: reel.visibility,
+    kids: reel.forKids,
     forKids: reel.forKids,
     media: {
       rawUrl: isOwner ? reel.rawMedia.secureUrl : null,
@@ -240,6 +243,7 @@ export function toReelFeedItemDto(
           }
         : null,
     },
+    kids: reel.forKids ?? false,
     forKids: reel.forKids ?? false,
     user: {
       id: ownerId,

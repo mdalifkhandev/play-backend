@@ -168,7 +168,7 @@ export const locationSchema = z
   })
   .strict();
 
-export const createReelBodySchema = z
+const createReelObjectSchema = z
   .object({
     mediaAssetId: objectIdSchema.optional(),
     rawMediaKey: z.string().trim().min(1).max(500).optional(),
@@ -210,6 +210,14 @@ export const createReelBodySchema = z
       });
     }
   });
+
+export const createReelBodySchema = z.preprocess((value) => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return value;
+  const input = value as Record<string, unknown>;
+  if (!('kids' in input)) return input;
+  const { kids, ...rest } = input;
+  return { ...rest, forKids: input.forKids ?? kids };
+}, createReelObjectSchema);
 
 export const reelIdParamsSchema = z
   .object({
