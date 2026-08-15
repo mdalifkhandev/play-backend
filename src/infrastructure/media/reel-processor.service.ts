@@ -110,8 +110,24 @@ export class ReelProcessorService {
       if (audioUrl) {
         musicPath = path.join(workDir, 'music.mp3');
         console.log('[REEL_PROCESS] music download start', { reelId, audioUrl });
-        await downloadToFile(audioUrl, musicPath);
-        console.log('[REEL_PROCESS] music downloaded', { reelId, musicPath });
+        try {
+          await downloadToFile(audioUrl, musicPath);
+          console.log('[REEL_PROCESS] music downloaded', { reelId, musicPath });
+        } catch (error) {
+          musicPath = undefined;
+          logger.warn({
+            err: error,
+            reelId,
+            audioUrl,
+            providerTrackId: claimed.audioEdit.music?.providerTrackId,
+          }, 'Music download failed; processing Reel without added music');
+          console.warn('[REEL_PROCESS] music download skipped', {
+            reelId,
+            message: error instanceof Error ? error.message : String(error),
+            code: (error as any)?.code,
+            statusCode: (error as any)?.statusCode,
+          });
+        }
         await this.setProgress(claimed, REEL_PROGRESS.MUSIC_PREPARED);
       } else {
         await this.setProgress(claimed, REEL_PROGRESS.MUSIC_PREPARED);

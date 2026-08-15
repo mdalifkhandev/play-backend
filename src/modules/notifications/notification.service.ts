@@ -10,7 +10,10 @@ import type {
   DeletePushTokenInput,
   RegisterPushTokenInput,
   SendPushNotificationInput,
+  GetNotificationsQuery,
+  MarkNotificationsAsReadInput,
 } from './notification.validation.js';
+import type { Notification, NotificationDocument } from './notification.model.js';
 
 export interface RegisterPushTokenResult {
   tokenId: string;
@@ -91,6 +94,45 @@ export class NotificationService {
       targetedDeviceCount: tokens.length,
       ...result,
     };
+  }
+
+  async createNotification(
+    data: Omit<Notification, '_id' | 'createdAt' | 'updatedAt' | 'isRead'>,
+  ): Promise<NotificationDocument> {
+    return this.repository.createNotification(data);
+  }
+
+  async getUserNotifications(
+    userId: string,
+    query: GetNotificationsQuery,
+  ): Promise<{ items: NotificationDocument[]; nextCursor: Date | null }> {
+    const limit = query.limit;
+    // Fetch limit + 1 to determine if there is a next page
+    const items = await this.repository.getUserNotifications(userId, limit + 1, query.cursor);
+    
+    let nextCursor: Date | null = null;
+    if (items.length > limit) {
+      const nextItem = items.pop();
+      nextCursor = nextItem!.createdAt;
+    }
+
+    return { items, nextCursor };
+  }
+
+  async markNotificationsAsRead(
+    userId: string,
+    input: MarkNotificationsAsReadInput,
+  ): Promise<{ modifiedCount: number }> {
+    const modifiedCount = await this.repository.markAsRead(userId, input.notificationIds);
+    return { modifiedCount };
+  }
+
+  async deleteNotification(userId: string, notificationId: string): Promise<{ deleted: boolean }> {
+    const deleted = await this.repository.deleteNotification(userId, notificationId);
+    if (!deleted) {
+      throw new NotFoundError('Notification not found', { code: 'NOTIFICATION_NOT_FOUND' });
+    }
+    return { deleted };
   }
 }
 

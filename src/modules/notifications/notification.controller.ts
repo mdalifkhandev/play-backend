@@ -8,6 +8,8 @@ import type {
   DeletePushTokenInput,
   RegisterPushTokenInput,
   SendPushNotificationInput,
+  GetNotificationsQuery,
+  MarkNotificationsAsReadInput,
 } from './notification.validation.js';
 
 export class NotificationController {
@@ -47,6 +49,34 @@ export class NotificationController {
     const result = await notificationService.sendToUser(userId, notification);
 
     return sendSuccess(response, 200, 'Push notification sent successfully.', result);
+  });
+
+  getUserNotifications = asyncHandler(async (request: Request, response: Response) => {
+    const userId = request.user!.userId;
+    const result = await notificationService.getUserNotifications(
+      userId,
+      request.query as unknown as GetNotificationsQuery,
+    );
+
+    return sendSuccess(response, 200, 'Notifications retrieved successfully.', result);
+  });
+
+  markNotificationsAsRead = asyncHandler(async (request: Request, response: Response) => {
+    const userId = request.user!.userId;
+    const result = await notificationService.markNotificationsAsRead(
+      userId,
+      request.body as MarkNotificationsAsReadInput,
+    );
+
+    return sendSuccess(response, 200, 'Notifications marked as read.', result);
+  });
+
+  deleteNotification = asyncHandler(async (request: Request, response: Response) => {
+    const userId = request.user!.userId;
+    const id = request.params.id as string;
+    const result = await notificationService.deleteNotification(userId, id);
+
+    return sendSuccess(response, 200, 'Notification deleted successfully.', result);
   });
 }
 

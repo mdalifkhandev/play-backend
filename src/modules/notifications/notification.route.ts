@@ -10,11 +10,30 @@ import {
   deletePushTokenBodySchema,
   registerPushTokenBodySchema,
   sendPushNotificationBodySchema,
+  getNotificationsQuerySchema,
+  markNotificationsAsReadBodySchema,
 } from './notification.validation.js';
 
 export const notificationRouter = Router();
 
 notificationRouter.use(authenticate);
+
+notificationRouter.get(
+  '/',
+  validateRequest({ query: getNotificationsQuerySchema }),
+  notificationController.getUserNotifications,
+);
+
+notificationRouter.patch(
+  '/read',
+  validateRequest({ body: markNotificationsAsReadBodySchema }),
+  notificationController.markNotificationsAsRead,
+);
+
+notificationRouter.delete(
+  '/:id',
+  notificationController.deleteNotification,
+);
 
 notificationRouter.post(
   '/tokens',
