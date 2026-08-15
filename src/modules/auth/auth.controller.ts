@@ -95,6 +95,10 @@ export class AuthController {
       });
     }
 
+    console.log('--- SETUP PROFILE CALLED ---');
+    console.log('Request Body:', request.body);
+    console.log('Request File:', request.file ? `File present: ${request.file.originalname}` : 'No file');
+
     const file = request.file
       ? {
           buffer: request.file.buffer,
