@@ -101,6 +101,7 @@ export function registerLiveStreamSocketHandlers(io: any, socket: any): void {
         type: 'HEART',
         likesCount: result.likesCount,
         userId: socket.user?.id,
+        avatarUrl: socket.user?.avatarUrl,
       });
     } catch (error) {
       logger.error({ err: error }, 'Error in LIVE_LIKE socket handler');

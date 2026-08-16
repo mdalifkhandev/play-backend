@@ -241,6 +241,11 @@ export class LiveStreamService {
     return this.mapToResponse(populated!);
   }
 
+  async likeStream(streamId: string): Promise<void> {
+    await this.requireLiveStream(streamId);
+    await this.repository.incrementLikesCount(streamId);
+  }
+
   async addComment(
     streamId: string,
     userId: string,
