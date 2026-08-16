@@ -105,6 +105,7 @@ export interface ReelFeedItemDto {
     id: string;
     email: string | null;
     username: string | null;
+    displayName: string | null;
     avatarUrl: string | null;
   };
   stats: {
@@ -248,7 +249,8 @@ export function toReelFeedItemDto(
     user: {
       id: ownerId,
       email: owner?.email ?? null,
-      username: profile?.username ?? null,
+      username: profile?.username ?? owner?.email?.split('@')[0] ?? null,
+      displayName: profile?.displayName ?? profile?.username ?? owner?.email?.split('@')[0] ?? null,
       avatarUrl: profile?.photoUrl ?? null,
     },
     stats: {

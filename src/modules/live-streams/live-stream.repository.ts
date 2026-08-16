@@ -11,7 +11,7 @@ export class LiveStreamRepository {
 
   async findById(id: string): Promise<ILiveStream | null> {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
-    return LiveStreamModel.findById(id).populate('hostId', 'username displayName avatarUrl isVerified');
+    return LiveStreamModel.findById(id).populate('hostId', 'profile email isVerified');
   }
 
   async findFeedStreams(options: {
@@ -60,7 +60,7 @@ export class LiveStreamRepository {
         .sort(sort)
         .skip(skip)
         .limit(limit)
-        .populate('hostId', 'username displayName avatarUrl isVerified')
+        .populate('hostId', 'profile email isVerified')
         .exec(),
       LiveStreamModel.countDocuments(filter),
     ]);
@@ -84,39 +84,41 @@ export class LiveStreamRepository {
         },
       },
       { new: true },
-    ).populate('hostId', 'username displayName avatarUrl isVerified');
+    ).populate('hostId', 'profile email isVerified');
   }
 
   async incrementViewerCount(id: string): Promise<ILiveStream | null> {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
 
-    return LiveStreamModel.findOneAndUpdate(
+    const stream = await LiveStreamModel.findOneAndUpdate(
       { _id: id, status: LIVE_STREAM_STATUS.LIVE },
-      [
-        {
-          $set: {
-            viewerCount: { $add: [{ $ifNull: ['$viewerCount', 0] }, 1] },
-            peakViewerCount: {
-              $max: [
-                { $ifNull: ['$peakViewerCount', 0] },
-                { $add: [{ $ifNull: ['$viewerCount', 0] }, 1] },
-              ],
-            },
-          },
-        },
-      ],
+      { $inc: { viewerCount: 1 } },
       { new: true },
     );
+    
+    if (stream && stream.viewerCount > (stream.peakViewerCount || 0)) {
+      stream.peakViewerCount = stream.viewerCount;
+      await stream.save();
+    }
+    
+    return stream;
   }
 
   async decrementViewerCount(id: string): Promise<ILiveStream | null> {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
 
-    return LiveStreamModel.findByIdAndUpdate(
+    const stream = await LiveStreamModel.findByIdAndUpdate(
       id,
-      [{ $set: { viewerCount: { $max: [0, { $subtract: [{ $ifNull: ['$viewerCount', 0] }, 1] }] } } }],
+      { $inc: { viewerCount: -1 } },
       { new: true },
     );
+    
+    if (stream && stream.viewerCount < 0) {
+      stream.viewerCount = 0;
+      await stream.save();
+    }
+    
+    return stream;
   }
 
   async incrementLikesCount(id: string): Promise<ILiveStream | null> {
@@ -154,7 +156,7 @@ export class LiveStreamRepository {
       $inc: { commentsCount: 1 },
     }).exec();
 
-    return comment.populate('userId', 'username displayName avatarUrl isVerified');
+    return comment.populate('userId', 'profile email isVerified');
   }
 
   async getRecentComments(streamId: string, limit = 50): Promise<ILiveStreamComment[]> {
@@ -163,7 +165,7 @@ export class LiveStreamRepository {
     return LiveStreamCommentModel.find({ streamId: new mongoose.Types.ObjectId(streamId) })
       .sort({ createdAt: -1 })
       .limit(limit)
-      .populate('userId', 'username displayName avatarUrl isVerified')
+      .populate('userId', 'profile email isVerified')
       .exec();
   }
 }

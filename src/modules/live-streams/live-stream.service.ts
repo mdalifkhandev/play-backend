@@ -291,17 +291,17 @@ export class LiveStreamService {
 
     const host: LiveStreamHostResponseDTO = {
       id: hostDoc?._id?.toString() || hostDoc?.toString() || '',
-      username: hostDoc?.username || 'user',
-      displayName: hostDoc?.displayName || 'User',
+      username: hostDoc?.profile?.username || hostDoc?.email?.split('@')[0] || 'user',
+      displayName: hostDoc?.profile?.displayName || hostDoc?.profile?.username || hostDoc?.email?.split('@')[0] || 'User',
       isVerified: hostDoc?.isVerified ?? false,
     };
-    if (hostDoc?.avatarUrl) {
-      host.avatarUrl = hostDoc.avatarUrl;
+    if (hostDoc?.profile?.photoUrl) {
+      host.avatarUrl = hostDoc.profile.photoUrl;
     }
 
     const response: LiveStreamResponseDTO = {
       id: String(stream._id),
-      host,
+      hostId: host,
       title: stream.title,
       status: stream.status,
       channelName: stream.channelName,
@@ -328,12 +328,12 @@ export class LiveStreamService {
 
     const user: LiveStreamHostResponseDTO = {
       id: userDoc?._id?.toString() || userDoc?.toString() || '',
-      username: userDoc?.username || 'user',
-      displayName: userDoc?.displayName || 'User',
+      username: userDoc?.profile?.username || userDoc?.email?.split('@')[0] || 'user',
+      displayName: userDoc?.profile?.displayName || userDoc?.profile?.username || userDoc?.email?.split('@')[0] || 'User',
       isVerified: userDoc?.isVerified ?? false,
     };
-    if (userDoc?.avatarUrl) {
-      user.avatarUrl = userDoc.avatarUrl;
+    if (userDoc?.profile?.photoUrl) {
+      user.avatarUrl = userDoc.profile.photoUrl;
     }
 
     return {

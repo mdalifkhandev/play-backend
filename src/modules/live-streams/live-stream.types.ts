@@ -34,7 +34,7 @@ export interface LiveStreamHostResponseDTO {
 
 export interface LiveStreamResponseDTO {
   id: string;
-  host: LiveStreamHostResponseDTO;
+  hostId: LiveStreamHostResponseDTO;
   title: string;
   description?: string;
   coverImage?: string;
