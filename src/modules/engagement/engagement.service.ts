@@ -1,5 +1,6 @@
 import { Types } from 'mongoose';
 
+
 import { AppError } from '../../common/errors/app-error.js';
 import { ForbiddenError } from '../../common/errors/forbidden-error.js';
 import { NotFoundError } from '../../common/errors/not-found-error.js';
@@ -10,6 +11,8 @@ import {
   type ReelFeedItemDto,
   type ReelWithOwner,
 } from '../reels/reel.mapper.js';
+import { userRepository } from '../users/user.repository.js';
+import { notificationService } from '../notifications/notification.service.js';
 import { commentRepository, type CommentRepository } from './comment/comment.repository.js';
 import { engagementRepository, type EngagementRepository } from './engagement.repository.js';
 import type {
@@ -117,7 +120,38 @@ export class EngagementService {
       await atomicCounterUpdate(reelId, 'likeCount', 1);
     }
 
-    const reel = await ReelModel.findById(reelId).select('likeCount').lean().exec();
+    const reel = await ReelModel.findById(reelId).select('likeCount ownerId').lean().exec();
+
+    if (inserted && reel && reel.ownerId.toString() !== userId) {
+      console.log(`[DEBUG] likeReel: notification block entered for user ${userId} and owner ${reel.ownerId}`);
+      const actor = await userRepository.findById(userId);
+      console.log(`[DEBUG] likeReel: actor found? ${!!actor}`);
+      if (actor) {
+        const displayName = actor.profile?.displayName || actor.profile?.username || 'Someone';
+        try {
+          console.log(`[DEBUG] likeReel: creating notification in DB`);
+          await notificationService.createNotification({
+            userId: reel.ownerId,
+            actorId: new Types.ObjectId(userId),
+            type: 'like',
+            title: 'New Like',
+            body: `${displayName} liked your reel.`,
+            relatedEntityId: new Types.ObjectId(reelId),
+          });
+          console.log(`[DEBUG] likeReel: sending push notification to ${reel.ownerId}`);
+          await notificationService.sendToUser(reel.ownerId.toString(), {
+            title: 'New Like',
+            body: `${displayName} liked your reel.`,
+            data: { type: 'like', targetId: reelId },
+          });
+        } catch (error) {
+          console.error('Failed to send like notification:', error);
+        }
+      }
+    } else {
+      console.log(`[DEBUG] likeReel: notification block SKIPPED. inserted=${inserted}, reelExists=${!!reel}, ownerId=${reel?.ownerId}, userId=${userId}`);
+    }
+
     return { likeCount: reel?.likeCount ?? 0, isLiked: true };
   }
 
@@ -293,6 +327,33 @@ export class EngagementService {
       );
     } else {
       await atomicCounterUpdate(reelId, 'commentCount', 1);
+    }
+
+    const reel = await ReelModel.findById(reelId).select('ownerId').lean().exec();
+
+    if (reel && reel.ownerId.toString() !== userId) {
+      const actor = await userRepository.findById(userId);
+      if (actor) {
+        const displayName = actor.profile?.displayName || actor.profile?.username || 'Someone';
+        const shortText = input.text.length > 50 ? input.text.substring(0, 50) + '...' : input.text;
+        try {
+          await notificationService.createNotification({
+            userId: reel.ownerId,
+            actorId: new Types.ObjectId(userId),
+            type: 'comment',
+            title: 'New Comment',
+            body: `${displayName} commented: "${shortText}"`,
+            relatedEntityId: new Types.ObjectId(reelId),
+          });
+          await notificationService.sendToUser(reel.ownerId.toString(), {
+            title: 'New Comment',
+            body: `${displayName} commented on your reel.`,
+            data: { type: 'comment', targetId: reelId },
+          });
+        } catch (error) {
+          console.error('Failed to send comment notification:', error);
+        }
+      }
     }
 
     return toCommentDto(comment);
