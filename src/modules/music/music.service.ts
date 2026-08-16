@@ -2,6 +2,8 @@ import { cacheKeys } from '../../infrastructure/cache/cache-keys.js';
 import { cacheService } from '../../infrastructure/cache/cache.service.js';
 import { jamendoProvider, type JamendoProvider } from './providers/jamendo.provider.js';
 import type { MusicSearchQuery, MusicSearchResult, MusicTrack } from './music.types.js';
+import { SavedMusicModel } from './saved-music.model.js';
+import { Types } from 'mongoose';
 
 const MUSIC_SEARCH_CACHE_TTL_SECONDS = 5 * 60;
 
@@ -42,6 +44,61 @@ export class MusicService {
 
   async getTrackById(providerTrackId: string): Promise<MusicTrack | null> {
     return this.provider.getTrackById(providerTrackId);
+  }
+
+  async toggleSaveTrack(userId: string | Types.ObjectId, trackData: Omit<MusicTrack, 'provider' | 'albumName' | 'shareUrl' | 'licenseUrl' | 'downloadAllowed' | 'downloadUrl'>) {
+    const existing = await SavedMusicModel.findOne({
+      userId,
+      providerTrackId: trackData.providerTrackId,
+    });
+
+    if (existing) {
+      await existing.deleteOne();
+      return { saved: false, trackId: trackData.providerTrackId };
+    }
+
+    await SavedMusicModel.create({
+      userId,
+      providerTrackId: trackData.providerTrackId,
+      title: trackData.title,
+      artistName: trackData.artistName,
+      coverImageUrl: trackData.coverImageUrl,
+      audioPreviewUrl: trackData.audioPreviewUrl,
+      durationSeconds: trackData.durationSeconds,
+    });
+
+    return { saved: true, trackId: trackData.providerTrackId };
+  }
+
+  async getSavedTracks(userId: string | Types.ObjectId, page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+
+    const [tracks, total] = await Promise.all([
+      SavedMusicModel.find({ userId })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      SavedMusicModel.countDocuments({ userId }),
+    ]);
+
+    return {
+      tracks: tracks.map((t) => ({
+        providerTrackId: t.providerTrackId,
+        title: t.title,
+        artistName: t.artistName,
+        coverImageUrl: t.coverImageUrl,
+        audioPreviewUrl: t.audioPreviewUrl,
+        durationSeconds: t.durationSeconds,
+        savedAt: t.createdAt,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        hasNextPage: page * limit < total,
+      },
+    };
   }
 }
 

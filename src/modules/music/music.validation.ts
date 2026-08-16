@@ -17,3 +17,18 @@ export const musicSearchQuerySchema = z
   })
   .strict();
 
+export const toggleSavedMusicSchema = z.object({
+  providerTrackId: z.string().trim().min(1),
+  title: z.string().trim().min(1),
+  artistName: z.string().trim().min(1),
+  coverImageUrl: z.string().url().nullable().optional(),
+  audioPreviewUrl: z.string().url(),
+  durationSeconds: z.number().nonnegative(),
+}).strict();
+
+export const getSavedMusicQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+}).strict();
+
+
