@@ -36,7 +36,7 @@ const engagementShareRedisStore = createRedisStore('rate-limit:engagement-share:
 
 export const globalRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1_000,
-  max: 500,
+  max: 5000,
   ...(globalRedisStore ? { store: globalRedisStore } : {}),
   standardHeaders: true,
   legacyHeaders: false,
