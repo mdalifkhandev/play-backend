@@ -33,6 +33,7 @@ import type {
   SetupProfileInput,
   SignUpInput,
   VerifyCodeInput,
+  ChangePasswordInput,
 } from './auth.validation.js';
 
 export class AuthService {
@@ -318,6 +319,33 @@ export class AuthService {
     }
 
     return { user: toPublicUser(user) };
+  }
+
+  async changePassword(userId: string, input: ChangePasswordInput): Promise<void> {
+    const user = await userRepository.findById(userId, { includePassword: true });
+    if (!user) {
+      throw new UnauthorizedError('User not found.');
+    }
+
+    const passwordMatches = await verifyPassword(user.passwordHash, input.currentPassword);
+    if (!passwordMatches) {
+      throw new BadRequestError('Current password is incorrect.', {
+        code: AUTH_ERROR_CODES.WRONG_PASSWORD,
+        details: [
+          {
+            field: 'currentPassword',
+            message: 'Current password is incorrect.',
+            code: AUTH_ERROR_CODES.WRONG_PASSWORD,
+          },
+        ],
+      });
+    }
+
+    const newPasswordHash = await hashPassword(input.newPassword);
+    await userRepository.updatePassword(userId, newPasswordHash);
+    
+    // Revoke all sessions so the user has to login again on other devices
+    await authRepository.revokeAllUserSessions(userId);
   }
 
   async refresh(refreshToken: string, context: RequestContext): Promise<AuthResult> {

@@ -17,6 +17,7 @@ import {
   setupProfileBodySchema,
   signUpBodySchema,
   verifyCodeBodySchema,
+  changePasswordBodySchema,
 } from './auth.validation.js';
 
 const upload = multer({
@@ -60,7 +61,10 @@ authRouter.post('/verify-reset-code', authRateLimiter, validateRequest({ body: v
 authRouter.post('/reset-password', authRateLimiter, validateRequest({ body: resetPasswordBodySchema }), authController.resetPassword);
 authRouter.post('/refresh', validateRequest({ body: refreshTokenBodySchema }), authController.refresh);
 authRouter.post('/logout', validateRequest({ body: logoutBodySchema }), authController.logout);
+
 authRouter.get('/me', authenticate, authController.me);
+authRouter.put('/change-password', authenticate, validateRequest({ body: changePasswordBodySchema }), authController.changePassword);
+
 authRouter.patch(
   '/setup-profile',
   authenticate,

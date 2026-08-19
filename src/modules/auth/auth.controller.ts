@@ -88,6 +88,17 @@ export class AuthController {
     return sendSuccess(response, 200, 'Authenticated user fetched.', result);
   });
 
+  changePassword = asyncHandler(async (request: Request, response: Response) => {
+    if (!request.user) {
+      throw new UnauthorizedError('Access token is required.', {
+        code: 'ACCESS_TOKEN_REQUIRED',
+      });
+    }
+
+    await authService.changePassword(request.user.userId, request.body);
+    return sendSuccess(response, 200, 'Password updated successfully.', null);
+  });
+
   completeProfile = asyncHandler(async (request: Request, response: Response) => {
     if (!request.user) {
       throw new UnauthorizedError('Access token is required.', {

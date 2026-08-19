@@ -160,6 +160,24 @@ export type RefreshTokenInput = z.infer<typeof refreshTokenBodySchema>;
 export type LogoutInput = z.infer<typeof logoutBodySchema>;
 export type SetupProfileInput = z.infer<typeof setupProfileBodySchema>;
 
+export const changePasswordBodySchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Current password is required.'),
+    newPassword: passwordSchema,
+    confirmPassword: z.string(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.newPassword !== value.confirmPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['confirmPassword'],
+        message: 'Confirm password does not match.',
+      });
+    }
+  });
+
+export type ChangePasswordInput = z.infer<typeof changePasswordBodySchema>;
+
 function isValidCalendarDate(value: string): boolean {
   const date = new Date(`${value}T00:00:00.000Z`);
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;

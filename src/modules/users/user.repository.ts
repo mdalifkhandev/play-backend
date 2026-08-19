@@ -12,8 +12,17 @@ export class UserRepository {
     return UserModel.create(input);
   }
 
-  async findById(userId: string | Types.ObjectId): Promise<UserDocument | null> {
-    return UserModel.findById(userId).exec();
+  async findById(
+    userId: string | Types.ObjectId,
+    options: { includePassword?: boolean } = {},
+  ): Promise<UserDocument | null> {
+    const query = UserModel.findById(userId);
+
+    if (options.includePassword) {
+      query.select('+passwordHash');
+    }
+
+    return query.exec();
   }
 
   async findByEmail(
