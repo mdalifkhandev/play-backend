@@ -118,6 +118,13 @@ export class UserRepository {
       { new: true, runValidators: true },
     ).exec();
   }
+
+  async updateById(
+    userId: string | Types.ObjectId,
+    update: import('mongoose').UpdateQuery<User>,
+  ): Promise<UserDocument | null> {
+    return UserModel.findByIdAndUpdate(userId, update, { new: true }).exec();
+  }
 }
 
 export const userRepository = new UserRepository();

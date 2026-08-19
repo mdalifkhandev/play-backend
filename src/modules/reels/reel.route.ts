@@ -21,6 +21,8 @@ export const reelRouter = Router();
 
 reelRouter.get('/feed', optionalAuthenticate, validateRequest({ query: reelFeedQuerySchema }), reelController.feed);
 
+reelRouter.get('/kids', optionalAuthenticate, validateRequest({ query: reelFeedQuerySchema }), reelController.kidsFeed);
+
 reelRouter.get('/search', optionalAuthenticate, validateRequest({ query: searchReelsQuerySchema }), reelController.search);
 
 reelRouter.get(

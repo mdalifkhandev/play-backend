@@ -39,6 +39,12 @@ export class ReelController {
     return sendSuccess(response, 200, 'Reels retrieved successfully', result);
   });
 
+  kidsFeed = asyncHandler(async (request: Request, response: Response) => {
+    const viewerId = request.user?.userId;
+    const result = await reelService.getKidsFeed(request.query as unknown as ReelFeedQuery, viewerId!);
+    return sendSuccess(response, 200, 'Kids reels retrieved successfully', result);
+  });
+
   forYou = asyncHandler(async (request: Request, response: Response) => {
     const viewerId = request.user?.userId;
     const result = await reelService.getForYouFeed(

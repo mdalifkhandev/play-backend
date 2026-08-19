@@ -14,6 +14,14 @@ export interface UserProfile {
   isSetupComplete: boolean;
 }
 
+export interface KidsProfile {
+  name?: string;
+  ageRange?: string;
+  dailyLimitMs?: number;
+  expireAt?: Date;
+  isActive: boolean;
+}
+
 export interface User {
   _id: Types.ObjectId;
   email: string;
@@ -32,6 +40,8 @@ export interface User {
   stripeConnectAccountId?: string;
   stripeConnectOnboardingComplete: boolean;
   profile: UserProfile;
+  kidsModePin?: string;
+  kidsProfile?: KidsProfile;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -48,6 +58,17 @@ const userProfileSchema = new Schema<UserProfile>(
     instagram: { type: String, trim: true, maxlength: 120 },
     youtube: { type: String, trim: true, maxlength: 250 },
     isSetupComplete: { type: Boolean, default: false },
+  },
+  { _id: false },
+);
+
+const kidsProfileSchema = new Schema<KidsProfile>(
+  {
+    name: { type: String, trim: true, maxlength: 80 },
+    ageRange: { type: String, trim: true, maxlength: 20 },
+    dailyLimitMs: { type: Number },
+    expireAt: { type: Date },
+    isActive: { type: Boolean, default: false },
   },
   { _id: false },
 );
@@ -87,6 +108,8 @@ const userSchema = new Schema<User>(
     stripeConnectAccountId: { type: String, trim: true, sparse: true },
     stripeConnectOnboardingComplete: { type: Boolean, default: false, required: true },
     profile: { type: userProfileSchema, default: () => ({ isSetupComplete: false }) },
+    kidsModePin: { type: String, trim: true, select: false },
+    kidsProfile: { type: kidsProfileSchema, default: () => ({ isActive: false }) },
   },
   {
     timestamps: true,

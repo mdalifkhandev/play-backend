@@ -7,8 +7,30 @@ import { validateRequest } from '../../common/middleware/validation.middleware.j
 import { followController } from './follow.controller.js';
 import { followListQuerySchema, followUserParamsSchema } from './follow.validation.js';
 import { userController } from './user.controller.js';
+import { kidsModePinSchema, updateKidsProfileSchema } from './user.validation.js';
 
 export const userRouter = Router();
+
+userRouter.post(
+  '/me/kids-pin',
+  authenticate,
+  validateRequest({ body: kidsModePinSchema }),
+  userController.setKidsModePin,
+);
+
+userRouter.post(
+  '/me/kids-pin/verify',
+  authenticate,
+  validateRequest({ body: kidsModePinSchema }),
+  userController.verifyKidsModePin,
+);
+
+userRouter.put(
+  '/me/kids-profile',
+  authenticate,
+  validateRequest({ body: updateKidsProfileSchema }),
+  userController.updateKidsProfile,
+);
 
 userRouter.get(
   '/search',
