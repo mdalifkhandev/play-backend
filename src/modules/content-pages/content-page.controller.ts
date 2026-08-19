@@ -3,14 +3,26 @@ import type { Request, Response } from 'express';
 import { UnauthorizedError } from '../../common/errors/unauthorized-error.js';
 import { sendSuccess } from '../../common/responses/api-response.js';
 import { asyncHandler } from '../../common/utils/async-handler.js';
-import type { ContentPageType } from './content-page.constants.js';
+import { ContentPageType } from './content-page.constants.js';
 import { contentPageService } from './content-page.service.js';
 
 export class ContentPageController {
-  getPublished = asyncHandler(async (request: Request, response: Response) => {
-    const result = await contentPageService.getPublished(request.params['pageType'] as ContentPageType);
+  getAboutUs = asyncHandler(async (_request: Request, response: Response) => {
+    const result = await contentPageService.getPublished(ContentPageType.ABOUT_US);
     response.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
-    return sendSuccess(response, 200, 'Content page fetched.', { page: result });
+    return sendSuccess(response, 200, 'About us page fetched.', { page: result });
+  });
+
+  getPrivacyPolicy = asyncHandler(async (_request: Request, response: Response) => {
+    const result = await contentPageService.getPublished(ContentPageType.PRIVACY_POLICY);
+    response.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    return sendSuccess(response, 200, 'Privacy policy page fetched.', { page: result });
+  });
+
+  getTermsConditions = asyncHandler(async (_request: Request, response: Response) => {
+    const result = await contentPageService.getPublished(ContentPageType.TERMS_CONDITIONS);
+    response.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    return sendSuccess(response, 200, 'Terms and conditions page fetched.', { page: result });
   });
 
   create = asyncHandler(async (request: Request, response: Response) => {

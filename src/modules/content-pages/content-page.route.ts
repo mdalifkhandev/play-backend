@@ -7,7 +7,6 @@ import { validateRequest } from '../../common/middleware/validation.middleware.j
 import { contentPageController } from './content-page.controller.js';
 import {
   contentPageIdParamsSchema,
-  contentPageTypeParamsSchema,
   createContentPageBodySchema,
   listContentPagesQuerySchema,
   publishContentPageBodySchema,
@@ -17,11 +16,9 @@ import {
 export const contentPageRouter = Router();
 export const contentPageAdminRouter = Router();
 
-contentPageRouter.get(
-  '/:pageType',
-  validateRequest({ params: contentPageTypeParamsSchema }),
-  contentPageController.getPublished,
-);
+contentPageRouter.get('/about-us', contentPageController.getAboutUs);
+contentPageRouter.get('/privacy-policy', contentPageController.getPrivacyPolicy);
+contentPageRouter.get('/terms-conditions', contentPageController.getTermsConditions);
 
 contentPageAdminRouter.use(authenticate, authorize(UserRole.ADMIN));
 contentPageAdminRouter.get(
