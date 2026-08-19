@@ -8,6 +8,7 @@ import { UserModel } from '../users/user.model.js';
 import { ReelModel } from '../reels/reel.model.js';
 import { LiveStreamModel } from '../live-streams/live-stream.model.js';
 import type { SendGiftInput, UpdateCoinSettingsInput } from './coin.validation.js';
+import { activityService } from '../activities/activity.service.js';
 import type { GiftTargetType } from './sent-gift.model.js';
 import type { WithdrawalStatus } from './withdrawal-request.model.js';
 
@@ -105,6 +106,36 @@ export class CoinService {
     }
 
     const remainingBalance = await coinRepository.getUserBalance(senderId);
+
+    // Map targetType to entityModel based on typical mappings
+    const entityModelMap: Record<string, 'Reel' | 'LiveStream' | 'Message' | 'User'> = {
+      reel: 'Reel',
+      live_stream: 'LiveStream',
+      message: 'Message',
+      profile: 'User'
+    };
+    const entityModel = entityModelMap[targetType] || 'User';
+
+    // Log for sender
+    activityService.logActivity({
+      userId: senderId,
+      actionType: 'gift_sent',
+      entityId: targetId,
+      entityModel,
+      metadata: { giftName: gift.name, quantity, totalCoins }
+    }).catch(console.error);
+
+    // Log for recipient
+    if (recipientId !== senderId) {
+      activityService.logActivity({
+        userId: recipientId,
+        actorId: senderId,
+        actionType: 'gift_received',
+        entityId: targetId,
+        entityModel,
+        metadata: { giftName: gift.name, quantity, totalCoins }
+      }).catch(console.error);
+    }
 
     return {
       giftSent: true,

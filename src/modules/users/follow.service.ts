@@ -4,6 +4,7 @@ import { AppError } from '../../common/errors/app-error.js';
 import { NotFoundError } from '../../common/errors/not-found-error.js';
 import { followRepository, type FollowCursor, type FollowRepository } from './follow.repository.js';
 import type { FollowListQuery } from './follow.validation.js';
+import { activityService } from '../activities/activity.service.js';
 
 interface FollowUserDto {
   id: string;
@@ -30,7 +31,26 @@ export class FollowService {
   ): Promise<{ isFollowing: boolean; followersCount: number; followingCount: number }> {
     this.assertNotSelf(followerId, followingId);
     await this.assertTargetExists(followingId);
-    await this.follows.createIfAbsent(followerId, followingId);
+    const result = await this.follows.createIfAbsent(followerId, followingId);
+    
+    // Log the follow activity
+    if (result) {
+      activityService.logActivity({
+        userId: followerId,
+        actionType: 'follow_given',
+        entityId: followingId,
+        entityModel: 'User',
+      }).catch(console.error);
+      
+      activityService.logActivity({
+        userId: followingId,
+        actorId: followerId,
+        actionType: 'follow_received',
+        entityId: followerId,
+        entityModel: 'User',
+      }).catch(console.error);
+    }
+    
     return this.buildState(followerId, followingId);
   }
 

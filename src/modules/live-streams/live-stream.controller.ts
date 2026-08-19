@@ -52,7 +52,8 @@ export class LiveStreamController {
 
   join = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
-    const stream = await this.service.joinStream(id as string);
+    const userId = req.user?.userId;
+    const stream = await this.service.joinStream(id as string, userId as string | undefined);
     sendSuccess(res, 200, 'Joined live stream.', stream);
   };
 

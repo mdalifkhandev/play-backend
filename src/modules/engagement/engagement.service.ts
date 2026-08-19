@@ -24,6 +24,7 @@ import type {
 } from './engagement.validation.js';
 import type { EngagementTargetType } from './like.model.js';
 import type { ShareChannel } from './share.model.js';
+import { activityService } from '../activities/activity.service.js';
 
 // ── Cursor helpers ─────────────────────────────────────────────────────────────
 
@@ -138,6 +139,17 @@ export class EngagementService {
             body: `${displayName} liked your reel.`,
             relatedEntityId: new Types.ObjectId(reelId),
           });
+          
+          // Log Activity: like_received for owner
+          activityService.logActivity({
+            userId: reel.ownerId.toString(),
+            actorId: userId,
+            actionType: 'like_received',
+            entityId: reelId,
+            entityModel: 'Reel',
+            metadata: { thumbnailUrl: (reel as any).thumbnail } 
+          }).catch(console.error);
+          
           console.log(`[DEBUG] likeReel: sending push notification to ${reel.ownerId}`);
           await notificationService.sendToUser(reel.ownerId.toString(), {
             title: 'New Like',
@@ -150,6 +162,16 @@ export class EngagementService {
       }
     } else {
       console.log(`[DEBUG] likeReel: notification block SKIPPED. inserted=${inserted}, reelExists=${!!reel}, ownerId=${reel?.ownerId}, userId=${userId}`);
+    }
+
+    if (inserted) {
+      // Log Activity: like_given for actor
+      activityService.logActivity({
+        userId,
+        actionType: 'like_given',
+        entityId: reelId,
+        entityModel: 'Reel',
+      }).catch(console.error);
     }
 
     return { likeCount: reel?.likeCount ?? 0, isLiked: true };
@@ -345,6 +367,16 @@ export class EngagementService {
             body: `${displayName} commented: "${shortText}"`,
             relatedEntityId: new Types.ObjectId(reelId),
           });
+          
+          activityService.logActivity({
+            userId: reel.ownerId.toString(),
+            actorId: userId,
+            actionType: 'comment_received',
+            entityId: reelId,
+            entityModel: 'Reel',
+            metadata: { thumbnailUrl: (reel as any).thumbnail } 
+          }).catch(console.error);
+          
           await notificationService.sendToUser(reel.ownerId.toString(), {
             title: 'New Comment',
             body: `${displayName} commented on your reel.`,
@@ -355,6 +387,13 @@ export class EngagementService {
         }
       }
     }
+
+    activityService.logActivity({
+      userId,
+      actionType: 'comment_given',
+      entityId: reelId,
+      entityModel: 'Reel',
+    }).catch(console.error);
 
     return toCommentDto(comment);
   }

@@ -2,6 +2,7 @@ import type { Types } from 'mongoose';
 
 import { AccountStatus } from '../../common/enums/account-status.enum.js';
 import { UserModel, type User, type UserDocument, type UserProfile } from './user.model.js';
+import { activityService } from '../activities/activity.service.js';
 
 type CreateUserInput = Pick<User, 'email' | 'passwordHash'> &
   Partial<Pick<User, 'phoneNumber' | 'role' | 'status' | 'isEmailVerified'>>;
@@ -112,11 +113,20 @@ export class UserRepository {
       Object.entries(account).filter(([, value]) => value !== undefined),
     );
 
-    return UserModel.findByIdAndUpdate(
+    const updatedUser = await UserModel.findByIdAndUpdate(
       userId,
       { $set: { ...profileUpdate, ...accountUpdate } },
       { new: true, runValidators: true },
     ).exec();
+    
+    if (updatedUser) {
+      activityService.logActivity({
+        userId: userId.toString(),
+        actionType: 'profile_updated',
+      }).catch(console.error);
+    }
+    
+    return updatedUser;
   }
 
   async updateById(

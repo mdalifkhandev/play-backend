@@ -14,6 +14,7 @@ import type {
 import type { ILiveStream } from './live-stream.model.js';
 import type { ILiveStreamComment } from './live-stream-comment.model.js';
 import { broadcastLiveStreamStatus } from './live-stream.gateway.js';
+import { activityService } from '../activities/activity.service.js';
 
 const { RtcTokenBuilder, RtcRole } = agoraToken;
 
@@ -93,6 +94,13 @@ export class LiveStreamService {
     if (!updated) {
       throw new AppError('Failed to update stream status.', 500, { code: 'UPDATE_FAILED' });
     }
+    
+    activityService.logActivity({
+      userId: hostId,
+      actionType: 'live_started',
+      entityId: streamId,
+      entityModel: 'LiveStream'
+    }).catch(console.error);
 
     const response = this.mapToResponse(updated);
     broadcastLiveStreamStatus(response);
@@ -235,13 +243,26 @@ export class LiveStreamService {
     return this.mapToResponse(stream);
   }
 
-  async joinStream(streamId: string): Promise<LiveStreamResponseDTO> {
+  async joinStream(streamId: string, userId?: string): Promise<LiveStreamResponseDTO> {
     await this.requireLiveStream(streamId);
     const updated = await this.repository.incrementViewerCount(streamId);
     if (!updated) {
       throw new AppError('Live stream not found.', 404, { code: 'STREAM_NOT_FOUND' });
     }
     const populated = await this.repository.findById(streamId);
+    
+    if (userId && populated) {
+      const hostId = (populated.hostId as any)._id?.toString() || populated.hostId.toString();
+      if (hostId !== userId) {
+        activityService.logActivity({
+          userId: userId,
+          actionType: 'live_watched',
+          entityId: streamId,
+          entityModel: 'LiveStream'
+        }).catch(console.error);
+      }
+    }
+    
     return this.mapToResponse(populated!);
   }
 
