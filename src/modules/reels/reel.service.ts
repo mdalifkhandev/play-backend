@@ -322,6 +322,7 @@ export class ReelService {
     };
   }
 
+
   async getForYouFeed(
     query: ReelForYouQuery,
     viewerId?: string,
@@ -434,6 +435,38 @@ export class ReelService {
       }),
       nextCursor: nextCursorValue,
       pagination: { nextCursor: nextCursorValue, hasNextPage },
+    };
+  }
+
+  async searchReels(query: string, page: number, limit: number, viewerId?: string) {
+    const skip = (page - 1) * limit;
+    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // simple escape regex
+    const records = await this.reels.search(escapedQuery, limit + 1, skip);
+    const hasNextPage = records.length > limit;
+    const items = hasNextPage ? records.slice(0, limit) : records;
+
+    let viewerStateMap: Map<string, { isLiked: boolean; isSaved: boolean }> | undefined;
+
+    if (viewerId && items.length > 0) {
+      const { engagementRepository: engRepo } = await import(
+        '../engagement/engagement.repository.js'
+      );
+      const reelIds = items.map((r) => r._id.toString());
+      viewerStateMap = await engRepo.getBulkViewerState(viewerId, 'reel', reelIds);
+    }
+
+    const commentCountMap = await this.getCommentCountMap(items.map((r) => r._id.toString()));
+
+    return {
+      reels: items.map((reel) => {
+        const item = toReelFeedItemDto(reel, viewerStateMap?.get(reel._id.toString()));
+        const actualCommentCount = commentCountMap.get(reel._id.toString());
+        return actualCommentCount === undefined
+          ? item
+          : { ...item, stats: { ...item.stats, comments: actualCommentCount } };
+      }),
+      hasMore: hasNextPage,
+      page,
     };
   }
 

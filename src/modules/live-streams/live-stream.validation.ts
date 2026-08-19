@@ -26,6 +26,12 @@ export const liveStreamIdParamsSchema = z.object({
   id: z.string().length(24, 'Invalid live stream identifier.'),
 });
 
+export const searchLiveStreamsQuerySchema = z.object({
+  q: z.string().trim().min(1, 'Search query is required.'),
+  page: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 1)),
+  limit: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 20)),
+});
+
 export const postLiveStreamCommentSchema = z.object({
   text: z.string().trim().min(1, 'Comment text is required.').max(500, 'Comment cannot exceed 500 characters.'),
 });

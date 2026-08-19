@@ -214,6 +214,19 @@ export class LiveStreamService {
     };
   }
 
+  async searchLiveStreams(query: string, page: number, limit: number) {
+    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // escape regex
+    const { streams, total } = await this.repository.searchStreams(escapedQuery, page, limit);
+
+    return {
+      streams: streams.map((s) => this.mapToResponse(s)),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
   async getStreamById(streamId: string): Promise<LiveStreamResponseDTO> {
     const stream = await this.repository.findById(streamId);
     if (!stream) {

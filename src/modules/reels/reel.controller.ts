@@ -40,11 +40,19 @@ export class ReelController {
   });
 
   forYou = asyncHandler(async (request: Request, response: Response) => {
+    const viewerId = request.user?.userId;
     const result = await reelService.getForYouFeed(
       request.query as unknown as ReelForYouQuery,
-      request.user?.userId,
+      viewerId,
     );
-    return sendSuccess(response, 200, 'For You Reels retrieved successfully', result);
+    return sendSuccess(response, 200, 'For You reels retrieved successfully', result);
+  });
+
+  search = asyncHandler(async (request: Request, response: Response) => {
+    const viewerId = request.user?.userId;
+    const { q, page, limit } = request.query as any;
+    const result = await reelService.searchReels(q, page, limit, viewerId);
+    return sendSuccess(response, 200, 'Reels searched successfully', result);
   });
 
   userReels = asyncHandler(async (request: Request, response: Response) => {

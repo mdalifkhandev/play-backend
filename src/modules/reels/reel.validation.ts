@@ -231,6 +231,12 @@ export const userReelsParamsSchema = z
   })
   .strict();
 
+export const searchReelsQuerySchema = z.object({
+  q: z.string().trim().min(1, 'Search query is required.'),
+  page: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 1)),
+  limit: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 20)),
+});
+
 export const reelFeedQuerySchema = z
   .object({
     limit: z.coerce.number().int().min(1).max(50).default(20),

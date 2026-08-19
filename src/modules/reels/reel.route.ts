@@ -14,11 +14,14 @@ import {
   reelIdParamsSchema,
   reportReelBodySchema,
   userReelsParamsSchema,
+  searchReelsQuerySchema,
 } from './reel.validation.js';
 
 export const reelRouter = Router();
 
 reelRouter.get('/feed', optionalAuthenticate, validateRequest({ query: reelFeedQuerySchema }), reelController.feed);
+
+reelRouter.get('/search', optionalAuthenticate, validateRequest({ query: searchReelsQuerySchema }), reelController.search);
 
 reelRouter.get(
   '/for-you',

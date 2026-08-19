@@ -136,6 +136,21 @@ export class ReelRepository {
       .exec();
   }
 
+  async search(query: string, limit: number, skip: number): Promise<ReelWithOwner[]> {
+    const searchRegex = new RegExp(query, 'i');
+    return ReelModel.find({
+      status: ReelStatus.READY,
+      visibility: ReelVisibility.PUBLIC,
+      caption: searchRegex,
+    })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate({ path: 'ownerId', select: OWNER_PROJECTION })
+      .lean<ReelWithOwner[]>()
+      .exec();
+  }
+
   async listForYou(
     limit: number,
     asOf: Date,

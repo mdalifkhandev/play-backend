@@ -68,6 +68,29 @@ export class LiveStreamRepository {
     return { streams, total };
   }
 
+  async searchStreams(query: string, page: number, limit: number): Promise<{ streams: ILiveStream[]; total: number }> {
+    const skip = (page - 1) * limit;
+    const searchRegex = new RegExp(query, 'i');
+    const filter = {
+      $or: [
+        { title: searchRegex },
+        { category: searchRegex }
+      ]
+    };
+
+    const [streams, total] = await Promise.all([
+      LiveStreamModel.find(filter)
+        .sort({ status: 1, viewerCount: -1, startedAt: -1 }) // Prioritize LIVE, then view count
+        .skip(skip)
+        .limit(limit)
+        .populate('hostId', 'profile email isVerified')
+        .exec(),
+      LiveStreamModel.countDocuments(filter),
+    ]);
+
+    return { streams, total };
+  }
+
   async updateStatus(
     id: string,
     status: (typeof LIVE_STREAM_STATUS)[keyof typeof LIVE_STREAM_STATUS],

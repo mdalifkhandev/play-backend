@@ -9,6 +9,7 @@ import {
   liveStreamFeedQuerySchema,
   liveStreamIdParamsSchema,
   postLiveStreamCommentSchema,
+  searchLiveStreamsQuerySchema,
 } from './live-stream.validation.js';
 
 export const liveStreamRouter = Router();
@@ -20,6 +21,14 @@ liveStreamRouter.get(
   blockLiveStreamingDuringKidsMode,
   validateRequest({ query: liveStreamFeedQuerySchema }),
   liveStreamController.getFeed,
+);
+
+liveStreamRouter.get(
+  '/search',
+  optionalAuthenticate,
+  blockLiveStreamingDuringKidsMode,
+  validateRequest({ query: searchLiveStreamsQuerySchema }),
+  liveStreamController.search,
 );
 
 liveStreamRouter.get(

@@ -38,6 +38,12 @@ export class LiveStreamController {
     sendSuccess(res, 200, 'Live stream feed retrieved.', feed);
   };
 
+  search = async (req: Request, res: Response): Promise<void> => {
+    const { q, page, limit } = req.query as any;
+    const result = await this.service.searchLiveStreams(q, page, limit);
+    sendSuccess(res, 200, 'Live streams searched.', result);
+  };
+
   getById = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
     const stream = await this.service.getStreamById(id as string);
@@ -82,11 +88,7 @@ export class LiveStreamController {
     sendSuccess(res, 200, 'Live stream shared.', result);
   };
 
-  like = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    await this.service.likeStream(id as string);
-    sendSuccess(res, 200, 'Live stream liked.');
-  };
+
 }
 
 export const liveStreamController = new LiveStreamController();
