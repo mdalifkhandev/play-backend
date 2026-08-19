@@ -20,6 +20,7 @@ export interface StreamTokenResponseDTO {
   token: string;
   channelName: string;
   uid: number;
+  hostUid: number;
   role: LiveStreamRole;
   expiresInSeconds: number;
 }

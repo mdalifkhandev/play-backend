@@ -59,7 +59,8 @@ export class LiveStreamController {
 
   leave = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
-    const stream = await this.service.leaveStream(id as string);
+    const userId = req.user?.userId;
+    const stream = await this.service.leaveStream(id as string, userId as string | undefined);
     sendSuccess(res, 200, 'Left live stream.', stream);
   };
 

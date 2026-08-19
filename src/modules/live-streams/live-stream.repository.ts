@@ -127,6 +127,27 @@ export class LiveStreamRepository {
     return stream;
   }
 
+  async addActiveViewer(id: string, userId: string): Promise<ILiveStream | null> {
+    if (!mongoose.Types.ObjectId.isValid(id) || !mongoose.Types.ObjectId.isValid(userId)) return null;
+
+    const stream = await LiveStreamModel.findOne({ _id: id, status: LIVE_STREAM_STATUS.LIVE });
+    if (!stream) return null;
+
+    const viewerObjectId = new mongoose.Types.ObjectId(userId);
+    const alreadyActive = (stream.activeViewerIds || []).some((viewerId) => viewerId.equals(viewerObjectId));
+
+    if (!alreadyActive) {
+      stream.activeViewerIds = [...(stream.activeViewerIds || []), viewerObjectId] as any;
+      stream.viewerCount = stream.activeViewerIds.length;
+      if (stream.viewerCount > (stream.peakViewerCount || 0)) {
+        stream.peakViewerCount = stream.viewerCount;
+      }
+      await stream.save();
+    }
+
+    return stream;
+  }
+
   async decrementViewerCount(id: string): Promise<ILiveStream | null> {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
 
@@ -141,6 +162,20 @@ export class LiveStreamRepository {
       await stream.save();
     }
     
+    return stream;
+  }
+
+  async removeActiveViewer(id: string, userId: string): Promise<ILiveStream | null> {
+    if (!mongoose.Types.ObjectId.isValid(id) || !mongoose.Types.ObjectId.isValid(userId)) return null;
+
+    const stream = await LiveStreamModel.findById(id);
+    if (!stream) return null;
+
+    const viewerObjectId = new mongoose.Types.ObjectId(userId);
+    stream.activeViewerIds = (stream.activeViewerIds || []).filter((viewerId) => !viewerId.equals(viewerObjectId)) as any;
+    stream.viewerCount = stream.activeViewerIds.length;
+    await stream.save();
+
     return stream;
   }
 

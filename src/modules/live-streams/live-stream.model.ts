@@ -10,6 +10,7 @@ export interface ILiveStream extends Document {
   status: LiveStreamStatus;
   channelName: string;
   streamKey: string;
+  activeViewerIds: mongoose.Types.ObjectId[];
   viewerCount: number;
   peakViewerCount: number;
   likesCount: number;
@@ -63,6 +64,11 @@ const liveStreamSchema = new Schema<ILiveStream>(
       required: true,
       select: false,
     },
+    activeViewerIds: [{
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: [],
+    }],
     viewerCount: {
       type: Number,
       default: 0,

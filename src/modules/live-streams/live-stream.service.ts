@@ -89,6 +89,8 @@ export class LiveStreamService {
 
     const updated = await this.repository.updateStatus(streamId, LIVE_STREAM_STATUS.LIVE, {
       startedAt: new Date(),
+      activeViewerIds: [],
+      viewerCount: 0,
     });
 
     if (!updated) {
@@ -125,6 +127,7 @@ export class LiveStreamService {
 
     const updated = await this.repository.updateStatus(streamId, LIVE_STREAM_STATUS.ENDED, {
       endedAt: new Date(),
+      activeViewerIds: [],
       viewerCount: 0,
     });
 
@@ -146,6 +149,7 @@ export class LiveStreamService {
     const hostIdStr = (stream.hostId as any)._id?.toString() || stream.hostId.toString();
     const isHost = hostIdStr === userId;
     const role = isHost ? LIVE_STREAM_ROLE.HOST : LIVE_STREAM_ROLE.VIEWER;
+    const hostUid = stringToNumericUid(hostIdStr);
 
     if (stream.status === LIVE_STREAM_STATUS.ENDED) {
       throw new AppError('Agora token cannot be issued for an ended stream.', 409, {
@@ -187,6 +191,7 @@ export class LiveStreamService {
       token,
       channelName: stream.channelName,
       uid,
+      hostUid,
       role,
       expiresInSeconds,
     };
@@ -244,8 +249,14 @@ export class LiveStreamService {
   }
 
   async joinStream(streamId: string, userId?: string): Promise<LiveStreamResponseDTO> {
-    await this.requireLiveStream(streamId);
-    const updated = await this.repository.incrementViewerCount(streamId);
+    const stream = await this.requireLiveStream(streamId);
+    const hostId = (stream.hostId as any)._id?.toString() || stream.hostId.toString();
+
+    if (!userId || hostId === userId) {
+      return this.mapToResponse(stream);
+    }
+
+    const updated = await this.repository.addActiveViewer(streamId, userId);
     if (!updated) {
       throw new AppError('Live stream not found.', 404, { code: 'STREAM_NOT_FOUND' });
     }
@@ -266,8 +277,16 @@ export class LiveStreamService {
     return this.mapToResponse(populated!);
   }
 
-  async leaveStream(streamId: string): Promise<LiveStreamResponseDTO> {
-    const updated = await this.repository.decrementViewerCount(streamId);
+  async leaveStream(streamId: string, userId?: string): Promise<LiveStreamResponseDTO> {
+    if (!userId) {
+      const stream = await this.repository.findById(streamId);
+      if (!stream) {
+        throw new AppError('Live stream not found.', 404, { code: 'STREAM_NOT_FOUND' });
+      }
+      return this.mapToResponse(stream);
+    }
+
+    const updated = await this.repository.removeActiveViewer(streamId, userId);
     if (!updated) {
       throw new AppError('Live stream not found.', 404, { code: 'STREAM_NOT_FOUND' });
     }

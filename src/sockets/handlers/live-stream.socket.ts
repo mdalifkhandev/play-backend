@@ -16,7 +16,7 @@ export function registerLiveStreamSocketHandlers(io: any, socket: any): void {
       if (joinedStreamIds.has(streamId)) return;
 
       const roomName = `stream:${streamId}`;
-      const stream = await liveStreamService.joinStream(streamId);
+      const stream = await liveStreamService.joinStream(streamId, socket.user?.id);
       await socket.join(roomName);
       joinedStreamIds.add(streamId);
 
@@ -49,7 +49,7 @@ export function registerLiveStreamSocketHandlers(io: any, socket: any): void {
       if (!streamId || !joinedStreamIds.has(streamId)) return;
 
       const roomName = `stream:${streamId}`;
-      const stream = await liveStreamService.leaveStream(streamId);
+      const stream = await liveStreamService.leaveStream(streamId, socket.user?.id);
       await socket.leave(roomName);
       joinedStreamIds.delete(streamId);
 
@@ -131,6 +131,7 @@ export function registerLiveStreamSocketHandlers(io: any, socket: any): void {
           username: socket.user.username,
           displayName: socket.user.displayName,
           avatarUrl: socket.user.avatarUrl,
+          isVerified: socket.user.isVerified,
         },
         gift: result.gift,
       });
@@ -162,7 +163,7 @@ export function registerLiveStreamSocketHandlers(io: any, socket: any): void {
 
   socket.on('disconnect', () => {
     for (const streamId of joinedStreamIds) {
-      void liveStreamService.leaveStream(streamId).catch((error) => {
+      void liveStreamService.leaveStream(streamId, socket.user?.id).catch((error) => {
         logger.warn({ err: error, streamId }, 'Failed to clean up disconnected live viewer');
       });
     }
