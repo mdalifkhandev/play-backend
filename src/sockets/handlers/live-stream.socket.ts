@@ -109,10 +109,16 @@ export function registerLiveStreamSocketHandlers(io: any, socket: any): void {
     }
   });
 
-  socket.on(SOCKET_EVENTS.LIVE_GIFT, async (data: { streamId: string; giftId: string; quantity?: number }) => {
+  socket.on(SOCKET_EVENTS.LIVE_GIFT, async (
+    data: { streamId: string; giftId: string; quantity?: number },
+    ack?: (response: { success: boolean; message?: string }) => void,
+  ) => {
     try {
       const { streamId, giftId, quantity = 1 } = data;
-      if (!streamId || !giftId || !socket.user) return;
+      if (!streamId || !giftId || !socket.user) {
+        ack?.({ success: false, message: 'Gift could not be sent.' });
+        return;
+      }
       await assertLiveStreamingAllowed(socket.user.id);
 
       const roomName = `stream:${streamId}`;
@@ -135,9 +141,14 @@ export function registerLiveStreamSocketHandlers(io: any, socket: any): void {
         },
         gift: result.gift,
       });
+      ack?.({ success: true });
     } catch (error) {
       logger.error({ err: error }, 'Error in LIVE_GIFT socket handler');
       emitLiveError(socket, error);
+      ack?.({
+        success: false,
+        message: error instanceof Error ? error.message : 'Gift could not be sent.',
+      });
     }
   });
 
