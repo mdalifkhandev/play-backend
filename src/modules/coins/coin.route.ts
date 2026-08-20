@@ -5,6 +5,7 @@ import { coinController } from './coin.controller.js';
 import {
   approveWithdrawalSchema,
   createPaymentIntentSchema,
+  createSquarePaymentSchema,
   getGiftsQuerySchema,
   getTransactionsQuerySchema,
   getWithdrawalsQuerySchema,
@@ -39,6 +40,12 @@ coinRouter.post(
   authenticate,
   validateRequest(verifyPaymentSchema),
   coinController.verifyPayment,
+);
+coinRouter.post(
+  '/purchase/square-payment',
+  authenticate,
+  validateRequest(createSquarePaymentSchema),
+  coinController.createSquarePayment,
 );
 coinRouter.get(
   '/history',

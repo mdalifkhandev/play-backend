@@ -652,6 +652,97 @@ export class CoinService {
     };
   }
 
+  async createSquarePayment(userId: string, packageId: string, sourceId: string) {
+    const coinPackage = await coinRepository.getPackageById(packageId);
+
+    if (!coinPackage || !coinPackage.isActive) {
+      throw new NotFoundError('Coin package not found or no longer available.');
+    }
+
+    if (!env.SQUARE_ACCESS_TOKEN || !env.SQUARE_LOCATION_ID) {
+      throw new BadRequestError('Square payment is not configured.', {
+        code: 'SQUARE_PAYMENT_NOT_CONFIGURED',
+      });
+    }
+
+    const transaction = await coinRepository.createTransaction({
+      userId,
+      packageId: coinPackage._id.toString(),
+      coins: coinPackage.coins,
+      amount: coinPackage.price,
+      currency: coinPackage.currency,
+      paymentProvider: 'square',
+      metadata: {
+        packageName: coinPackage.name,
+        source: 'mobile',
+        squareEnvironment: env.SQUARE_ENVIRONMENT,
+      },
+    });
+
+    const amountInCents = Math.round(coinPackage.price * 100);
+    const squareBaseUrl =
+      env.SQUARE_ENVIRONMENT === 'production'
+        ? 'https://connect.squareup.com'
+        : 'https://connect.squareupsandbox.com';
+
+    const squareResponse = await fetch(`${squareBaseUrl}/v2/payments`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${env.SQUARE_ACCESS_TOKEN}`,
+        'Content-Type': 'application/json',
+        'Square-Version': '2026-08-20',
+      },
+      body: JSON.stringify({
+        source_id: sourceId,
+        idempotency_key: `coin-${transaction._id.toString()}`,
+        location_id: env.SQUARE_LOCATION_ID,
+        amount_money: {
+          amount: amountInCents,
+          currency: coinPackage.currency.toUpperCase(),
+        },
+        note: `${coinPackage.coins} coins purchase`,
+        reference_id: transaction._id.toString(),
+      }),
+    });
+
+    const squarePayload = await squareResponse.json().catch(() => ({}));
+
+    if (!squareResponse.ok || !squarePayload?.payment?.id) {
+      throw new BadRequestError(
+        squarePayload?.errors?.[0]?.detail || 'Square payment failed.',
+        { code: 'SQUARE_PAYMENT_FAILED' },
+      );
+    }
+
+    const payment = squarePayload.payment as { id: string; order_id?: string; status?: string };
+
+    if (payment.status !== 'COMPLETED' && payment.status !== 'APPROVED') {
+      throw new BadRequestError(`Square payment status is ${payment.status || 'unknown'}.`, {
+        code: 'SQUARE_PAYMENT_NOT_COMPLETED',
+      });
+    }
+
+    const paymentFields = {
+      squarePaymentId: payment.id,
+      ...(payment.order_id ? { squareOrderId: payment.order_id } : {}),
+    };
+    const completed = await coinRepository.completeTransactionByIdAndAddCoins(
+      transaction._id.toString(),
+      paymentFields,
+    );
+    const currentBalance = await coinRepository.getUserBalance(userId);
+
+    return {
+      paymentProvider: 'square',
+      paymentId: payment.id,
+      transactionId: completed?.transaction._id.toString() ?? transaction._id.toString(),
+      coinsAdded: coinPackage.coins,
+      coinBalance: currentBalance,
+      coinsCredited: completed?.newlyCompleted ?? false,
+      status: payment.status,
+    };
+  }
+
   async updateAdminCoinSettings(adminUserId: string, input: UpdateCoinSettingsInput) {
     const update = {
       coinsPerDollar: input.coinsPerDollar,

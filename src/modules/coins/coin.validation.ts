@@ -12,6 +12,13 @@ export const verifyPaymentSchema = {
   }),
 };
 
+export const createSquarePaymentSchema = {
+  body: z.object({
+    packageId: z.string().trim().min(1, 'Package ID is required.'),
+    sourceId: z.string().trim().min(1, 'Square payment source is required.'),
+  }),
+};
+
 export const getTransactionsQuerySchema = {
   query: z.object({
     page: z.coerce.number().int().positive().default(1),
@@ -86,6 +93,7 @@ export const getWithdrawalsQuerySchema = {
 
 export type CreatePaymentIntentInput = z.infer<typeof createPaymentIntentSchema.body>;
 export type VerifyPaymentInput = z.infer<typeof verifyPaymentSchema.body>;
+export type CreateSquarePaymentInput = z.infer<typeof createSquarePaymentSchema.body>;
 export type GetTransactionsQueryInput = z.infer<typeof getTransactionsQuerySchema.query>;
 export type SendGiftInput = z.infer<typeof sendGiftSchema.body>;
 export type GetGiftsQueryInput = z.infer<typeof getGiftsQuerySchema.query>;

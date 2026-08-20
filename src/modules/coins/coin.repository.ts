@@ -132,8 +132,11 @@ export class CoinRepository {
     coins: number;
     amount: number;
     currency: string;
+    paymentProvider?: 'stripe' | 'square';
     stripePaymentIntentId?: string;
     stripeClientSecret?: string;
+    squarePaymentId?: string;
+    squareOrderId?: string;
     metadata?: Record<string, unknown>;
   }): Promise<CoinTransactionDocument> {
     const transaction = new CoinTransactionModel({
@@ -142,9 +145,11 @@ export class CoinRepository {
       coins: data.coins,
       amount: data.amount,
       currency: data.currency.toLowerCase(),
-      paymentProvider: 'stripe',
+      paymentProvider: data.paymentProvider ?? 'stripe',
       stripePaymentIntentId: data.stripePaymentIntentId,
       stripeClientSecret: data.stripeClientSecret,
+      squarePaymentId: data.squarePaymentId,
+      squareOrderId: data.squareOrderId,
       status: 'pending',
       metadata: data.metadata,
     });
@@ -169,6 +174,10 @@ export class CoinRepository {
 
   async findTransactionByPaymentIntentId(stripePaymentIntentId: string): Promise<CoinTransactionDocument | null> {
     return CoinTransactionModel.findOne({ stripePaymentIntentId }).exec();
+  }
+
+  async findTransactionBySquarePaymentId(squarePaymentId: string): Promise<CoinTransactionDocument | null> {
+    return CoinTransactionModel.findOne({ squarePaymentId }).exec();
   }
 
   async findTransactionById(transactionId: string): Promise<CoinTransactionDocument | null> {
@@ -197,6 +206,44 @@ export class CoinRepository {
         $set: {
           status: 'completed',
           completedAt: new Date(),
+        },
+      },
+      { new: true },
+    ).exec();
+
+    if (!updatedTransaction) {
+      const current = await CoinTransactionModel.findById(transaction._id).exec();
+      return current ? { transaction: current, newlyCompleted: false } : null;
+    }
+
+    await UserModel.findByIdAndUpdate(updatedTransaction.userId, {
+      $inc: { coinBalance: updatedTransaction.coins },
+    }).exec();
+
+    return { transaction: updatedTransaction, newlyCompleted: true };
+  }
+
+  async completeTransactionByIdAndAddCoins(
+    transactionId: string,
+    paymentFields: { squarePaymentId?: string; squareOrderId?: string } = {},
+  ): Promise<{ transaction: CoinTransactionDocument; newlyCompleted: boolean } | null> {
+    const transaction = await this.findTransactionById(transactionId);
+
+    if (!transaction) {
+      return null;
+    }
+
+    if (transaction.status === 'completed') {
+      return { transaction, newlyCompleted: false };
+    }
+
+    const updatedTransaction = await CoinTransactionModel.findOneAndUpdate(
+      { _id: transaction._id, status: { $ne: 'completed' } },
+      {
+        $set: {
+          status: 'completed',
+          completedAt: new Date(),
+          ...paymentFields,
         },
       },
       { new: true },

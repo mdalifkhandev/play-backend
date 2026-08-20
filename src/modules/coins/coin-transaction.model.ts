@@ -9,9 +9,11 @@ export interface CoinTransaction {
   coins: number;
   amount: number;
   currency: string;
-  paymentProvider: 'stripe';
+  paymentProvider: 'stripe' | 'square';
   stripePaymentIntentId?: string;
   stripeClientSecret?: string;
+  squarePaymentId?: string;
+  squareOrderId?: string;
   status: CoinTransactionStatus;
   completedAt?: Date;
   failedAt?: Date;
@@ -30,9 +32,11 @@ const coinTransactionSchema = new Schema<CoinTransaction>(
     coins: { type: Number, required: true, min: 1 },
     amount: { type: Number, required: true, min: 0 },
     currency: { type: String, required: true, default: 'usd', lowercase: true, trim: true },
-    paymentProvider: { type: String, required: true, default: 'stripe', enum: ['stripe'] },
+    paymentProvider: { type: String, required: true, default: 'stripe', enum: ['stripe', 'square'] },
     stripePaymentIntentId: { type: String, trim: true, index: true },
     stripeClientSecret: { type: String, trim: true },
+    squarePaymentId: { type: String, trim: true, index: true },
+    squareOrderId: { type: String, trim: true },
     status: {
       type: String,
       required: true,
@@ -53,6 +57,7 @@ const coinTransactionSchema = new Schema<CoinTransaction>(
 
 coinTransactionSchema.index({ userId: 1, createdAt: -1 });
 coinTransactionSchema.index({ stripePaymentIntentId: 1 }, { unique: true, sparse: true });
+coinTransactionSchema.index({ squarePaymentId: 1 }, { unique: true, sparse: true });
 
 export const CoinTransactionModel: Model<CoinTransaction> =
   (mongoose.models.CoinTransaction as Model<CoinTransaction> | undefined) ??
