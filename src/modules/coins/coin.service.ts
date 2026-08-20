@@ -515,6 +515,7 @@ export class CoinService {
       estimatedUsdValue,
       stripeConnectAccountId: user?.stripeConnectAccountId,
       stripeConnectOnboardingComplete: user?.stripeConnectOnboardingComplete ?? false,
+      payoutSetupAvailable: Boolean(env.STRIPE_SECRET_KEY),
     };
   }
 
