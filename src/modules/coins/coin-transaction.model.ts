@@ -9,7 +9,7 @@ export interface CoinTransaction {
   coins: number;
   amount: number;
   currency: string;
-  paymentProvider: 'stripe' | 'square';
+  paymentProvider: 'stripe' | 'square' | 'diamond_conversion';
   stripePaymentIntentId?: string;
   stripeClientSecret?: string;
   squarePaymentId?: string;
@@ -32,7 +32,7 @@ const coinTransactionSchema = new Schema<CoinTransaction>(
     coins: { type: Number, required: true, min: 1 },
     amount: { type: Number, required: true, min: 0 },
     currency: { type: String, required: true, default: 'usd', lowercase: true, trim: true },
-    paymentProvider: { type: String, required: true, default: 'stripe', enum: ['stripe', 'square'] },
+    paymentProvider: { type: String, required: true, default: 'stripe', enum: ['stripe', 'square', 'diamond_conversion'] },
     stripePaymentIntentId: { type: String, trim: true, index: true },
     stripeClientSecret: { type: String, trim: true },
     squarePaymentId: { type: String, trim: true, index: true },

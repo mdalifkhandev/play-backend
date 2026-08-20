@@ -57,6 +57,12 @@ export const withdrawCoinsSchema = {
   }),
 };
 
+export const convertDiamondsSchema = {
+  body: z.object({
+    diamonds: z.coerce.number().int().positive('Diamonds must be a positive integer.'),
+  }),
+};
+
 export const approveWithdrawalSchema = {
   params: z.object({
     requestId: z.string().trim().min(1, 'Request ID is required.'),
@@ -99,6 +105,7 @@ export type SendGiftInput = z.infer<typeof sendGiftSchema.body>;
 export type GetGiftsQueryInput = z.infer<typeof getGiftsQuerySchema.query>;
 export type StripeConnectLinkInput = z.infer<typeof stripeConnectLinkSchema.body>;
 export type WithdrawCoinsInput = z.infer<typeof withdrawCoinsSchema.body>;
+export type ConvertDiamondsInput = z.infer<typeof convertDiamondsSchema.body>;
 export type ApproveWithdrawalInput = z.infer<typeof approveWithdrawalSchema.body>;
 export type RejectWithdrawalInput = z.infer<typeof rejectWithdrawalSchema.body>;
 export type UpdateCoinSettingsInput = z.infer<typeof updateCoinSettingsSchema.body>;

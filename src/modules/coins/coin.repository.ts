@@ -132,7 +132,7 @@ export class CoinRepository {
     coins: number;
     amount: number;
     currency: string;
-    paymentProvider?: 'stripe' | 'square';
+    paymentProvider?: 'stripe' | 'square' | 'diamond_conversion';
     stripePaymentIntentId?: string;
     stripeClientSecret?: string;
     squarePaymentId?: string;
@@ -280,6 +280,48 @@ export class CoinRepository {
     return user?.coinBalance ?? 0;
   }
 
+  async getUserDiamondBalance(userId: string): Promise<number> {
+    const user = await UserModel.findById(userId).select('diamondBalance').lean().exec();
+    return user?.diamondBalance ?? 0;
+  }
+
+  async convertDiamondsToCoins(data: {
+    userId: string;
+    diamonds: number;
+    coins: number;
+    amountUsd: number;
+  }): Promise<{ diamondBalance: number; coinBalance: number } | null> {
+    const userObjectId = new Types.ObjectId(data.userId);
+    const updatedUser = await UserModel.findOneAndUpdate(
+      { _id: userObjectId, diamondBalance: { $gte: data.diamonds } },
+      { $inc: { diamondBalance: -data.diamonds, coinBalance: data.coins } },
+      { new: true },
+    ).select('diamondBalance coinBalance').lean().exec();
+
+    if (!updatedUser) {
+      return null;
+    }
+
+    await CoinTransactionModel.create({
+      userId: userObjectId,
+      coins: data.coins,
+      amount: data.amountUsd,
+      currency: 'usd',
+      paymentProvider: 'diamond_conversion',
+      status: 'completed',
+      completedAt: new Date(),
+      metadata: {
+        source: 'diamond_conversion',
+        diamonds: data.diamonds,
+      },
+    });
+
+    return {
+      diamondBalance: updatedUser.diamondBalance ?? 0,
+      coinBalance: updatedUser.coinBalance ?? 0,
+    };
+  }
+
   async getUserTransactions(
     userId: string,
     skip: number,
@@ -321,6 +363,10 @@ export class CoinRepository {
     if (!updatedSender) {
       throw new Error('INSUFFICIENT_COINS');
     }
+
+    await UserModel.findByIdAndUpdate(data.recipientId, {
+      $inc: { diamondBalance: data.totalCoins },
+    }).exec();
 
     const sentGift = new SentGiftModel({
       senderId: senderObjectId,

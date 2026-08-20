@@ -4,6 +4,7 @@ import { asyncHandler } from '../../common/utils/async-handler.js';
 import { coinService } from './coin.service.js';
 import type {
   ApproveWithdrawalInput,
+  ConvertDiamondsInput,
   CreatePaymentIntentInput,
   CreateSquarePaymentInput,
   GetGiftsQueryInput,
@@ -29,6 +30,19 @@ export class CoinController {
     const userId = request.user!.userId;
     const balance = await coinService.getUserCoinBalance(userId);
     return sendSuccess(response, 200, 'Coin balance retrieved successfully.', balance);
+  });
+
+  getDiamondBalance = asyncHandler(async (request: Request, response: Response) => {
+    const userId = request.user!.userId;
+    const balance = await coinService.getUserDiamondBalance(userId);
+    return sendSuccess(response, 200, 'Diamond balance retrieved successfully.', balance);
+  });
+
+  convertDiamonds = asyncHandler(async (request: Request, response: Response) => {
+    const userId = request.user!.userId;
+    const input = request.body as ConvertDiamondsInput;
+    const result = await coinService.convertDiamonds(userId, input);
+    return sendSuccess(response, 200, 'Diamonds converted successfully.', result);
   });
 
   createPaymentIntent = asyncHandler(async (request: Request, response: Response) => {

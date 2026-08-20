@@ -4,6 +4,7 @@ import { validateRequest } from '../../common/middleware/validation.middleware.j
 import { coinController } from './coin.controller.js';
 import {
   approveWithdrawalSchema,
+  convertDiamondsSchema,
   createPaymentIntentSchema,
   createSquarePaymentSchema,
   getGiftsQuerySchema,
@@ -29,6 +30,13 @@ coinRouter.post('/stripe/webhook', coinController.handleWebhook);
 
 // Protected user coin & balance routes
 coinRouter.get('/balance', authenticate, coinController.getBalance);
+coinRouter.get('/diamonds', authenticate, coinController.getDiamondBalance);
+coinRouter.post(
+  '/diamonds/convert',
+  authenticate,
+  validateRequest(convertDiamondsSchema),
+  coinController.convertDiamonds,
+);
 coinRouter.post(
   '/purchase/create-payment-intent',
   authenticate,

@@ -7,7 +7,7 @@ import { coinRepository } from './coin.repository.js';
 import { UserModel } from '../users/user.model.js';
 import { ReelModel } from '../reels/reel.model.js';
 import { LiveStreamModel } from '../live-streams/live-stream.model.js';
-import type { SendGiftInput, UpdateCoinSettingsInput } from './coin.validation.js';
+import type { ConvertDiamondsInput, SendGiftInput, UpdateCoinSettingsInput } from './coin.validation.js';
 import { activityService } from '../activities/activity.service.js';
 import type { GiftTargetType } from './sent-gift.model.js';
 import type { WithdrawalStatus } from './withdrawal-request.model.js';
@@ -31,6 +31,47 @@ export class CoinService {
     return {
       userId,
       coinBalance: balance,
+    };
+  }
+
+  async getUserDiamondBalance(userId: string) {
+    const [diamondBalance, setting] = await Promise.all([
+      coinRepository.getUserDiamondBalance(userId),
+      coinRepository.getCoinSettings(),
+    ]);
+
+    return {
+      userId,
+      diamondBalance,
+      diamondsPerDollar: setting.coinsPerDollar,
+      estimatedUsdValue: Number((diamondBalance / setting.coinsPerDollar).toFixed(2)),
+    };
+  }
+
+  async convertDiamonds(userId: string, input: ConvertDiamondsInput) {
+    const setting = await coinRepository.getCoinSettings();
+    const amountUsd = Number((input.diamonds / setting.coinsPerDollar).toFixed(2));
+    const result = await coinRepository.convertDiamondsToCoins({
+      userId,
+      diamonds: input.diamonds,
+      coins: input.diamonds,
+      amountUsd,
+    });
+
+    if (!result) {
+      const currentDiamondBalance = await coinRepository.getUserDiamondBalance(userId);
+      throw new BadRequestError(
+        `Insufficient diamond balance. You have ${currentDiamondBalance} diamonds but requested ${input.diamonds}.`,
+      );
+    }
+
+    return {
+      converted: true,
+      diamondsConverted: input.diamonds,
+      amountUsd,
+      coinBalance: result.coinBalance,
+      diamondBalance: result.diamondBalance,
+      diamondsPerDollar: setting.coinsPerDollar,
     };
   }
 
