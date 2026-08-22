@@ -6,6 +6,8 @@ import type { Reel } from './reel.model.js';
 export interface PopulatedReelOwner {
   _id: Types.ObjectId;
   email?: string;
+  subscriptionStatus?: 'none' | 'active' | 'expired' | 'canceled';
+  subscriptionExpiresAt?: Date;
   profile?: {
     displayName?: string;
     username?: string;
@@ -107,6 +109,7 @@ export interface ReelFeedItemDto {
     username: string | null;
     displayName: string | null;
     avatarUrl: string | null;
+    isPremium: boolean;
   };
   stats: {
     likes: number;
@@ -197,6 +200,11 @@ export function toReelFeedItemDto(
   const owner = isPopulatedOwner(reel.ownerId) ? reel.ownerId : undefined;
   const ownerId = owner?._id.toString() ?? reel.ownerId.toString();
   const profile = owner?.profile;
+  const isPremium = Boolean(
+    owner?.subscriptionStatus === 'active' &&
+    owner.subscriptionExpiresAt &&
+    owner.subscriptionExpiresAt.getTime() > Date.now(),
+  );
 
   const videoUrl = reel.processedMedia?.secureUrl || reel.rawMedia?.secureUrl || '';
   const thumbnailUrl = reel.thumbnail?.secureUrl || reel.rawMedia?.secureUrl || '';
@@ -252,6 +260,7 @@ export function toReelFeedItemDto(
       username: profile?.username ?? owner?.email?.split('@')[0] ?? null,
       displayName: profile?.displayName ?? profile?.username ?? owner?.email?.split('@')[0] ?? null,
       avatarUrl: profile?.photoUrl ?? null,
+      isPremium,
     },
     stats: {
       likes: reel.likeCount || 0,
