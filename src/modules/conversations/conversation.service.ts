@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { Types } from 'mongoose';
 
 import { AppError } from '../../common/errors/app-error.js';
 import { env } from '../../config/env.config.js';
@@ -447,6 +448,36 @@ export class ConversationService {
   ): Promise<void> {
     const senderName = message.sender.displayName || message.sender.username || 'New message';
     const body = message.text?.trim() || (message.mediaUrl ? 'Sent a media message' : 'Sent a message');
+
+    try {
+      await notificationService.createNotification({
+        userId: new Types.ObjectId(recipientId),
+        actorId: new Types.ObjectId(message.sender.id),
+        type: 'chat_message',
+        title: senderName,
+        body,
+        relatedEntityId: new Types.ObjectId(message.conversationId),
+      });
+
+      logger.info(
+        {
+          recipientId,
+          conversationId: message.conversationId,
+          messageId: message.id,
+        },
+        'Chat notification stored',
+      );
+    } catch (error) {
+      logger.warn(
+        {
+          err: error,
+          recipientId,
+          conversationId: message.conversationId,
+          messageId: message.id,
+        },
+        'Chat notification store skipped',
+      );
+    }
 
     try {
       const result = await notificationService.sendToUser(recipientId, {

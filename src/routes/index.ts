@@ -30,6 +30,7 @@ import { kidsModeRouter } from '../modules/kids-mode/kids-mode.route.js';
 import { activityRouter } from '../modules/activities/activity.route.js';
 import { rewardRouter } from '../modules/rewards/reward.route.js';
 import { subscriptionRouter } from '../modules/subscriptions/subscription.route.js';
+import { adAdminRouter, adRouter } from '../modules/ads/ad.route.js';
 
 export const apiRouter = Router();
 
@@ -42,6 +43,7 @@ apiRouter.use('/rewards', rewardRouter);
 apiRouter.use('/subscriptions', subscriptionRouter);
 apiRouter.use('/kids-mode', kidsModeRouter);
 apiRouter.use('/coins', coinRouter);
+apiRouter.use('/ads', adRouter);
 apiRouter.use('/content-pages', contentPageRouter);
 apiRouter.use('/legal-consents', legalConsentRouter);
 apiRouter.use('/uploads', mediaAssetRouter);
@@ -57,4 +59,5 @@ apiRouter.use('/stories', storyRouter);
 apiRouter.use('/support-requests', supportRequestRouter);
 apiRouter.use('/admin/content-pages', contentPageAdminRouter);
 apiRouter.use('/admin/support-requests', supportRequestAdminRouter);
+apiRouter.use('/admin/ads', adAdminRouter);
 
