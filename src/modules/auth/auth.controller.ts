@@ -36,6 +36,12 @@ export class AuthController {
     return sendSuccess(response, 200, 'Google login successful.', result);
   });
 
+  appleLogin = asyncHandler(async (request: Request, response: Response) => {
+    const result = await authService.appleLogin(request.body, getRequestContext(request));
+    setRefreshCookie(response, result.tokens.refreshToken, result.tokens.refreshTokenExpiresAt);
+    return sendSuccess(response, 200, 'Apple login successful.', result);
+  });
+
   refresh = asyncHandler(async (request: Request, response: Response) => {
     const refreshToken = getRefreshToken(request);
 

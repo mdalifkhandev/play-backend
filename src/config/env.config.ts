@@ -122,6 +122,7 @@ const environmentSchema = z
     GOOGLE_ANDROID_CLIENT_ID: z.string().trim().min(1).optional(),
     GOOGLE_IOS_CLIENT_ID: z.string().trim().min(1).optional(),
     GOOGLE_WEB_CLIENT_ID: z.string().trim().min(1).optional(),
+    APPLE_CLIENT_ID: z.string().trim().min(1).optional(),
   })
   .superRefine((value, context) => {
     if (Boolean(value.AGORA_APP_ID) !== Boolean(value.AGORA_APP_CERTIFICATE)) {

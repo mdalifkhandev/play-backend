@@ -1,4 +1,5 @@
 import { randomInt } from 'node:crypto';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 import { env } from '../../config/env.config.js';
 import { AccountStatus } from '../../common/enums/account-status.enum.js';
@@ -26,6 +27,7 @@ import type {
   VerificationResult,
 } from './auth.types.js';
 import type {
+  AppleLoginInput,
   EmailInput,
   GoogleLoginInput,
   LoginInput,
@@ -35,6 +37,8 @@ import type {
   VerifyCodeInput,
   ChangePasswordInput,
 } from './auth.validation.js';
+
+const appleJwks = createRemoteJWKSet(new URL('https://appleid.apple.com/auth/keys'));
 
 export class AuthService {
   async signUp(
@@ -193,6 +197,46 @@ export class AuthService {
 
       if (!user.profile.photoUrl && googleUser.picture) {
         user.profile.photoUrl = googleUser.picture;
+      }
+    }
+
+    await userRepository.recordSuccessfulLogin(user);
+
+    return this.createAuthResult(user, Boolean(input.rememberMe), context);
+  }
+
+  async appleLogin(input: AppleLoginInput, context: RequestContext): Promise<AuthResult> {
+    const appleUser = await this.verifyAppleIdentityToken(input.identityToken);
+    let user = await userRepository.findByEmail(appleUser.email);
+    const fullName = [input.fullName?.givenName, input.fullName?.familyName]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+
+    if (!user) {
+      const createdUser = await userRepository.create({
+        email: appleUser.email,
+        passwordHash: await hashPassword(createSecureToken()),
+        status: AccountStatus.ACTIVE,
+        isEmailVerified: true,
+      });
+
+      const updatedUser = await userRepository.updateProfile(createdUser._id, {
+        ...(fullName ? { displayName: fullName } : {}),
+        isSetupComplete: false,
+      });
+
+      user = updatedUser ?? createdUser;
+    } else {
+      this.assertUserCanLogin(user);
+
+      if (!user.isEmailVerified) {
+        user.isEmailVerified = true;
+        user.emailVerifiedAt = new Date();
+      }
+
+      if (!user.profile.displayName && fullName) {
+        user.profile.displayName = fullName;
       }
     }
 
@@ -616,6 +660,39 @@ export class AuthService {
       ...(payload.name ? { name: payload.name } : {}),
       ...(payload.picture ? { picture: payload.picture } : {}),
     };
+  }
+
+  private async verifyAppleIdentityToken(identityToken: string): Promise<{
+    email: string;
+  }> {
+    if (!env.APPLE_CLIENT_ID) {
+      throw new AppError('Apple login is not configured.', 503, {
+        code: 'APPLE_LOGIN_NOT_CONFIGURED',
+      });
+    }
+
+    try {
+      const { payload } = await jwtVerify(identityToken, appleJwks, {
+        issuer: 'https://appleid.apple.com',
+        audience: env.APPLE_CLIENT_ID,
+      });
+
+      if (typeof payload.email !== 'string' || payload.email.trim().length === 0) {
+        throw new UnauthorizedError('Apple token email is missing.', {
+          code: 'APPLE_EMAIL_MISSING',
+        });
+      }
+
+      return {
+        email: payload.email.toLowerCase(),
+      };
+    } catch (error) {
+      if (error instanceof UnauthorizedError) throw error;
+
+      throw new UnauthorizedError('Apple identity token is invalid.', {
+        code: 'APPLE_TOKEN_INVALID',
+      });
+    }
   }
 
   private async createAndDispatchCode(

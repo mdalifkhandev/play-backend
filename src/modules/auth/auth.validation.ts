@@ -102,6 +102,19 @@ export const googleLoginBodySchema = z
   })
   .strict();
 
+export const appleLoginBodySchema = z
+  .object({
+    identityToken: z.string().trim().min(20, 'Apple identity token is required.'),
+    fullName: z
+      .object({
+        givenName: z.string().trim().min(1).max(80).optional(),
+        familyName: z.string().trim().min(1).max(80).optional(),
+      })
+      .optional(),
+    rememberMe: z.boolean().optional().default(true),
+  })
+  .strict();
+
 export const emailBodySchema = z.object({
   email: emailSchema,
 });
@@ -153,6 +166,7 @@ export const setupProfileBodySchema = z.object({
 export type SignUpInput = z.infer<typeof signUpBodySchema>;
 export type LoginInput = z.infer<typeof loginBodySchema>;
 export type GoogleLoginInput = z.infer<typeof googleLoginBodySchema>;
+export type AppleLoginInput = z.infer<typeof appleLoginBodySchema>;
 export type EmailInput = z.infer<typeof emailBodySchema>;
 export type VerifyCodeInput = z.infer<typeof verifyCodeBodySchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordBodySchema>;
