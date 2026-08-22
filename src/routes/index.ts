@@ -28,6 +28,7 @@ import { userRouter } from '../modules/users/user.route.js';
 import { notificationRouter } from '../modules/notifications/notification.route.js';
 import { kidsModeRouter } from '../modules/kids-mode/kids-mode.route.js';
 import { activityRouter } from '../modules/activities/activity.route.js';
+import { rewardRouter } from '../modules/rewards/reward.route.js';
 
 export const apiRouter = Router();
 
@@ -36,6 +37,7 @@ apiRouter.use('/auth', authRouter);
 apiRouter.use('/users', userRouter);
 apiRouter.use('/notifications', notificationRouter);
 apiRouter.use('/activities', activityRouter);
+apiRouter.use('/rewards', rewardRouter);
 apiRouter.use('/kids-mode', kidsModeRouter);
 apiRouter.use('/coins', coinRouter);
 apiRouter.use('/content-pages', contentPageRouter);
