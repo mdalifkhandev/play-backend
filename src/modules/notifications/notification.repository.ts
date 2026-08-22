@@ -112,7 +112,7 @@ export class NotificationRepository {
     return NotificationModel.find(query)
       .sort({ createdAt: -1 })
       .limit(limit)
-      .populate('actorId', 'username name profilePicture')
+      .populate('actorId', '_id email profile.displayName profile.username profile.photoUrl')
       .exec();
   }
 

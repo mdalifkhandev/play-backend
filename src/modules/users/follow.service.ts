@@ -5,6 +5,8 @@ import { NotFoundError } from '../../common/errors/not-found-error.js';
 import { followRepository, type FollowCursor, type FollowRepository } from './follow.repository.js';
 import type { FollowListQuery } from './follow.validation.js';
 import { activityService } from '../activities/activity.service.js';
+import { notificationService } from '../notifications/notification.service.js';
+import { userRepository } from './user.repository.js';
 
 interface FollowUserDto {
   id: string;
@@ -49,6 +51,16 @@ export class FollowService {
         entityId: followerId,
         entityModel: 'User',
       }).catch(console.error);
+
+      this.notifyFollow(followerId, followingId).catch((error) => {
+        console.warn('[FOLLOW_NOTIFICATION] failed', {
+          followerId,
+          followingId,
+          message: error instanceof Error ? error.message : String(error),
+          code: (error as any)?.code,
+          statusCode: (error as any)?.statusCode,
+        });
+      });
     }
     
     return this.buildState(followerId, followingId);
@@ -115,6 +127,34 @@ export class FollowService {
     ]);
 
     return { isFollowing, followersCount, followingCount };
+  }
+
+  private async notifyFollow(followerId: string, followingId: string): Promise<void> {
+    const follower = await userRepository.findById(followerId);
+    const displayName =
+      follower?.profile?.displayName ||
+      follower?.profile?.username ||
+      follower?.email ||
+      'Someone';
+
+    await notificationService.createNotification({
+      userId: new Types.ObjectId(followingId),
+      actorId: new Types.ObjectId(followerId),
+      type: 'follow',
+      title: 'New Follower',
+      body: `${displayName} started following you.`,
+      relatedEntityId: new Types.ObjectId(followerId),
+    });
+
+    await notificationService.sendToUser(followingId, {
+      title: 'New Follower',
+      body: `${displayName} started following you.`,
+      data: {
+        type: 'follow',
+        targetId: followerId,
+        userId: followerId,
+      },
+    });
   }
 }
 
