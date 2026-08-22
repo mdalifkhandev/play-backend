@@ -29,6 +29,7 @@ import { notificationRouter } from '../modules/notifications/notification.route.
 import { kidsModeRouter } from '../modules/kids-mode/kids-mode.route.js';
 import { activityRouter } from '../modules/activities/activity.route.js';
 import { rewardRouter } from '../modules/rewards/reward.route.js';
+import { subscriptionRouter } from '../modules/subscriptions/subscription.route.js';
 
 export const apiRouter = Router();
 
@@ -38,6 +39,7 @@ apiRouter.use('/users', userRouter);
 apiRouter.use('/notifications', notificationRouter);
 apiRouter.use('/activities', activityRouter);
 apiRouter.use('/rewards', rewardRouter);
+apiRouter.use('/subscriptions', subscriptionRouter);
 apiRouter.use('/kids-mode', kidsModeRouter);
 apiRouter.use('/coins', coinRouter);
 apiRouter.use('/content-pages', contentPageRouter);

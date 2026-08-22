@@ -11,6 +11,12 @@ export interface PublicUserDto {
   coinBalance: number;
   stripeConnectAccountId?: string;
   stripeConnectOnboardingComplete: boolean;
+  subscription: {
+    plan?: 'monthly' | 'yearly';
+    status: 'none' | 'active' | 'expired' | 'canceled';
+    expiresAt?: string;
+    isPremium: boolean;
+  };
   profile: {
     username?: string;
     displayName?: string;
@@ -38,6 +44,16 @@ export function toPublicUser(user: UserDocument): PublicUserDto {
     coinBalance: user.coinBalance ?? 0,
     ...(user.stripeConnectAccountId ? { stripeConnectAccountId: user.stripeConnectAccountId } : {}),
     stripeConnectOnboardingComplete: user.stripeConnectOnboardingComplete ?? false,
+    subscription: {
+      ...(user.subscriptionPlan ? { plan: user.subscriptionPlan } : {}),
+      status: user.subscriptionStatus ?? 'none',
+      ...(user.subscriptionExpiresAt ? { expiresAt: user.subscriptionExpiresAt.toISOString() } : {}),
+      isPremium: Boolean(
+        user.subscriptionStatus === 'active' &&
+        user.subscriptionExpiresAt &&
+        user.subscriptionExpiresAt.getTime() > Date.now(),
+      ),
+    },
     profile: {
       ...(profile.username ? { username: profile.username } : {}),
       ...(profile.displayName ? { displayName: profile.displayName } : {}),

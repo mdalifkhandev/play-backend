@@ -40,6 +40,11 @@ export interface User {
   diamondBalance: number;
   stripeConnectAccountId?: string;
   stripeConnectOnboardingComplete: boolean;
+  subscriptionPlan?: 'monthly' | 'yearly';
+  subscriptionStatus: 'none' | 'active' | 'expired' | 'canceled';
+  subscriptionExpiresAt?: Date;
+  subscriptionProvider?: 'square' | 'apple_pay';
+  subscriptionPaymentId?: string;
   profile: UserProfile;
   kidsModePin?: string;
   kidsProfile?: KidsProfile;
@@ -109,6 +114,16 @@ const userSchema = new Schema<User>(
     diamondBalance: { type: Number, default: 0, min: 0, required: true },
     stripeConnectAccountId: { type: String, trim: true, sparse: true },
     stripeConnectOnboardingComplete: { type: Boolean, default: false, required: true },
+    subscriptionPlan: { type: String, enum: ['monthly', 'yearly'], trim: true },
+    subscriptionStatus: {
+      type: String,
+      enum: ['none', 'active', 'expired', 'canceled'],
+      default: 'none',
+      required: true,
+    },
+    subscriptionExpiresAt: { type: Date },
+    subscriptionProvider: { type: String, enum: ['square', 'apple_pay'], trim: true },
+    subscriptionPaymentId: { type: String, trim: true },
     profile: { type: userProfileSchema, default: () => ({ isSetupComplete: false }) },
     kidsModePin: { type: String, trim: true, select: false },
     kidsProfile: { type: kidsProfileSchema, default: () => ({ isActive: false }) },
@@ -121,6 +136,7 @@ const userSchema = new Schema<User>(
 
 userSchema.index({ 'profile.username': 1 }, { unique: true, sparse: true });
 userSchema.index({ status: 1, role: 1 });
+userSchema.index({ subscriptionStatus: 1, subscriptionExpiresAt: 1 });
 
 export const UserModel: Model<User> =
   (mongoose.models.User as Model<User> | undefined) ?? model<User>('User', userSchema);
