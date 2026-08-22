@@ -24,9 +24,8 @@ export class CloudinaryStorage implements StorageProvider {
       throw new TypeError('Cloudinary public ID must not be empty.');
     }
 
-    const overwrite = false as const;
     const signature = cloudinaryClient.utils.api_sign_request(
-      { overwrite, public_id: publicId, timestamp },
+      { public_id: publicId, timestamp },
       storageConfig.cloudinary.apiSecret,
     );
 
@@ -38,7 +37,7 @@ export class CloudinaryStorage implements StorageProvider {
       signature,
       publicId,
       resourceType,
-      overwrite,
+      overwrite: false,
       uploadUrl: `https://api.cloudinary.com/v1_1/${encodeURIComponent(storageConfig.cloudinary.cloudName)}/${resourceType}/upload`,
     };
   }
