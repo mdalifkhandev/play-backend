@@ -31,6 +31,7 @@ import { activityRouter } from '../modules/activities/activity.route.js';
 import { rewardRouter } from '../modules/rewards/reward.route.js';
 import { subscriptionRouter } from '../modules/subscriptions/subscription.route.js';
 import { adAdminRouter, adRouter } from '../modules/ads/ad.route.js';
+import { creatorAdminRouter, creatorRouter } from '../modules/creators/creator.route.js';
 
 export const apiRouter = Router();
 
@@ -41,6 +42,7 @@ apiRouter.use('/notifications', notificationRouter);
 apiRouter.use('/activities', activityRouter);
 apiRouter.use('/rewards', rewardRouter);
 apiRouter.use('/subscriptions', subscriptionRouter);
+apiRouter.use('/creators', creatorRouter);
 apiRouter.use('/kids-mode', kidsModeRouter);
 apiRouter.use('/coins', coinRouter);
 apiRouter.use('/ads', adRouter);
@@ -60,4 +62,5 @@ apiRouter.use('/support-requests', supportRequestRouter);
 apiRouter.use('/admin/content-pages', contentPageAdminRouter);
 apiRouter.use('/admin/support-requests', supportRequestAdminRouter);
 apiRouter.use('/admin/ads', adAdminRouter);
+apiRouter.use('/admin/creators', creatorAdminRouter);
 
