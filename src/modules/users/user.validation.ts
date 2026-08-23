@@ -27,7 +27,32 @@ export const discoverUsersQuerySchema = z
 
 export const usernameProfileParamsSchema = z.object({ username: usernameSchema }).strict();
 
+const objectIdSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-f\d]{24}$/i, 'Invalid user id.');
+
+export const adminListUsersQuerySchema = z
+  .object({
+    q: z.string().trim().max(120).optional().default(''),
+    status: z.enum(['all', 'active', 'banned', 'suspended', 'pending']).optional().default('all'),
+    page: z.coerce.number().int().min(1).optional().default(1),
+    limit: z.coerce.number().int().min(1).max(100).optional().default(8),
+  })
+  .strict();
+
+export const adminUserParamsSchema = z.object({ userId: objectIdSchema }).strict();
+
+export const adminUserActionBodySchema = z
+  .object({
+    reason: z.string().trim().max(500).optional(),
+  })
+  .strict();
+
 export type KidsModePinInput = z.infer<typeof kidsModePinSchema>;
 export type UpdateKidsProfileInput = z.infer<typeof updateKidsProfileSchema>;
 export type DiscoverUsersQuery = z.infer<typeof discoverUsersQuerySchema>;
 export type UsernameProfileParams = z.infer<typeof usernameProfileParamsSchema>;
+export type AdminListUsersQuery = z.infer<typeof adminListUsersQuerySchema>;
+export type AdminUserParams = z.infer<typeof adminUserParamsSchema>;
+export type AdminUserActionInput = z.infer<typeof adminUserActionBodySchema>;

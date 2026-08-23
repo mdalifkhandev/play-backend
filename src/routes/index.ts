@@ -24,7 +24,7 @@ import {
 } from '../modules/support-requests/support-request.route.js';
 import { coinRouter } from '../modules/coins/coin.route.js';
 import { healthRouter } from './health.route.js';
-import { userRouter } from '../modules/users/user.route.js';
+import { userAdminRouter, userRouter } from '../modules/users/user.route.js';
 import { notificationRouter } from '../modules/notifications/notification.route.js';
 import { kidsModeRouter } from '../modules/kids-mode/kids-mode.route.js';
 import { activityRouter } from '../modules/activities/activity.route.js';
@@ -63,4 +63,5 @@ apiRouter.use('/admin/content-pages', contentPageAdminRouter);
 apiRouter.use('/admin/support-requests', supportRequestAdminRouter);
 apiRouter.use('/admin/ads', adAdminRouter);
 apiRouter.use('/admin/creators', creatorAdminRouter);
+apiRouter.use('/admin/users', userAdminRouter);
 

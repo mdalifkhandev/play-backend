@@ -1,18 +1,130 @@
 import type { Request, Response } from 'express';
+import { Types } from 'mongoose';
 
+import { AccountStatus } from '../../common/enums/account-status.enum.js';
 import { NotFoundError } from '../../common/errors/not-found-error.js';
 import { sendSuccess } from '../../common/responses/api-response.js';
 import { asyncHandler } from '../../common/utils/async-handler.js';
+import { ReelModel, ReelReportModel } from '../reels/index.js';
 import { FollowModel } from './follow.model.js';
 import { toPublicUser } from './user.mapper.js';
-import { UserModel } from './user.model.js';
+import { UserModel, type User } from './user.model.js';
 import { userRepository } from './user.repository.js';
 import type { FollowUserParams } from './follow.validation.js';
-import type { DiscoverUsersQuery, UsernameProfileParams } from './user.validation.js';
+import type {
+  AdminListUsersQuery,
+  AdminUserActionInput,
+  AdminUserParams,
+  DiscoverUsersQuery,
+  UsernameProfileParams,
+} from './user.validation.js';
 
 const objectIdPattern = /^[a-f\d]{24}$/i;
 
 export class UserController {
+  listForAdmin = asyncHandler(async (request: Request, response: Response) => {
+    const { q, status, page, limit } = request.query as unknown as AdminListUsersQuery;
+    const filter: Record<string, unknown> = {};
+    const search = q.trim();
+
+    if (status !== 'all') {
+      filter.status = adminStatusToAccountStatus(status);
+    }
+
+    if (search) {
+      const searchRegex = new RegExp(escapeRegExp(search), 'i');
+      filter.$or = [
+        { email: searchRegex },
+        { 'profile.username': searchRegex },
+        { 'profile.displayName': searchRegex },
+      ];
+    }
+
+    const skip = (page - 1) * limit;
+    const [records, total] = await Promise.all([
+      UserModel.find(filter as any)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .select('_id email role status isEmailVerified profile createdAt')
+        .lean()
+        .exec(),
+      UserModel.countDocuments(filter as any),
+    ]);
+
+    const userIds = records.map(user => user._id);
+    const [followers, reels, reports] = await Promise.all([
+      getFollowerCounts(userIds),
+      getReelCounts(userIds),
+      getReportCounts(userIds),
+    ]);
+
+    return sendSuccess(response, 200, 'Admin users retrieved successfully.', {
+      items: records.map(user => formatAdminUser(user as any, {
+        followers: followers.get(user._id.toString()) ?? 0,
+        videos: reels.get(user._id.toString()) ?? 0,
+        reports: reports.get(user._id.toString()) ?? 0,
+      })),
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    });
+  });
+
+  banForAdmin = asyncHandler(async (request: Request, response: Response) => {
+    const user = await updateAdminUserStatus(
+      (request.params as AdminUserParams).userId,
+      { status: AccountStatus.DELETED },
+    );
+
+    return sendSuccess(response, 200, 'User banned successfully.', {
+      user: await hydrateAdminUser(user),
+    });
+  });
+
+  suspendForAdmin = asyncHandler(async (request: Request, response: Response) => {
+    const user = await updateAdminUserStatus(
+      (request.params as AdminUserParams).userId,
+      { status: AccountStatus.SUSPENDED },
+    );
+
+    return sendSuccess(response, 200, 'User suspended successfully.', {
+      user: await hydrateAdminUser(user),
+    });
+  });
+
+  verifyForAdmin = asyncHandler(async (request: Request, response: Response) => {
+    const user = await updateAdminUserStatus(
+      (request.params as AdminUserParams).userId,
+      {
+        status: AccountStatus.ACTIVE,
+        isEmailVerified: true,
+        emailVerifiedAt: new Date(),
+      },
+    );
+
+    return sendSuccess(response, 200, 'User verified successfully.', {
+      user: await hydrateAdminUser(user),
+    });
+  });
+
+  warnForAdmin = asyncHandler(async (request: Request, response: Response) => {
+    const { userId } = request.params as AdminUserParams;
+    const { reason } = request.body as AdminUserActionInput;
+    const user = await userRepository.findById(userId);
+
+    if (!user) {
+      throw new NotFoundError('User was not found.', { code: 'USER_NOT_FOUND' });
+    }
+
+    return sendSuccess(response, 200, 'Warning sent successfully.', {
+      userId,
+      reason: reason ?? null,
+      warnedAt: new Date().toISOString(),
+    });
+  });
+
   discover = asyncHandler(async (request: Request, response: Response) => {
     const currentUserId = request.user?.userId;
     const { q, limit } = request.query as unknown as DiscoverUsersQuery;
@@ -211,6 +323,114 @@ export class UserController {
 }
 
 export const userController = new UserController();
+
+type AdminUserStats = {
+  followers: number;
+  videos: number;
+  reports: number;
+};
+
+type AdminUserShape = Pick<User, '_id' | 'email' | 'status' | 'profile' | 'createdAt'>;
+
+function adminStatusToAccountStatus(status: AdminListUsersQuery['status']): AccountStatus {
+  if (status === 'banned') return AccountStatus.DELETED;
+  if (status === 'suspended') return AccountStatus.SUSPENDED;
+  if (status === 'pending') return AccountStatus.PENDING;
+  return AccountStatus.ACTIVE;
+}
+
+function accountStatusToAdminStatus(status: AccountStatus): string {
+  if (status === AccountStatus.DELETED) return 'Banned';
+  if (status === AccountStatus.SUSPENDED) return 'Suspended';
+  if (status === AccountStatus.PENDING) return 'Pending';
+  return 'Active';
+}
+
+function formatAdminUser(user: AdminUserShape, stats: AdminUserStats) {
+  const username = user.profile?.username
+    ? `@${user.profile.username}`
+    : user.profile?.displayName || user.email.split('@')[0] || 'User';
+
+  return {
+    id: user._id.toString(),
+    username,
+    email: user.email,
+    joinDate: user.createdAt.toISOString().slice(0, 10),
+    status: accountStatusToAdminStatus(user.status),
+    followers: stats.followers,
+    avatar: user.profile?.photoUrl ?? '',
+    bio: user.profile?.bio || 'No bio yet.',
+    videos: stats.videos,
+    reports: stats.reports,
+  };
+}
+
+async function updateAdminUserStatus(userId: string, update: Partial<User>) {
+  const user = await userRepository.updateById(userId, update);
+
+  if (!user) {
+    throw new NotFoundError('User was not found.', { code: 'USER_NOT_FOUND' });
+  }
+
+  return user;
+}
+
+async function hydrateAdminUser(user: User) {
+  const userId = user._id.toString();
+  const [followers, videos, reports] = await Promise.all([
+    FollowModel.countDocuments({ followingId: user._id }),
+    ReelModel.countDocuments({ ownerId: user._id }),
+    getReportCounts([user._id]),
+  ]);
+
+  return formatAdminUser(user, {
+    followers,
+    videos,
+    reports: reports.get(userId) ?? 0,
+  });
+}
+
+async function getFollowerCounts(userIds: Types.ObjectId[]): Promise<Map<string, number>> {
+  if (userIds.length === 0) return new Map();
+
+  const rows = await FollowModel.aggregate<{ _id: Types.ObjectId; count: number }>([
+    { $match: { followingId: { $in: userIds } } },
+    { $group: { _id: '$followingId', count: { $sum: 1 } } },
+  ]).exec();
+
+  return new Map(rows.map(row => [row._id.toString(), row.count]));
+}
+
+async function getReelCounts(userIds: Types.ObjectId[]): Promise<Map<string, number>> {
+  if (userIds.length === 0) return new Map();
+
+  const rows = await ReelModel.aggregate<{ _id: Types.ObjectId; count: number }>([
+    { $match: { ownerId: { $in: userIds } } },
+    { $group: { _id: '$ownerId', count: { $sum: 1 } } },
+  ]).exec();
+
+  return new Map(rows.map(row => [row._id.toString(), row.count]));
+}
+
+async function getReportCounts(userIds: Types.ObjectId[]): Promise<Map<string, number>> {
+  if (userIds.length === 0) return new Map();
+
+  const rows = await ReelReportModel.aggregate<{ _id: Types.ObjectId; count: number }>([
+    {
+      $lookup: {
+        from: 'reels',
+        localField: 'reelId',
+        foreignField: '_id',
+        as: 'reel',
+      },
+    },
+    { $unwind: '$reel' },
+    { $match: { 'reel.ownerId': { $in: userIds } } },
+    { $group: { _id: '$reel.ownerId', count: { $sum: 1 } } },
+  ]).exec();
+
+  return new Map(rows.map(row => [row._id.toString(), row.count]));
+}
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

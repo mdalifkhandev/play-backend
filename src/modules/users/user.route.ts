@@ -1,6 +1,8 @@
 import { Router } from 'express';
 
 import { authenticate, optionalAuthenticate } from '../../common/middleware/auth.middleware.js';
+import { authorize } from '../../common/middleware/authorization.middleware.js';
+import { UserRole } from '../../common/enums/user-role.enum.js';
 import { conversationController } from '../conversations/conversation.controller.js';
 import { searchConversationUsersQuerySchema } from '../conversations/conversation.validation.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
@@ -8,6 +10,9 @@ import { followController } from './follow.controller.js';
 import { followListQuerySchema, followUserParamsSchema } from './follow.validation.js';
 import { userController } from './user.controller.js';
 import {
+  adminListUsersQuerySchema,
+  adminUserActionBodySchema,
+  adminUserParamsSchema,
   discoverUsersQuerySchema,
   kidsModePinSchema,
   updateKidsProfileSchema,
@@ -15,6 +20,39 @@ import {
 } from './user.validation.js';
 
 export const userRouter = Router();
+export const userAdminRouter = Router();
+
+userAdminRouter.use(authenticate, authorize(UserRole.ADMIN, UserRole.MODERATOR));
+
+userAdminRouter.get(
+  '/',
+  validateRequest({ query: adminListUsersQuerySchema }),
+  userController.listForAdmin,
+);
+
+userAdminRouter.patch(
+  '/:userId/ban',
+  validateRequest({ params: adminUserParamsSchema, body: adminUserActionBodySchema }),
+  userController.banForAdmin,
+);
+
+userAdminRouter.patch(
+  '/:userId/suspend',
+  validateRequest({ params: adminUserParamsSchema, body: adminUserActionBodySchema }),
+  userController.suspendForAdmin,
+);
+
+userAdminRouter.patch(
+  '/:userId/verify',
+  validateRequest({ params: adminUserParamsSchema, body: adminUserActionBodySchema }),
+  userController.verifyForAdmin,
+);
+
+userAdminRouter.post(
+  '/:userId/warnings',
+  validateRequest({ params: adminUserParamsSchema, body: adminUserActionBodySchema }),
+  userController.warnForAdmin,
+);
 
 userRouter.post(
   '/me/kids-pin',
