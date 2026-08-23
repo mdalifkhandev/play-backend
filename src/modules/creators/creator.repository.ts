@@ -76,6 +76,7 @@ export class CreatorRepository {
       country: input.country,
       reason: input.reason,
       ...(input.dateOfBirth ? { dateOfBirth: input.dateOfBirth } : {}),
+      ...(input.occupationId ? { occupationId: new Types.ObjectId(input.occupationId) } : {}),
       ...(input.occupation ? { occupation: input.occupation } : {}),
       ...(input.idFrontUrl ? { idFrontUrl: input.idFrontUrl } : {}),
       ...(input.idBackUrl ? { idBackUrl: input.idBackUrl } : {}),
@@ -91,6 +92,7 @@ export class CreatorRepository {
       .sort({ createdAt: -1 })
       .limit(query.limit)
       .populate('userId', 'email role profile.displayName profile.username profile.photoUrl')
+      .populate('occupationId', 'name')
       .populate('reviewedBy', 'email profile.displayName profile.username')
       .exec();
   }
@@ -98,6 +100,7 @@ export class CreatorRepository {
   findApplicationById(id: string) {
     return CreatorApplicationModel.findById(id)
       .populate('userId', 'email role profile.displayName profile.username profile.photoUrl')
+      .populate('occupationId', 'name')
       .populate('reviewedBy', 'email profile.displayName profile.username')
       .exec();
   }

@@ -7,6 +7,7 @@ export const createCreatorApplicationBodySchema = z
     fullName: z.string().trim().min(2).max(120),
     email: z.string().trim().email().max(160),
     dateOfBirth: z.coerce.date().optional(),
+    occupationId: objectIdSchema.optional(),
     occupation: z.string().trim().min(1).max(120).optional(),
     contentCategory: z.string().trim().min(2).max(80),
     contentLanguage: z.string().trim().min(2).max(80),

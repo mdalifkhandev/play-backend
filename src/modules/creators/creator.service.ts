@@ -205,6 +205,14 @@ function mapAdminApplication(application: any) {
     email: application.email,
     ...(application.dateOfBirth ? { dateOfBirth: application.dateOfBirth.toISOString().slice(0, 10) } : {}),
     ...(application.occupation ? { occupation: application.occupation } : {}),
+    ...(application.occupationId
+      ? {
+          occupationData: {
+            id: application.occupationId?._id?.toString?.() || application.occupationId.toString(),
+            name: application.occupationId?.name || application.occupation,
+          },
+        }
+      : {}),
     contentCategory: application.contentCategory,
     contentLanguage: application.contentLanguage,
     country: application.country,

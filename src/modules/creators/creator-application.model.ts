@@ -9,6 +9,7 @@ export interface CreatorApplication {
   fullName: string;
   email: string;
   dateOfBirth?: Date;
+  occupationId?: Types.ObjectId;
   occupation?: string;
   contentCategory: string;
   contentLanguage: string;
@@ -32,6 +33,7 @@ const creatorApplicationSchema = new Schema<CreatorApplication>(
     fullName: { type: String, required: true, trim: true, maxlength: 120 },
     email: { type: String, required: true, trim: true, lowercase: true, maxlength: 160 },
     dateOfBirth: { type: Date },
+    occupationId: { type: Schema.Types.ObjectId, ref: 'Occupation' },
     occupation: { type: String, trim: true, maxlength: 120 },
     contentCategory: { type: String, required: true, trim: true, maxlength: 80 },
     contentLanguage: { type: String, required: true, trim: true, maxlength: 80 },

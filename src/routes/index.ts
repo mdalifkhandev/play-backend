@@ -34,6 +34,7 @@ import { adAdminRouter, adRouter } from '../modules/ads/ad.route.js';
 import { creatorAdminRouter, creatorRouter } from '../modules/creators/creator.route.js';
 import { moderationAdminRouter, moderationRouter } from '../modules/moderation/moderation.route.js';
 import { monetizationAdminRouter } from '../modules/monetization/monetization.route.js';
+import { occupationRouter } from '../modules/occupations/occupation.route.js';
 
 export const apiRouter = Router();
 
@@ -45,6 +46,7 @@ apiRouter.use('/activities', activityRouter);
 apiRouter.use('/rewards', rewardRouter);
 apiRouter.use('/subscriptions', subscriptionRouter);
 apiRouter.use('/creators', creatorRouter);
+apiRouter.use('/occupations', occupationRouter);
 apiRouter.use('/kids-mode', kidsModeRouter);
 apiRouter.use('/coins', coinRouter);
 apiRouter.use('/ads', adRouter);
