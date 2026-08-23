@@ -109,6 +109,17 @@ export class UserController {
     });
   });
 
+  activateForAdmin = asyncHandler(async (request: Request, response: Response) => {
+    const user = await updateAdminUserStatus(
+      (request.params as AdminUserParams).userId,
+      { status: AccountStatus.ACTIVE },
+    );
+
+    return sendSuccess(response, 200, 'User activated successfully.', {
+      user: await hydrateAdminUser(user),
+    });
+  });
+
   warnForAdmin = asyncHandler(async (request: Request, response: Response) => {
     const { userId } = request.params as AdminUserParams;
     const { reason } = request.body as AdminUserActionInput;

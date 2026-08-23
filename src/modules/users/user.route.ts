@@ -48,6 +48,12 @@ userAdminRouter.patch(
   userController.verifyForAdmin,
 );
 
+userAdminRouter.patch(
+  '/:userId/activate',
+  validateRequest({ params: adminUserParamsSchema, body: adminUserActionBodySchema }),
+  userController.activateForAdmin,
+);
+
 userAdminRouter.post(
   '/:userId/warnings',
   validateRequest({ params: adminUserParamsSchema, body: adminUserActionBodySchema }),
