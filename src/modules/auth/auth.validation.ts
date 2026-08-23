@@ -163,6 +163,15 @@ export const setupProfileBodySchema = z.object({
   photoPublicId: optionalTrimmedString(200),
 });
 
+export const updateProfileBodySchema = z
+  .object({
+    username: usernameSchema,
+    displayName: optionalTrimmedString(80),
+    bio: optionalTrimmedString(500),
+    photoUrl: optionalTrimmedString(500),
+  })
+  .strict();
+
 export type SignUpInput = z.infer<typeof signUpBodySchema>;
 export type LoginInput = z.infer<typeof loginBodySchema>;
 export type GoogleLoginInput = z.infer<typeof googleLoginBodySchema>;
@@ -173,6 +182,7 @@ export type ResetPasswordInput = z.infer<typeof resetPasswordBodySchema>;
 export type RefreshTokenInput = z.infer<typeof refreshTokenBodySchema>;
 export type LogoutInput = z.infer<typeof logoutBodySchema>;
 export type SetupProfileInput = z.infer<typeof setupProfileBodySchema>;
+export type UpdateProfileInput = z.infer<typeof updateProfileBodySchema>;
 
 export const changePasswordBodySchema = z
   .object({

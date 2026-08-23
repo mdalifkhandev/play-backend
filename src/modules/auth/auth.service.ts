@@ -36,6 +36,7 @@ import type {
   SignUpInput,
   VerifyCodeInput,
   ChangePasswordInput,
+  UpdateProfileInput,
 } from './auth.validation.js';
 
 const appleJwks = createRemoteJWKSet(new URL('https://appleid.apple.com/auth/keys'));
@@ -449,6 +450,41 @@ export class AuthService {
 
   async getMe(userId: string): Promise<{ user: PublicUserDto }> {
     const user = await userRepository.findById(userId);
+
+    if (!user) {
+      throw new UnauthorizedError('Authenticated user was not found.', {
+        code: 'AUTHENTICATED_USER_NOT_FOUND',
+      });
+    }
+
+    return { user: toPublicUser(user) };
+  }
+
+  async updateProfile(userId: string, input: UpdateProfileInput): Promise<{ user: PublicUserDto }> {
+    if (input.username) {
+      const usernameTaken = await userRepository.existsByUsername(input.username, userId);
+
+      if (usernameTaken) {
+        throw new ConflictError('Username already taken.', {
+          code: AUTH_ERROR_CODES.USERNAME_TAKEN,
+          fieldErrors: [
+            {
+              field: 'username',
+              message: 'Username already taken.',
+              code: AUTH_ERROR_CODES.USERNAME_TAKEN,
+            },
+          ],
+        });
+      }
+    }
+
+    const user = await userRepository.updateProfile(userId, {
+      ...(input.username !== undefined ? { username: input.username } : {}),
+      ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
+      ...(input.bio !== undefined ? { bio: input.bio } : {}),
+      ...(input.photoUrl !== undefined ? { photoUrl: input.photoUrl } : {}),
+      isSetupComplete: true,
+    });
 
     if (!user) {
       throw new UnauthorizedError('Authenticated user was not found.', {

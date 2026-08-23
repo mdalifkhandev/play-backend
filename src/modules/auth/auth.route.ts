@@ -16,6 +16,7 @@ import {
   refreshTokenBodySchema,
   resetPasswordBodySchema,
   setupProfileBodySchema,
+  updateProfileBodySchema,
   signUpBodySchema,
   verifyCodeBodySchema,
   changePasswordBodySchema,
@@ -65,6 +66,7 @@ authRouter.post('/refresh', validateRequest({ body: refreshTokenBodySchema }), a
 authRouter.post('/logout', validateRequest({ body: logoutBodySchema }), authController.logout);
 
 authRouter.get('/me', authenticate, authController.me);
+authRouter.patch('/profile', authenticate, validateRequest({ body: updateProfileBodySchema }), authController.updateProfile);
 authRouter.put('/change-password', authenticate, validateRequest({ body: changePasswordBodySchema }), authController.changePassword);
 
 authRouter.patch(

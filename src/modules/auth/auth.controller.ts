@@ -105,6 +105,17 @@ export class AuthController {
     return sendSuccess(response, 200, 'Password updated successfully.', null);
   });
 
+  updateProfile = asyncHandler(async (request: Request, response: Response) => {
+    if (!request.user) {
+      throw new UnauthorizedError('Access token is required.', {
+        code: 'ACCESS_TOKEN_REQUIRED',
+      });
+    }
+
+    const result = await authService.updateProfile(request.user.userId, request.body);
+    return sendSuccess(response, 200, 'Profile updated successfully.', result);
+  });
+
   completeProfile = asyncHandler(async (request: Request, response: Response) => {
     if (!request.user) {
       throw new UnauthorizedError('Access token is required.', {
