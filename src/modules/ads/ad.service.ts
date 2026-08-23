@@ -219,9 +219,21 @@ function mapAdPage(items: AdCampaignDocument[], limit: number) {
 }
 
 function mapAd(ad: AdCampaignDocument) {
+  const owner = (ad as any).ownerId;
+  const ownerId = owner?._id ? owner._id.toString() : ad.ownerId.toString();
+
   return {
     id: ad._id.toString(),
-    ownerId: ad.ownerId.toString(),
+    ownerId,
+    owner: owner?._id
+      ? {
+          id: owner._id.toString(),
+          email: owner.email,
+          displayName: owner.profile?.displayName || owner.profile?.username || owner.email,
+          username: owner.profile?.username,
+          photoUrl: owner.profile?.photoUrl,
+        }
+      : null,
     category: ad.category,
     days: ad.days,
     budgetUsd: ad.budgetUsd,

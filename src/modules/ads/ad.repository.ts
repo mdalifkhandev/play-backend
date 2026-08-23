@@ -48,7 +48,9 @@ export class AdRepository {
   }
 
   async findById(adId: string): Promise<AdCampaignDocument | null> {
-    return AdCampaignModel.findById(adId).exec();
+    return AdCampaignModel.findById(adId)
+      .populate('ownerId', 'email profile.username profile.displayName profile.photoUrl')
+      .exec();
   }
 
   async listMine(userId: string, query: ListAdsQuery): Promise<AdCampaignDocument[]> {
@@ -56,7 +58,7 @@ export class AdRepository {
   }
 
   async listForAdmin(query: ListAdsQuery): Promise<AdCampaignDocument[]> {
-    return this.list({ query });
+    return this.list({ query, includeOwner: true });
   }
 
   async listActiveForFeed(limit: number): Promise<AdCampaignDocument[]> {
@@ -107,9 +109,11 @@ export class AdRepository {
   private async list({
     ownerId,
     query,
+    includeOwner,
   }: {
     ownerId?: string;
     query: ListAdsQuery;
+    includeOwner?: boolean;
   }): Promise<AdCampaignDocument[]> {
     const filter: Record<string, unknown> = {
       ...(ownerId ? { ownerId } : {}),
@@ -117,10 +121,15 @@ export class AdRepository {
       ...(query.cursor ? { createdAt: { $lt: new Date(query.cursor) } } : {}),
     };
 
-    return AdCampaignModel.find(filter)
+    const request = AdCampaignModel.find(filter)
       .sort({ createdAt: -1, _id: -1 })
-      .limit(query.limit + 1)
-      .exec();
+      .limit(query.limit + 1);
+
+    if (includeOwner) {
+      request.populate('ownerId', 'email profile.username profile.displayName profile.photoUrl');
+    }
+
+    return request.exec();
   }
 }
 
