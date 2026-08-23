@@ -7,7 +7,12 @@ import { validateRequest } from '../../common/middleware/validation.middleware.j
 import { followController } from './follow.controller.js';
 import { followListQuerySchema, followUserParamsSchema } from './follow.validation.js';
 import { userController } from './user.controller.js';
-import { kidsModePinSchema, updateKidsProfileSchema } from './user.validation.js';
+import {
+  discoverUsersQuerySchema,
+  kidsModePinSchema,
+  updateKidsProfileSchema,
+  usernameProfileParamsSchema,
+} from './user.validation.js';
 
 export const userRouter = Router();
 
@@ -37,6 +42,26 @@ userRouter.get(
   authenticate,
   validateRequest({ query: searchConversationUsersQuerySchema }),
   conversationController.searchUsers,
+);
+
+userRouter.get(
+  '/discover',
+  authenticate,
+  validateRequest({ query: discoverUsersQuerySchema }),
+  userController.discover,
+);
+
+userRouter.get(
+  '/me/share-profile',
+  authenticate,
+  userController.shareProfile,
+);
+
+userRouter.get(
+  '/by-username/:username/profile',
+  optionalAuthenticate,
+  validateRequest({ params: usernameProfileParamsSchema }),
+  userController.profileByUsername,
 );
 
 userRouter.get(
