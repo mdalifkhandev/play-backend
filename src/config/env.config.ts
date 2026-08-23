@@ -255,8 +255,17 @@ export const env = Object.freeze({
     'jesusname7-development-access-token-secret-change-before-production',
 });
 
+const defaultDevelopmentCorsOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5174',
+];
+
 export const corsOrigins = Object.freeze(
-  (env.CORS_ORIGINS ?? 'http://localhost:3000').split(',')
+  (env.CORS_ORIGINS ?? defaultDevelopmentCorsOrigins.join(',')).split(',')
     .map((origin) => origin.trim())
     .filter(Boolean),
 );
