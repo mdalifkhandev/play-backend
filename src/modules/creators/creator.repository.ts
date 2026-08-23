@@ -81,8 +81,8 @@ export class CreatorRepository {
       ...(input.contentCategoryId ? { contentCategoryId: new Types.ObjectId(input.contentCategoryId) } : {}),
       ...(input.contentLanguageCode ? { contentLanguageCode: input.contentLanguageCode } : {}),
       ...(input.countryCode ? { countryCode: input.countryCode } : {}),
-      ...(input.idFrontUrl ? { idFrontUrl: input.idFrontUrl } : {}),
-      ...(input.idBackUrl ? { idBackUrl: input.idBackUrl } : {}),
+      idFrontUrl: input.idFrontUrl,
+      idBackUrl: input.idBackUrl,
       status: 'pending',
     });
   }

@@ -18,8 +18,8 @@ export interface CreatorApplication {
   countryCode?: string;
   country: string;
   reason: string;
-  idFrontUrl?: string;
-  idBackUrl?: string;
+  idFrontUrl: string;
+  idBackUrl: string;
   status: CreatorApplicationStatus;
   adminReason?: string;
   reviewedBy?: Types.ObjectId;
@@ -45,8 +45,8 @@ const creatorApplicationSchema = new Schema<CreatorApplication>(
     countryCode: { type: String, trim: true, uppercase: true, maxlength: 2 },
     country: { type: String, required: true, trim: true, maxlength: 80 },
     reason: { type: String, required: true, trim: true, maxlength: 1000 },
-    idFrontUrl: { type: String, trim: true, maxlength: 1000 },
-    idBackUrl: { type: String, trim: true, maxlength: 1000 },
+    idFrontUrl: { type: String, required: true, trim: true, maxlength: 1000 },
+    idBackUrl: { type: String, required: true, trim: true, maxlength: 1000 },
     status: {
       type: String,
       enum: creatorApplicationStatuses,

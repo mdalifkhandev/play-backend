@@ -108,7 +108,7 @@ export class CreatorService {
 
     const completedSteps = requirements.filter((item) => item.complete).length;
     const totalSteps = requirements.length;
-    const progress = Math.round((completedSteps / totalSteps) * 100);
+    const progress = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 100;
     const isCreator = user.role === UserRole.CREATOR;
     const canApply = completedSteps === totalSteps && !['pending', 'held', 'approved'].includes(application?.status ?? '');
 

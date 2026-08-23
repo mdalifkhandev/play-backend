@@ -16,8 +16,8 @@ export const createCreatorApplicationBodySchema = z
     countryCode: z.string().trim().length(2).optional(),
     country: z.string().trim().min(2).max(80),
     reason: z.string().trim().min(20).max(1000),
-    idFrontUrl: z.string().trim().url().optional(),
-    idBackUrl: z.string().trim().url().optional(),
+    idFrontUrl: z.string().trim().url('ID card front image is required.'),
+    idBackUrl: z.string().trim().url('ID card back image is required.'),
   })
   .strict();
 
