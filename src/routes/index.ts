@@ -33,6 +33,7 @@ import { subscriptionRouter } from '../modules/subscriptions/subscription.route.
 import { adAdminRouter, adRouter } from '../modules/ads/ad.route.js';
 import { creatorAdminRouter, creatorRouter } from '../modules/creators/creator.route.js';
 import { moderationAdminRouter, moderationRouter } from '../modules/moderation/moderation.route.js';
+import { monetizationAdminRouter } from '../modules/monetization/monetization.route.js';
 
 export const apiRouter = Router();
 
@@ -67,4 +68,5 @@ apiRouter.use('/admin/ads', adAdminRouter);
 apiRouter.use('/admin/creators', creatorAdminRouter);
 apiRouter.use('/admin/users', userAdminRouter);
 apiRouter.use('/admin/moderation', moderationAdminRouter);
+apiRouter.use('/admin/monetization', monetizationAdminRouter);
 

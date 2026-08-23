@@ -1,0 +1,279 @@
+import { Types } from 'mongoose';
+
+import { AdCampaignModel } from '../ads/ad-campaign.model.js';
+import { CoinTransactionModel } from '../coins/coin-transaction.model.js';
+import { WithdrawalRequestModel } from '../coins/withdrawal-request.model.js';
+import { CreatorRequirementSettingModel } from '../creators/creator-requirement-setting.model.js';
+import { UserModel } from '../users/user.model.js';
+import { MonetizationSettingModel } from './monetization-setting.model.js';
+import type {
+  UpdateCreatorRequirementSettingsInput,
+  UpdateMonetizationSettingsInput,
+} from './monetization.validation.js';
+
+const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'];
+
+export class MonetizationService {
+  async getDashboard() {
+    const [setting, adRevenue, coinRevenue, subscriptionRevenue, payouts, creatorRows] = await Promise.all([
+      this.getSetting(),
+      this.sumAdRevenue(),
+      this.sumCoinRevenue({ excludeProvider: 'diamond_conversion' }),
+      this.sumSubscriptionRevenue(),
+      this.sumPayouts(),
+      this.getCreatorEarnings(),
+    ]);
+
+    const totalRevenue = adRevenue + coinRevenue + subscriptionRevenue;
+    const breakdown = [
+      { name: 'Ad Revenue', value: adRevenue },
+      { name: 'Coin Purchases', value: coinRevenue },
+      { name: 'Premium Subscription', value: subscriptionRevenue },
+    ];
+
+    return {
+      summary: {
+        totalRevenue,
+        adRevenue,
+        coinRevenue,
+        subscriptionRevenue,
+        pendingPayouts: payouts.pending,
+        completedPayouts: payouts.completed,
+      },
+      revenueBreakdown: toPercentBreakdown(breakdown),
+      creatorEarnings: creatorRows,
+      settings: {
+        creatorSharePercent: setting.creatorSharePercent,
+        adminSharePercent: 100 - setting.creatorSharePercent,
+      },
+      creatorRequirements: await this.getCreatorRequirementSettings(),
+      revenueTrend: await this.getRevenueTrend(),
+    };
+  }
+
+  async updateSettings(adminUserId: string, input: UpdateMonetizationSettingsInput) {
+    const setting = await MonetizationSettingModel.findOneAndUpdate(
+      {},
+      {
+        $set: {
+          creatorSharePercent: input.creatorSharePercent,
+          updatedBy: new Types.ObjectId(adminUserId),
+        },
+      },
+      { new: true, upsert: true, runValidators: true },
+    ).exec();
+
+    return {
+      creatorSharePercent: setting.creatorSharePercent,
+      adminSharePercent: 100 - setting.creatorSharePercent,
+    };
+  }
+
+  async updateCreatorRequirements(adminUserId: string, input: UpdateCreatorRequirementSettingsInput) {
+    const setting = await CreatorRequirementSettingModel.findOneAndUpdate(
+      {},
+      {
+        $set: {
+          ...input,
+          updatedBy: new Types.ObjectId(adminUserId),
+        },
+      },
+      { new: true, upsert: true, runValidators: true },
+    ).exec();
+
+    return mapCreatorRequirementSettings(setting);
+  }
+
+  private async getSetting() {
+    let setting = await MonetizationSettingModel.findOne().exec();
+    if (!setting) {
+      setting = await MonetizationSettingModel.create({ creatorSharePercent: 60 });
+    }
+    return setting;
+  }
+
+  private async getCreatorRequirementSettings() {
+    let setting = await CreatorRequirementSettingModel.findOne().exec();
+    if (!setting) {
+      setting = await CreatorRequirementSettingModel.create({});
+    }
+
+    return mapCreatorRequirementSettings(setting);
+  }
+
+  private async sumAdRevenue() {
+    const [result] = await AdCampaignModel.aggregate<{ total: number }>([
+      { $match: { status: { $in: ['approved', 'active', 'paused', 'completed'] } } },
+      { $group: { _id: null, total: { $sum: { $ifNull: ['$metrics.spendUsd', '$budgetUsd'] } } } },
+    ]).exec();
+
+    return Number(result?.total ?? 0);
+  }
+
+  private async sumCoinRevenue({ excludeProvider }: { excludeProvider?: string } = {}) {
+    const match: Record<string, unknown> = { status: 'completed' };
+    if (excludeProvider) match.paymentProvider = { $ne: excludeProvider };
+
+    const [result] = await CoinTransactionModel.aggregate<{ total: number }>([
+      { $match: match },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]).exec();
+
+    return Number(result?.total ?? 0);
+  }
+
+  private async sumSubscriptionRevenue() {
+    const [monthly, yearly] = await Promise.all([
+      UserModel.countDocuments({ subscriptionStatus: 'active', subscriptionPlan: 'monthly' }),
+      UserModel.countDocuments({ subscriptionStatus: 'active', subscriptionPlan: 'yearly' }),
+    ]);
+
+    return monthly * 4.99 + yearly * 49.99;
+  }
+
+  private async sumPayouts() {
+    const rows = await WithdrawalRequestModel.aggregate<{ _id: string; total: number }>([
+      { $group: { _id: '$status', total: { $sum: '$amountUsd' } } },
+    ]).exec();
+
+    return rows.reduce(
+      (acc, row) => {
+        if (row._id === 'pending') acc.pending += row.total;
+        if (['approved', 'transferred'].includes(row._id)) acc.completed += row.total;
+        return acc;
+      },
+      { pending: 0, completed: 0 },
+    );
+  }
+
+  private async getCreatorEarnings() {
+    const rows = await WithdrawalRequestModel.aggregate<{
+      _id: Types.ObjectId;
+      total: number;
+      thisMonth: number;
+      pending: number;
+      transferred: number;
+    }>([
+      {
+        $group: {
+          _id: '$userId',
+          total: { $sum: '$amountUsd' },
+          thisMonth: {
+            $sum: {
+              $cond: [{ $gte: ['$createdAt', monthStart()] }, '$amountUsd', 0],
+            },
+          },
+          pending: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } },
+          transferred: { $sum: { $cond: [{ $in: ['$status', ['approved', 'transferred']] }, 1, 0] } },
+        },
+      },
+      { $sort: { total: -1 } },
+      { $limit: 20 },
+    ]).exec();
+
+    const users = await UserModel.find({ _id: { $in: rows.map((row) => row._id) } })
+      .select('email profile.username profile.displayName')
+      .lean()
+      .exec();
+    const usersById = new Map(users.map((user) => [user._id.toString(), user]));
+
+    return rows.map((row) => {
+      const user = usersById.get(row._id.toString());
+      return {
+        id: row._id.toString(),
+        name: user?.profile?.displayName || user?.profile?.username || user?.email || 'Creator',
+        total: Number(row.total.toFixed(2)),
+        thisMonth: Number(row.thisMonth.toFixed(2)),
+        payout: row.pending > 0 ? 'Pending' : row.transferred > 0 ? 'Paid' : 'Processing',
+      };
+    });
+  }
+
+  private async getRevenueTrend() {
+    const [ads, coins] = await Promise.all([
+      AdCampaignModel.aggregate<{ month: string; revenue: number }>([
+        { $match: { status: { $in: ['approved', 'active', 'paused', 'completed'] } } },
+        {
+          $group: {
+            _id: { $dateToString: { format: '%b', date: '$createdAt' } },
+            revenue: { $sum: { $ifNull: ['$metrics.spendUsd', '$budgetUsd'] } },
+          },
+        },
+        { $project: { _id: 0, month: '$_id', revenue: 1 } },
+      ]).exec(),
+      CoinTransactionModel.aggregate<{ month: string; revenue: number }>([
+        { $match: { status: 'completed', paymentProvider: { $ne: 'diamond_conversion' } } },
+        {
+          $group: {
+            _id: { $dateToString: { format: '%b', date: '$createdAt' } },
+            revenue: { $sum: '$amount' },
+          },
+        },
+        { $project: { _id: 0, month: '$_id', revenue: 1 } },
+      ]).exec(),
+    ]);
+
+    const totals = new Map(months.map((month) => [month, 0]));
+    [...ads, ...coins].forEach((row) => {
+      if (totals.has(row.month)) totals.set(row.month, (totals.get(row.month) ?? 0) + row.revenue);
+    });
+
+    return months.map((month) => ({ month, revenue: Number((totals.get(month) ?? 0).toFixed(2)) }));
+  }
+}
+
+export const monetizationService = new MonetizationService();
+
+function monthStart() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1);
+}
+
+function toPercentBreakdown(rows: { name: string; value: number }[]) {
+  const total = rows.reduce((sum, row) => sum + row.value, 0);
+  if (total <= 0) {
+    return rows.map((row) => ({ name: row.name, value: 0, amount: 0 }));
+  }
+
+  return rows.map((row) => ({
+    name: row.name,
+    value: Math.round((row.value / total) * 100),
+    amount: Number(row.value.toFixed(2)),
+  }));
+}
+
+function mapCreatorRequirementSettings(setting: {
+  profileEnabled?: boolean;
+  followers: number;
+  followersEnabled?: boolean;
+  views: number;
+  viewsEnabled?: boolean;
+  watchTimeMinutes: number;
+  watchTimeEnabled?: boolean;
+  likes: number;
+  likesEnabled?: boolean;
+  accountAgeDays: number;
+  accountAgeEnabled?: boolean;
+  reels: number;
+  reelsEnabled?: boolean;
+  reportLimit: number;
+  guidelinesEnabled?: boolean;
+}) {
+  return {
+    profileEnabled: setting.profileEnabled ?? true,
+    followers: setting.followers,
+    followersEnabled: setting.followersEnabled ?? true,
+    views: setting.views,
+    viewsEnabled: setting.viewsEnabled ?? true,
+    watchTimeMinutes: setting.watchTimeMinutes,
+    watchTimeEnabled: setting.watchTimeEnabled ?? false,
+    likes: setting.likes,
+    likesEnabled: setting.likesEnabled ?? false,
+    accountAgeDays: setting.accountAgeDays,
+    accountAgeEnabled: setting.accountAgeEnabled ?? true,
+    reels: setting.reels,
+    reelsEnabled: setting.reelsEnabled ?? false,
+    reportLimit: setting.reportLimit,
+    guidelinesEnabled: setting.guidelinesEnabled ?? true,
+  };
+}

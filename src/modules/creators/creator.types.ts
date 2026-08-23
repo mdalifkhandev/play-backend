@@ -17,6 +17,7 @@ export interface CreatorRequirementDTO {
   target: number;
   complete: boolean;
   locked?: boolean;
+  enabled?: boolean;
 }
 
 export interface CreatorApplicationSummaryDTO {

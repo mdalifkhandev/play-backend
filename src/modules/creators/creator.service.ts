@@ -1,6 +1,7 @@
 import { AppError } from '../../common/errors/app-error.js';
 import { NotFoundError } from '../../common/errors/not-found-error.js';
 import { UserRole } from '../../common/enums/user-role.enum.js';
+import { CreatorRequirementSettingModel } from './creator-requirement-setting.model.js';
 import { creatorRepository, type CreatorRepository } from './creator.repository.js';
 import type {
   CreatorApplicationSummaryDTO,
@@ -12,25 +13,16 @@ import type {
   CreateCreatorApplicationInput,
 } from './creator.validation.js';
 
-const CREATOR_REQUIREMENTS = Object.freeze({
-  followers: 1000,
-  views: 100_000,
-  watchTimeMinutes: 1_000,
-  likes: 10_000,
-  accountAgeDays: 30,
-  reels: 3,
-  reportLimit: 0,
-});
-
 export class CreatorService {
   constructor(private readonly repository: CreatorRepository = creatorRepository) {}
 
   async getMyEligibility(userId: string): Promise<CreatorEligibilityDTO> {
-    const [user, followersCount, reelStats, application] = await Promise.all([
+    const [user, followersCount, reelStats, application, requirementSettings] = await Promise.all([
       this.repository.findUser(userId),
       this.repository.countFollowers(userId),
       this.repository.getReelStats(userId),
       this.repository.findLatestApplication(userId),
+      getCreatorRequirementSettings(),
     ]);
 
     if (!user) {
@@ -45,44 +37,74 @@ export class CreatorService {
         user.profile?.photoUrl,
     );
 
-    const requirements: CreatorRequirementDTO[] = [
+    const allRequirements: CreatorRequirementDTO[] = [
       {
         key: 'profile',
         title: 'Profile Complete',
         current: profileComplete ? 1 : 0,
         target: 1,
         complete: profileComplete,
+        enabled: requirementSettings.profileEnabled,
       },
       {
         key: 'followers',
         title: 'Followers',
         current: followersCount,
-        target: CREATOR_REQUIREMENTS.followers,
-        complete: followersCount >= CREATOR_REQUIREMENTS.followers,
+        target: requirementSettings.followers,
+        complete: followersCount >= requirementSettings.followers,
+        enabled: requirementSettings.followersEnabled,
       },
       {
         key: 'views',
         title: 'Video Views',
         current: reelStats.totalViews,
-        target: CREATOR_REQUIREMENTS.views,
-        complete: reelStats.totalViews >= CREATOR_REQUIREMENTS.views,
+        target: requirementSettings.views,
+        complete: reelStats.totalViews >= requirementSettings.views,
+        enabled: requirementSettings.viewsEnabled,
+      },
+      {
+        key: 'watch_time',
+        title: 'Watch Time',
+        current: reelStats.watchTimeMinutes,
+        target: requirementSettings.watchTimeMinutes,
+        complete: reelStats.watchTimeMinutes >= requirementSettings.watchTimeMinutes,
+        enabled: requirementSettings.watchTimeEnabled,
+      },
+      {
+        key: 'likes',
+        title: 'Likes',
+        current: reelStats.totalLikes,
+        target: requirementSettings.likes,
+        complete: reelStats.totalLikes >= requirementSettings.likes,
+        enabled: requirementSettings.likesEnabled,
       },
       {
         key: 'account_age',
         title: 'Account Age',
         current: accountAgeDays,
-        target: CREATOR_REQUIREMENTS.accountAgeDays,
-        complete: accountAgeDays >= CREATOR_REQUIREMENTS.accountAgeDays,
+        target: requirementSettings.accountAgeDays,
+        complete: accountAgeDays >= requirementSettings.accountAgeDays,
+        enabled: requirementSettings.accountAgeEnabled,
+      },
+      {
+        key: 'reels',
+        title: 'Reels Posted',
+        current: reelStats.reelsCount,
+        target: requirementSettings.reels,
+        complete: reelStats.reelsCount >= requirementSettings.reels,
+        enabled: requirementSettings.reelsEnabled,
       },
       {
         key: 'guidelines',
         title: 'Community Guidelines',
-        current: Math.max(0, CREATOR_REQUIREMENTS.reportLimit - reelStats.totalReports),
-        target: 1,
-        complete: reelStats.totalReports <= CREATOR_REQUIREMENTS.reportLimit,
-        locked: reelStats.totalReports > CREATOR_REQUIREMENTS.reportLimit,
+        current: reelStats.totalReports,
+        target: requirementSettings.reportLimit,
+        complete: reelStats.totalReports <= requirementSettings.reportLimit,
+        locked: reelStats.totalReports > requirementSettings.reportLimit,
+        enabled: requirementSettings.guidelinesEnabled,
       },
     ];
+    const requirements = allRequirements.filter((item) => item.enabled !== false);
 
     const completedSteps = requirements.filter((item) => item.complete).length;
     const totalSteps = requirements.length;
@@ -139,6 +161,31 @@ export class CreatorService {
 }
 
 export const creatorService = new CreatorService();
+
+async function getCreatorRequirementSettings() {
+  let setting = await CreatorRequirementSettingModel.findOne().lean().exec();
+  if (!setting) {
+    setting = await CreatorRequirementSettingModel.create({});
+  }
+
+  return {
+    profileEnabled: setting.profileEnabled ?? true,
+    followers: setting.followers,
+    followersEnabled: setting.followersEnabled ?? true,
+    views: setting.views,
+    viewsEnabled: setting.viewsEnabled ?? true,
+    watchTimeMinutes: setting.watchTimeMinutes,
+    watchTimeEnabled: setting.watchTimeEnabled ?? false,
+    likes: setting.likes,
+    likesEnabled: setting.likesEnabled ?? false,
+    accountAgeDays: setting.accountAgeDays,
+    accountAgeEnabled: setting.accountAgeEnabled ?? true,
+    reels: setting.reels,
+    reelsEnabled: setting.reelsEnabled ?? false,
+    reportLimit: setting.reportLimit,
+    guidelinesEnabled: setting.guidelinesEnabled ?? true,
+  };
+}
 
 function mapApplicationSummary(application: any): CreatorApplicationSummaryDTO {
   return {
