@@ -78,6 +78,9 @@ export class CreatorRepository {
       ...(input.dateOfBirth ? { dateOfBirth: input.dateOfBirth } : {}),
       ...(input.occupationId ? { occupationId: new Types.ObjectId(input.occupationId) } : {}),
       ...(input.occupation ? { occupation: input.occupation } : {}),
+      ...(input.contentCategoryId ? { contentCategoryId: new Types.ObjectId(input.contentCategoryId) } : {}),
+      ...(input.contentLanguageCode ? { contentLanguageCode: input.contentLanguageCode } : {}),
+      ...(input.countryCode ? { countryCode: input.countryCode } : {}),
       ...(input.idFrontUrl ? { idFrontUrl: input.idFrontUrl } : {}),
       ...(input.idBackUrl ? { idBackUrl: input.idBackUrl } : {}),
       status: 'pending',
@@ -93,6 +96,7 @@ export class CreatorRepository {
       .limit(query.limit)
       .populate('userId', 'email role profile.displayName profile.username profile.photoUrl')
       .populate('occupationId', 'name')
+      .populate('contentCategoryId', 'name')
       .populate('reviewedBy', 'email profile.displayName profile.username')
       .exec();
   }
@@ -101,6 +105,7 @@ export class CreatorRepository {
     return CreatorApplicationModel.findById(id)
       .populate('userId', 'email role profile.displayName profile.username profile.photoUrl')
       .populate('occupationId', 'name')
+      .populate('contentCategoryId', 'name')
       .populate('reviewedBy', 'email profile.displayName profile.username')
       .exec();
   }

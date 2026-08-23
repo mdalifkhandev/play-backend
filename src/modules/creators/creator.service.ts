@@ -214,6 +214,14 @@ function mapAdminApplication(application: any) {
         }
       : {}),
     contentCategory: application.contentCategory,
+    ...(application.contentCategoryId
+      ? {
+          contentCategoryData: {
+            id: application.contentCategoryId?._id?.toString?.() || application.contentCategoryId.toString(),
+            name: application.contentCategoryId?.name || application.contentCategory,
+          },
+        }
+      : {}),
     contentLanguage: application.contentLanguage,
     country: application.country,
     reason: application.reason,

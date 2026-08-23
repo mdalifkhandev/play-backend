@@ -11,8 +11,11 @@ export interface CreatorApplication {
   dateOfBirth?: Date;
   occupationId?: Types.ObjectId;
   occupation?: string;
+  contentCategoryId?: Types.ObjectId;
   contentCategory: string;
+  contentLanguageCode?: string;
   contentLanguage: string;
+  countryCode?: string;
   country: string;
   reason: string;
   idFrontUrl?: string;
@@ -35,8 +38,11 @@ const creatorApplicationSchema = new Schema<CreatorApplication>(
     dateOfBirth: { type: Date },
     occupationId: { type: Schema.Types.ObjectId, ref: 'Occupation' },
     occupation: { type: String, trim: true, maxlength: 120 },
+    contentCategoryId: { type: Schema.Types.ObjectId, ref: 'CreatorCategory' },
     contentCategory: { type: String, required: true, trim: true, maxlength: 80 },
+    contentLanguageCode: { type: String, trim: true, lowercase: true, maxlength: 12 },
     contentLanguage: { type: String, required: true, trim: true, maxlength: 80 },
+    countryCode: { type: String, trim: true, uppercase: true, maxlength: 2 },
     country: { type: String, required: true, trim: true, maxlength: 80 },
     reason: { type: String, required: true, trim: true, maxlength: 1000 },
     idFrontUrl: { type: String, trim: true, maxlength: 1000 },
