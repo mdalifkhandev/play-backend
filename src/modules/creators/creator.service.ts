@@ -156,15 +156,30 @@ function mapAdminApplication(application: any) {
     ...mapApplicationSummary(application),
     fullName: application.fullName,
     email: application.email,
+    ...(application.dateOfBirth ? { dateOfBirth: application.dateOfBirth.toISOString().slice(0, 10) } : {}),
+    ...(application.occupation ? { occupation: application.occupation } : {}),
     contentCategory: application.contentCategory,
     contentLanguage: application.contentLanguage,
     country: application.country,
     reason: application.reason,
+    ...(application.idFrontUrl ? { idFrontUrl: application.idFrontUrl } : {}),
+    ...(application.idBackUrl ? { idBackUrl: application.idBackUrl } : {}),
+    ...(application.adminReason ? { adminReason: application.adminReason } : {}),
+    ...(application.reviewedAt ? { reviewedAt: application.reviewedAt.toISOString() } : {}),
     user: {
       id: user?._id?.toString() || application.userId.toString(),
       email: user?.email,
       role: user?.role,
       profile: user?.profile,
     },
+    ...(application.reviewedBy
+      ? {
+          reviewedBy: {
+            id: application.reviewedBy?._id?.toString(),
+            email: application.reviewedBy?.email,
+            profile: application.reviewedBy?.profile,
+          },
+        }
+      : {}),
   };
 }
