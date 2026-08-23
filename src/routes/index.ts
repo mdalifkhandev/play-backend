@@ -32,6 +32,7 @@ import { rewardRouter } from '../modules/rewards/reward.route.js';
 import { subscriptionRouter } from '../modules/subscriptions/subscription.route.js';
 import { adAdminRouter, adRouter } from '../modules/ads/ad.route.js';
 import { creatorAdminRouter, creatorRouter } from '../modules/creators/creator.route.js';
+import { moderationAdminRouter, moderationRouter } from '../modules/moderation/moderation.route.js';
 
 export const apiRouter = Router();
 
@@ -46,6 +47,7 @@ apiRouter.use('/creators', creatorRouter);
 apiRouter.use('/kids-mode', kidsModeRouter);
 apiRouter.use('/coins', coinRouter);
 apiRouter.use('/ads', adRouter);
+apiRouter.use('/reports', moderationRouter);
 apiRouter.use('/content-pages', contentPageRouter);
 apiRouter.use('/legal-consents', legalConsentRouter);
 apiRouter.use('/uploads', mediaAssetRouter);
@@ -64,4 +66,5 @@ apiRouter.use('/admin/support-requests', supportRequestAdminRouter);
 apiRouter.use('/admin/ads', adAdminRouter);
 apiRouter.use('/admin/creators', creatorAdminRouter);
 apiRouter.use('/admin/users', userAdminRouter);
+apiRouter.use('/admin/moderation', moderationAdminRouter);
 
