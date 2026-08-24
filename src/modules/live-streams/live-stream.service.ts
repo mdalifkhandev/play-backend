@@ -1,6 +1,7 @@
 import agoraToken from 'agora-token';
 import { env } from '../../config/env.config.js';
 import { AppError } from '../../common/errors/app-error.js';
+import { logger } from '../../infrastructure/logger/logger.js';
 import { LIVE_STREAM_ROLE, LIVE_STREAM_STATUS } from './live-stream.constants.js';
 import { liveStreamRepository, LiveStreamRepository } from './live-stream.repository.js';
 import type {
@@ -15,6 +16,7 @@ import type { ILiveStream } from './live-stream.model.js';
 import type { ILiveStreamComment } from './live-stream-comment.model.js';
 import { broadcastLiveStreamStatus } from './live-stream.gateway.js';
 import { activityService } from '../activities/activity.service.js';
+import { isRecordingActive, liveStreamRecordingService } from './live-stream-recording.service.js';
 
 const { RtcTokenBuilder, RtcRole } = agoraToken;
 
@@ -106,6 +108,9 @@ export class LiveStreamService {
 
     const response = this.mapToResponse(updated);
     broadcastLiveStreamStatus(response);
+    this.startRecordingInBackground(String(updated._id), updated.channelName).catch((error) => {
+      logger.error({ err: error, streamId }, 'Unexpected live recording start background error');
+    });
     return response;
   }
 
@@ -123,6 +128,15 @@ export class LiveStreamService {
 
     if (stream.status === LIVE_STREAM_STATUS.ENDED) {
       return this.mapToResponse(stream);
+    }
+
+    const activeRecording = stream.recording;
+    if (activeRecording && isRecordingActive(activeRecording)) {
+      const recording = { ...activeRecording, status: 'stopping' as const };
+      await this.repository.updateRecordingState(streamId, recording);
+      this.stopRecordingInBackground(streamId, stream.channelName, activeRecording).catch((error) => {
+        logger.error({ err: error, streamId }, 'Unexpected live recording stop background error');
+      });
     }
 
     const updated = await this.repository.updateStatus(streamId, LIVE_STREAM_STATUS.ENDED, {
@@ -333,6 +347,52 @@ export class LiveStreamService {
     return { sharesCount: updated.sharesCount };
   }
 
+  private async startRecordingInBackground(streamId: string, channelName: string): Promise<void> {
+    if (!liveStreamRecordingService.isEnabled()) {
+      return;
+    }
+
+    await this.repository.updateRecordingState(streamId, {
+      status: 'starting',
+      mode: env.AGORA_RECORDING_MODE,
+    });
+
+    try {
+      const recording = await liveStreamRecordingService.start({ streamId, channelName });
+      if (recording) {
+        await this.repository.updateRecordingState(streamId, recording);
+      }
+    } catch (error) {
+      logger.error({ err: error, streamId }, 'Agora cloud recording start failed');
+      await this.repository.updateRecordingState(streamId, {
+        status: 'failed',
+        mode: env.AGORA_RECORDING_MODE,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private async stopRecordingInBackground(
+    streamId: string,
+    channelName: string,
+    recording: NonNullable<ILiveStream['recording']>,
+  ): Promise<void> {
+    try {
+      const stoppedRecording = await liveStreamRecordingService.stop({ streamId, channelName, recording });
+      if (stoppedRecording) {
+        await this.repository.updateRecordingState(streamId, stoppedRecording);
+      }
+    } catch (error) {
+      logger.error({ err: error, streamId }, 'Agora cloud recording stop failed');
+      await this.repository.updateRecordingState(streamId, {
+        ...recording,
+        status: 'failed',
+        stoppedAt: new Date(),
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   private async requireLiveStream(streamId: string): Promise<ILiveStream> {
     const stream = await this.repository.findById(streamId);
     if (!stream) {
@@ -377,6 +437,16 @@ export class LiveStreamService {
     if (stream.category) response.category = stream.category;
     if (stream.startedAt) response.startedAt = stream.startedAt.toISOString();
     if (stream.endedAt) response.endedAt = stream.endedAt.toISOString();
+    if (stream.recording) {
+      response.recording = {
+        status: stream.recording.status,
+      };
+      if (stream.recording.mode) response.recording.mode = stream.recording.mode;
+      if (stream.recording.startedAt) response.recording.startedAt = stream.recording.startedAt.toISOString();
+      if (stream.recording.stoppedAt) response.recording.stoppedAt = stream.recording.stoppedAt.toISOString();
+      if (stream.recording.fileList) response.recording.fileList = stream.recording.fileList;
+      if (stream.recording.errorMessage) response.recording.errorMessage = stream.recording.errorMessage;
+    }
 
     return response;
   }

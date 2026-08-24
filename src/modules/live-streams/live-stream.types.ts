@@ -33,6 +33,15 @@ export interface LiveStreamHostResponseDTO {
   isVerified?: boolean;
 }
 
+export interface LiveRecordingResponseDTO {
+  status: string;
+  mode?: 'mix' | 'individual';
+  startedAt?: string;
+  stoppedAt?: string;
+  fileList?: unknown;
+  errorMessage?: string;
+}
+
 export interface LiveStreamResponseDTO {
   id: string;
   hostId: LiveStreamHostResponseDTO;
@@ -50,6 +59,7 @@ export interface LiveStreamResponseDTO {
   category?: string;
   startedAt?: string;
   endedAt?: string;
+  recording?: LiveRecordingResponseDTO;
   createdAt: string;
 }
 

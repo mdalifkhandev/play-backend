@@ -2,6 +2,26 @@ import mongoose, { type Document, Schema } from 'mongoose';
 
 import { LIVE_STREAM_STATUS, type LiveStreamStatus } from './live-stream.constants.js';
 
+export type LiveRecordingStatus =
+  | 'disabled'
+  | 'starting'
+  | 'recording'
+  | 'stopping'
+  | 'stopped'
+  | 'failed';
+
+export interface ILiveRecordingState {
+  status: LiveRecordingStatus;
+  uid?: string;
+  resourceId?: string;
+  sid?: string;
+  mode?: 'mix' | 'individual';
+  fileList?: unknown;
+  startedAt?: Date;
+  stoppedAt?: Date;
+  errorMessage?: string;
+}
+
 export interface ILiveStream extends Document {
   hostId: mongoose.Types.ObjectId;
   title: string;
@@ -18,6 +38,7 @@ export interface ILiveStream extends Document {
   sharesCount: number;
   giftsCount: number;
   category?: string;
+  recording?: ILiveRecordingState;
   startedAt?: Date;
   endedAt?: Date;
   createdAt: Date;
@@ -103,6 +124,42 @@ const liveStreamSchema = new Schema<ILiveStream>(
       type: String,
       trim: true,
       default: 'General',
+    },
+    recording: {
+      status: {
+        type: String,
+        enum: ['disabled', 'starting', 'recording', 'stopping', 'stopped', 'failed'],
+        default: 'disabled',
+      },
+      uid: {
+        type: String,
+        trim: true,
+      },
+      resourceId: {
+        type: String,
+        trim: true,
+      },
+      sid: {
+        type: String,
+        trim: true,
+      },
+      mode: {
+        type: String,
+        enum: ['mix', 'individual'],
+      },
+      fileList: {
+        type: Schema.Types.Mixed,
+      },
+      startedAt: {
+        type: Date,
+      },
+      stoppedAt: {
+        type: Date,
+      },
+      errorMessage: {
+        type: String,
+        trim: true,
+      },
     },
     startedAt: {
       type: Date,

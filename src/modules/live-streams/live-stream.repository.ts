@@ -110,6 +110,23 @@ export class LiveStreamRepository {
     ).populate('hostId', 'profile email isVerified');
   }
 
+  async updateRecordingState(
+    id: string,
+    recording: NonNullable<ILiveStream['recording']>,
+  ): Promise<ILiveStream | null> {
+    if (!mongoose.Types.ObjectId.isValid(id)) return null;
+
+    return LiveStreamModel.findByIdAndUpdate(
+      id,
+      {
+        $set: {
+          recording,
+        },
+      },
+      { new: true },
+    ).populate('hostId', 'profile email isVerified');
+  }
+
   async incrementViewerCount(id: string): Promise<ILiveStream | null> {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
 

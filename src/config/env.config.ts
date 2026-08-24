@@ -83,6 +83,21 @@ const environmentSchema = z
     JAMENDO_CLIENT_ID: z.string().trim().min(1).optional(),
     AGORA_APP_ID: z.string().trim().min(1).optional(),
     AGORA_APP_CERTIFICATE: z.string().trim().min(1).optional(),
+    AGORA_CLOUD_RECORDING_ENABLED: z
+      .enum(['true', 'false'])
+      .transform((value) => value === 'true')
+      .default(false),
+    AGORA_CUSTOMER_ID: z.string().trim().min(1).optional(),
+    AGORA_CUSTOMER_SECRET: z.string().trim().min(1).optional(),
+    AGORA_RECORDING_MODE: z.enum(['mix', 'individual']).default('mix'),
+    AGORA_RECORDING_UID_SEED: z.string().trim().min(1).default('recording'),
+    AGORA_RECORDING_MAX_IDLE_TIME_SECONDS: z.coerce.number().int().positive().max(3600).default(30),
+    AGORA_RECORDING_STORAGE_VENDOR: z.coerce.number().int().positive().optional(),
+    AGORA_RECORDING_STORAGE_REGION: z.coerce.number().int().nonnegative().optional(),
+    AGORA_RECORDING_STORAGE_BUCKET: z.string().trim().min(1).optional(),
+    AGORA_RECORDING_STORAGE_ACCESS_KEY: z.string().trim().min(1).optional(),
+    AGORA_RECORDING_STORAGE_SECRET_KEY: z.string().trim().min(1).optional(),
+    AGORA_RECORDING_FILE_PREFIX: z.string().trim().min(1).default('live-recordings'),
     STORY_DURATION_HOURS: z.coerce.number().int().positive().max(168).default(24),
     STORY_IMAGE_MAX_BYTES: z.coerce.number().int().positive().default(10 * 1024 * 1024),
     STORY_VIDEO_MAX_BYTES: z.coerce.number().int().positive().default(100 * 1024 * 1024),
@@ -131,6 +146,30 @@ const environmentSchema = z
         path: [value.AGORA_APP_ID ? 'AGORA_APP_CERTIFICATE' : 'AGORA_APP_ID'],
         message: 'AGORA_APP_ID and AGORA_APP_CERTIFICATE must be configured together.',
       });
+    }
+
+    if (value.AGORA_CLOUD_RECORDING_ENABLED) {
+      const requiredAgoraRecordingFields = [
+        ['AGORA_APP_ID', value.AGORA_APP_ID],
+        ['AGORA_APP_CERTIFICATE', value.AGORA_APP_CERTIFICATE],
+        ['AGORA_CUSTOMER_ID', value.AGORA_CUSTOMER_ID],
+        ['AGORA_CUSTOMER_SECRET', value.AGORA_CUSTOMER_SECRET],
+        ['AGORA_RECORDING_STORAGE_VENDOR', value.AGORA_RECORDING_STORAGE_VENDOR],
+        ['AGORA_RECORDING_STORAGE_REGION', value.AGORA_RECORDING_STORAGE_REGION],
+        ['AGORA_RECORDING_STORAGE_BUCKET', value.AGORA_RECORDING_STORAGE_BUCKET],
+        ['AGORA_RECORDING_STORAGE_ACCESS_KEY', value.AGORA_RECORDING_STORAGE_ACCESS_KEY],
+        ['AGORA_RECORDING_STORAGE_SECRET_KEY', value.AGORA_RECORDING_STORAGE_SECRET_KEY],
+      ] as const;
+
+      for (const [field, fieldValue] of requiredAgoraRecordingFields) {
+        if (!fieldValue && fieldValue !== 0) {
+          context.addIssue({
+            code: 'custom',
+            path: [field],
+            message: `${field} is required when AGORA_CLOUD_RECORDING_ENABLED is true.`,
+          });
+        }
+      }
     }
 
     if (value.DATABASE_MIN_POOL_SIZE > value.DATABASE_MAX_POOL_SIZE) {
