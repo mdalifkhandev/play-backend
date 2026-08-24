@@ -38,6 +38,11 @@ moderationRouter.post(
   validateRequest({ params: reportTargetParamsSchema, body: createModerationReportBodySchema }),
   moderationController.report('profile'),
 );
+moderationRouter.post(
+  '/live-streams/:targetId',
+  validateRequest({ params: reportTargetParamsSchema, body: createModerationReportBodySchema }),
+  moderationController.report('live_stream'),
+);
 
 moderationAdminRouter.use(authenticate, authorize(UserRole.ADMIN, UserRole.MODERATOR));
 moderationAdminRouter.get(

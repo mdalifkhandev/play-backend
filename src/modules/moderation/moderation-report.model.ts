@@ -1,6 +1,6 @@
 import mongoose, { Schema, model, type Model, type Types } from 'mongoose';
 
-export const moderationTargetTypes = ['reel', 'comment', 'user', 'profile'] as const;
+export const moderationTargetTypes = ['reel', 'comment', 'user', 'profile', 'live_stream'] as const;
 export type ModerationTargetType = (typeof moderationTargetTypes)[number];
 
 export const moderationReportStatuses = ['pending', 'resolved', 'rejected'] as const;

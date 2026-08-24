@@ -14,6 +14,90 @@ export class LiveStreamRepository {
     return LiveStreamModel.findById(id).populate('hostId', 'profile email isVerified');
   }
 
+  async findActiveByHostId(hostId: string): Promise<ILiveStream | null> {
+    if (!mongoose.Types.ObjectId.isValid(hostId)) return null;
+
+    return LiveStreamModel.findOne({
+      hostId: new mongoose.Types.ObjectId(hostId),
+      status: { $in: [LIVE_STREAM_STATUS.LIVE, LIVE_STREAM_STATUS.SCHEDULED] },
+    })
+      .sort({ status: 1, createdAt: -1 })
+      .populate('hostId', 'profile email isVerified')
+      .exec();
+  }
+
+  async findActiveStreamsByHostId(hostId: string, excludeStreamId?: string): Promise<ILiveStream[]> {
+    if (!mongoose.Types.ObjectId.isValid(hostId)) return [];
+
+    const filter: Record<string, unknown> = {
+      hostId: new mongoose.Types.ObjectId(hostId),
+      status: { $in: [LIVE_STREAM_STATUS.LIVE, LIVE_STREAM_STATUS.SCHEDULED] },
+    };
+
+    if (excludeStreamId && mongoose.Types.ObjectId.isValid(excludeStreamId)) {
+      filter._id = { $ne: new mongoose.Types.ObjectId(excludeStreamId) };
+    }
+
+    return LiveStreamModel.find(filter)
+      .sort({ createdAt: -1 })
+      .populate('hostId', 'profile email isVerified')
+      .exec();
+  }
+
+  async findByIds(ids: string[]): Promise<ILiveStream[]> {
+    const objectIds = ids.filter((id) => mongoose.Types.ObjectId.isValid(id));
+    if (objectIds.length === 0) return [];
+
+    return LiveStreamModel.find({ _id: { $in: objectIds } })
+      .populate('hostId', 'profile email isVerified')
+      .exec();
+  }
+
+  async findForAdmin(options: {
+    status?: (typeof LIVE_STREAM_STATUS)[keyof typeof LIVE_STREAM_STATUS];
+    page: number;
+    limit: number;
+  }): Promise<{ streams: ILiveStream[]; total: number }> {
+    const skip = (options.page - 1) * options.limit;
+    const filter: Record<string, unknown> = {};
+    if (options.status) filter.status = options.status;
+
+    const [streams, total] = await Promise.all([
+      LiveStreamModel.find(filter)
+        .sort({ startedAt: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(options.limit)
+        .populate('hostId', 'profile email isVerified')
+        .exec(),
+      LiveStreamModel.countDocuments(filter),
+    ]);
+
+    return { streams, total };
+  }
+
+  async findRecordedForAdmin(options: {
+    page: number;
+    limit: number;
+  }): Promise<{ streams: ILiveStream[]; total: number }> {
+    const skip = (options.page - 1) * options.limit;
+    const filter: Record<string, unknown> = {
+      status: LIVE_STREAM_STATUS.ENDED,
+      'recording.status': { $exists: true, $ne: 'disabled' },
+    };
+
+    const [streams, total] = await Promise.all([
+      LiveStreamModel.find(filter)
+        .sort({ endedAt: -1, startedAt: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(options.limit)
+        .populate('hostId', 'profile email isVerified')
+        .exec(),
+      LiveStreamModel.countDocuments(filter),
+    ]);
+
+    return { streams, total };
+  }
+
   async findFeedStreams(options: {
     tab?: LiveStreamFeedTab;
     category?: string;

@@ -2,7 +2,7 @@ import agoraToken from 'agora-token';
 import { env } from '../../config/env.config.js';
 import { AppError } from '../../common/errors/app-error.js';
 import { logger } from '../../infrastructure/logger/logger.js';
-import { LIVE_STREAM_ROLE, LIVE_STREAM_STATUS } from './live-stream.constants.js';
+import { LIVE_STREAM_ROLE, LIVE_STREAM_STATUS, type LiveStreamStatus } from './live-stream.constants.js';
 import { liveStreamRepository, LiveStreamRepository } from './live-stream.repository.js';
 import type {
   CreateLiveStreamDTO,
@@ -18,6 +18,9 @@ import { broadcastLiveStreamStatus } from './live-stream.gateway.js';
 import { activityService } from '../activities/activity.service.js';
 import { adminNotificationService } from '../notifications/admin-notification.service.js';
 import { isRecordingActive, liveStreamRecordingService } from './live-stream-recording.service.js';
+import { ModerationReportModel } from '../moderation/moderation-report.model.js';
+import type { AdminLiveStreamsQuery } from './live-stream.validation.js';
+import { cloudinaryStorage } from '../../infrastructure/storage/index.js';
 
 const { RtcTokenBuilder, RtcRole } = agoraToken;
 
@@ -38,6 +41,15 @@ export class LiveStreamService {
   ) {}
 
   async createStream(hostId: string, dto: CreateLiveStreamDTO): Promise<LiveStreamResponseDTO> {
+    const activeStream = await this.repository.findActiveByHostId(hostId);
+    if (activeStream) {
+      logger.info(
+        { hostId, streamId: String(activeStream._id), status: activeStream.status },
+        'Reusing active live stream for host',
+      );
+      return this.mapToResponse(activeStream);
+    }
+
     const channelName = `live_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
     const streamKey = `sk_${crypto.randomUUID()}`;
 
@@ -87,8 +99,11 @@ export class LiveStreamService {
     }
 
     if (stream.status === LIVE_STREAM_STATUS.LIVE) {
+      await this.endOtherActiveStreamsForHost(hostId, streamId);
       return this.mapToResponse(stream);
     }
+
+    await this.endOtherActiveStreamsForHost(hostId, streamId);
 
     const updated = await this.repository.updateStatus(streamId, LIVE_STREAM_STATUS.LIVE, {
       startedAt: new Date(),
@@ -113,6 +128,36 @@ export class LiveStreamService {
       logger.error({ err: error, streamId }, 'Unexpected live recording start background error');
     });
     return response;
+  }
+
+  private async endOtherActiveStreamsForHost(hostId: string, currentStreamId: string): Promise<void> {
+    const otherStreams = await this.repository.findActiveStreamsByHostId(hostId, currentStreamId);
+    if (otherStreams.length === 0) return;
+
+    await Promise.all(
+      otherStreams.map(async (otherStream) => {
+        const otherStreamId = String(otherStream._id);
+
+        if (otherStream.recording && isRecordingActive(otherStream.recording)) {
+          const recording = { ...otherStream.recording, status: 'stopping' as const };
+          await this.repository.updateRecordingState(otherStreamId, recording);
+          this.stopRecordingInBackground(otherStreamId, otherStream.channelName, otherStream.recording).catch((error) => {
+            logger.error({ err: error, streamId: otherStreamId }, 'Unexpected duplicate live recording stop error');
+          });
+        }
+
+        const ended = await this.repository.updateStatus(otherStreamId, LIVE_STREAM_STATUS.ENDED, {
+          endedAt: new Date(),
+          activeViewerIds: [],
+          viewerCount: 0,
+        });
+
+        if (ended) {
+          const response = this.mapToResponse(ended);
+          broadcastLiveStreamStatus(response);
+        }
+      }),
+    );
   }
 
   async endStream(streamId: string, hostId: string): Promise<LiveStreamResponseDTO> {
@@ -263,6 +308,117 @@ export class LiveStreamService {
     return this.mapToResponse(stream);
   }
 
+  async listForAdmin(query: AdminLiveStreamsQuery) {
+    const page = Math.max(1, query.page);
+    const limit = Math.min(100, Math.max(1, query.limit));
+    const skip = (page - 1) * limit;
+
+    if (query.reported) {
+      const [reports, total] = await Promise.all([
+        ModerationReportModel.find({ targetType: 'live_stream', status: 'pending' })
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(limit)
+          .populate('reporterId', 'email profile.username profile.displayName profile.photoUrl')
+          .lean()
+          .exec(),
+        ModerationReportModel.countDocuments({ targetType: 'live_stream', status: 'pending' }),
+      ]);
+
+      const streamIds = reports.map((report) => report.targetId);
+      const streams = await this.repository.findByIds(streamIds.map((id) => id.toString()));
+      const streamsById = new Map(streams.map((stream) => [String(stream._id), stream]));
+
+      return {
+        items: reports.map((report: any) => {
+          const stream = streamsById.get(report.targetId.toString());
+          return {
+            reportId: report._id.toString(),
+            reason: report.reason,
+            reportedAt: report.createdAt.toISOString(),
+            reporter: mapAdminUser(report.reporterId),
+            stream: stream ? this.mapAdminStream(stream) : undefined,
+          };
+        }),
+        pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
+      };
+    }
+
+    const { streams, total } = await this.repository.findForAdmin({
+      page,
+      limit,
+      ...(query.status ? { status: query.status as LiveStreamStatus } : {}),
+    });
+
+    return {
+      items: streams.map((stream) => this.mapAdminStream(stream)),
+      pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
+    };
+  }
+
+  async listRecordedForAdmin(query: Pick<AdminLiveStreamsQuery, 'page' | 'limit'>) {
+    const page = Math.max(1, query.page);
+    const limit = Math.min(100, Math.max(1, query.limit));
+    const { streams, total } = await this.repository.findRecordedForAdmin({ page, limit });
+
+    for (const stream of streams) {
+      if (
+        stream.recording?.status === 'stopped' &&
+        stream.recording.fileList &&
+        !stream.recording.cloudinaryUrl
+      ) {
+        this.uploadRecordingToCloudinary(String(stream._id), stream.recording).catch((error) => {
+          logger.error({ err: error, streamId: String(stream._id) }, 'Recorded live Cloudinary retry failed');
+        });
+      }
+    }
+
+    return {
+      items: streams.map((stream) => this.mapAdminStream(stream)),
+      pagination: { page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) },
+    };
+  }
+
+  async forceEndForAdmin(streamId: string): Promise<LiveStreamResponseDTO> {
+    const stream = await this.repository.findById(streamId);
+    if (!stream) {
+      throw new AppError('Live stream not found.', 404, { code: 'STREAM_NOT_FOUND' });
+    }
+
+    if (stream.status === LIVE_STREAM_STATUS.ENDED) {
+      return this.mapToResponse(stream);
+    }
+
+    const activeRecording = stream.recording;
+    if (activeRecording && isRecordingActive(activeRecording)) {
+      const recording = { ...activeRecording, status: 'stopping' as const };
+      await this.repository.updateRecordingState(streamId, recording);
+      this.stopRecordingInBackground(streamId, stream.channelName, activeRecording).catch((error) => {
+        logger.error({ err: error, streamId }, 'Unexpected admin live recording stop background error');
+      });
+    }
+
+    const updated = await this.repository.updateStatus(streamId, LIVE_STREAM_STATUS.ENDED, {
+      endedAt: new Date(),
+      activeViewerIds: [],
+      viewerCount: 0,
+    });
+    if (!updated) {
+      throw new AppError('Failed to end stream.', 500, { code: 'UPDATE_FAILED' });
+    }
+
+    void adminNotificationService.notifyAdmins({
+      event: 'live_force_ended',
+      title: 'Live stream force ended',
+      body: `Admin ended live stream ${streamId}.`,
+      relatedEntityId: streamId,
+    });
+
+    const response = this.mapToResponse(updated);
+    broadcastLiveStreamStatus(response);
+    return response;
+  }
+
   async joinStream(streamId: string, userId?: string): Promise<LiveStreamResponseDTO> {
     const stream = await this.requireLiveStream(streamId);
     const hostId = (stream.hostId as any)._id?.toString() || stream.hostId.toString();
@@ -389,6 +545,7 @@ export class LiveStreamService {
       const stoppedRecording = await liveStreamRecordingService.stop({ streamId, channelName, recording });
       if (stoppedRecording) {
         await this.repository.updateRecordingState(streamId, stoppedRecording);
+        await this.uploadRecordingToCloudinary(streamId, stoppedRecording);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -403,6 +560,48 @@ export class LiveStreamService {
         event: 'live_recording_failed',
         title: 'Live recording failed',
         body: `Recording could not stop for live stream ${streamId}: ${message}`,
+        relatedEntityId: streamId,
+      });
+    }
+  }
+
+  private async uploadRecordingToCloudinary(
+    streamId: string,
+    recording: NonNullable<ILiveStream['recording']>,
+  ): Promise<void> {
+    if (!recording.fileList) return;
+
+    const [sourceUrl] = extractRecordingPlaybackUrls(recording.fileList);
+    if (!sourceUrl) {
+      logger.warn({ streamId }, 'Live recording stopped but no public recording URL was found for Cloudinary upload');
+      return;
+    }
+
+    try {
+      const uploaded = await cloudinaryStorage.upload(sourceUrl, {
+        folder: 'jesusname7/live-recordings',
+        publicId: streamId,
+        resourceType: 'video',
+        overwrite: true,
+        tags: ['live-recording', streamId],
+      });
+
+      await this.repository.updateRecordingState(streamId, {
+        ...recording,
+        cloudinaryUrl: uploaded.secureUrl,
+        cloudinaryPublicId: uploaded.publicId,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error({ err: error, streamId, sourceUrl }, 'Cloudinary live recording upload failed');
+      await this.repository.updateRecordingState(streamId, {
+        ...recording,
+        errorMessage: `Cloudinary upload failed: ${message}`,
+      });
+      void adminNotificationService.notifyAdmins({
+        event: 'live_recording_failed',
+        title: 'Live recording upload failed',
+        body: `Recording could not upload to Cloudinary for live stream ${streamId}: ${message}`,
         relatedEntityId: streamId,
       });
     }
@@ -459,11 +658,28 @@ export class LiveStreamService {
       if (stream.recording.mode) response.recording.mode = stream.recording.mode;
       if (stream.recording.startedAt) response.recording.startedAt = stream.recording.startedAt.toISOString();
       if (stream.recording.stoppedAt) response.recording.stoppedAt = stream.recording.stoppedAt.toISOString();
-      if (stream.recording.fileList) response.recording.fileList = stream.recording.fileList;
+      if (stream.recording.cloudinaryUrl) response.recording.cloudinaryUrl = stream.recording.cloudinaryUrl;
+      if (stream.recording.cloudinaryPublicId) response.recording.cloudinaryPublicId = stream.recording.cloudinaryPublicId;
+      if (stream.recording.fileList) {
+        response.recording.fileList = stream.recording.fileList;
+        const playbackUrls = extractRecordingPlaybackUrls(stream.recording.fileList);
+        if (stream.recording.cloudinaryUrl) playbackUrls.unshift(stream.recording.cloudinaryUrl);
+        if (playbackUrls.length > 0) response.recording.playbackUrls = playbackUrls;
+      } else if (stream.recording.cloudinaryUrl) {
+        response.recording.playbackUrls = [stream.recording.cloudinaryUrl];
+      }
       if (stream.recording.errorMessage) response.recording.errorMessage = stream.recording.errorMessage;
     }
 
     return response;
+  }
+
+  private mapAdminStream(stream: ILiveStream) {
+    const response = this.mapToResponse(stream);
+    return {
+      ...response,
+      durationSeconds: getDurationSeconds(stream.startedAt, stream.endedAt),
+    };
   }
 
   private mapCommentToResponse(comment: ILiveStreamComment): LiveStreamCommentResponseDTO {
@@ -490,6 +706,77 @@ export class LiveStreamService {
 }
 
 export const liveStreamService = new LiveStreamService();
+
+function mapAdminUser(user: any) {
+  if (!user) return undefined;
+  return {
+    id: user._id?.toString(),
+    email: user.email,
+    displayName: user.profile?.displayName || user.profile?.username || user.email,
+    username: user.profile?.username,
+    photoUrl: user.profile?.photoUrl,
+  };
+}
+
+function getDurationSeconds(startedAt?: Date, endedAt?: Date) {
+  if (!startedAt) return 0;
+  const end = endedAt?.getTime() ?? Date.now();
+  return Math.max(0, Math.floor((end - startedAt.getTime()) / 1000));
+}
+
+function extractRecordingPlaybackUrls(fileList: unknown): string[] {
+  const urls = new Set<string>();
+  const queue: unknown[] = [fileList];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) continue;
+
+    if (typeof current === 'string') {
+      addRecordingUrl(urls, current);
+      continue;
+    }
+
+    if (Array.isArray(current)) {
+      queue.push(...current);
+      continue;
+    }
+
+    if (typeof current === 'object') {
+      const record = current as Record<string, unknown>;
+      for (const key of ['url', 'fileUrl', 'fileURL', 'downloadUrl', 'playUrl', 'location', 'fileName']) {
+        const value = record[key];
+        if (typeof value === 'string') addRecordingUrl(urls, value);
+      }
+      queue.push(...Object.values(record));
+    }
+  }
+
+  return [...urls].sort((left, right) => recordingUrlRank(left) - recordingUrlRank(right));
+}
+
+function addRecordingUrl(urls: Set<string>, value: string): void {
+  if (!isRecordingVideoPath(value)) return;
+  if (/^https?:\/\//i.test(value)) {
+    urls.add(value);
+    return;
+  }
+
+  if (!env.AGORA_RECORDING_PUBLIC_BASE_URL) return;
+  const baseUrl = env.AGORA_RECORDING_PUBLIC_BASE_URL.replace(/\/+$/, '');
+  const path = value.replace(/^\/+/, '');
+  urls.add(`${baseUrl}/${path}`);
+}
+
+function isRecordingVideoPath(value: string): boolean {
+  return /\.(mp4|m3u8|mov|webm)(\?|$)/i.test(value);
+}
+
+function recordingUrlRank(value: string): number {
+  if (/\.mp4(\?|$)/i.test(value)) return 0;
+  if (/\.m3u8(\?|$)/i.test(value)) return 1;
+  return 2;
+}
 
 function stringToNumericUid(str: string): number {
   let hash = 0;

@@ -10,6 +10,7 @@ export type AdminNotificationEvent =
   | 'moderation_report_submitted'
   | 'support_request_submitted'
   | 'support_request_user_replied'
+  | 'live_force_ended'
   | 'live_recording_failed'
   | 'reel_processing_failed';
 
@@ -63,6 +64,7 @@ function adminPageForEvent(event: AdminNotificationEvent): string {
   if (event === 'withdrawal_request_submitted') return 'withdrawals';
   if (event === 'moderation_report_submitted') return 'moderation';
   if (event === 'support_request_submitted' || event === 'support_request_user_replied') return 'settings';
+  if (event === 'live_force_ended') return 'live';
   if (event === 'live_recording_failed') return 'live';
   if (event === 'reel_processing_failed') return 'moderation';
   return 'dashboard';

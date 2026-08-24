@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { LIVE_STREAM_FEED_TAB } from './live-stream.constants.js';
+import { LIVE_STREAM_FEED_TAB, LIVE_STREAM_STATUS } from './live-stream.constants.js';
 
 export const createLiveStreamSchema = z.object({
   title: z.string().trim().min(1, 'Title is required.').max(120, 'Title cannot exceed 120 characters.'),
@@ -35,3 +35,12 @@ export const searchLiveStreamsQuerySchema = z.object({
 export const postLiveStreamCommentSchema = z.object({
   text: z.string().trim().min(1, 'Comment text is required.').max(500, 'Comment cannot exceed 500 characters.'),
 });
+
+export const adminLiveStreamsQuerySchema = z.object({
+  status: z.enum(Object.values(LIVE_STREAM_STATUS) as [string, ...string[]]).optional(),
+  reported: z.coerce.boolean().optional().default(false),
+  page: z.coerce.number().int().min(1).optional().default(1),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+});
+
+export type AdminLiveStreamsQuery = z.infer<typeof adminLiveStreamsQuerySchema>;

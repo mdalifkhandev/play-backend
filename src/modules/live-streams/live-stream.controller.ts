@@ -50,6 +50,22 @@ export class LiveStreamController {
     sendSuccess(res, 200, 'Live stream details retrieved.', stream);
   };
 
+  listForAdmin = async (req: Request, res: Response): Promise<void> => {
+    const result = await this.service.listForAdmin(req.query as any);
+    sendSuccess(res, 200, 'Admin live streams retrieved.', result);
+  };
+
+  listRecordedForAdmin = async (req: Request, res: Response): Promise<void> => {
+    const result = await this.service.listRecordedForAdmin(req.query as any);
+    sendSuccess(res, 200, 'Admin recorded live streams retrieved.', result);
+  };
+
+  forceEndForAdmin = async (req: Request, res: Response): Promise<void> => {
+    const { id } = req.params;
+    const stream = await this.service.forceEndForAdmin(id as string);
+    sendSuccess(res, 200, 'Live stream ended by admin.', stream);
+  };
+
   join = async (req: Request, res: Response): Promise<void> => {
     const { id } = req.params;
     const userId = req.user?.userId;

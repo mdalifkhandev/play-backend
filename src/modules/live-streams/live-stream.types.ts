@@ -39,6 +39,9 @@ export interface LiveRecordingResponseDTO {
   startedAt?: string;
   stoppedAt?: string;
   fileList?: unknown;
+  cloudinaryUrl?: string;
+  cloudinaryPublicId?: string;
+  playbackUrls?: string[];
   errorMessage?: string;
 }
 

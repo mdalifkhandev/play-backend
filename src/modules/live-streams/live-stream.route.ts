@@ -1,18 +1,39 @@
-import { Router } from 'express';
+import { Router, type Router as ExpressRouter } from 'express';
 
+import { UserRole } from '../../common/enums/user-role.enum.js';
 import { authenticate, optionalAuthenticate } from '../../common/middleware/auth.middleware.js';
+import { authorize } from '../../common/middleware/authorization.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
 import { blockLiveStreamingDuringKidsMode } from '../kids-mode/kids-mode.middleware.js';
 import { liveStreamController } from './live-stream.controller.js';
 import {
   createLiveStreamSchema,
+  adminLiveStreamsQuerySchema,
   liveStreamFeedQuerySchema,
   liveStreamIdParamsSchema,
   postLiveStreamCommentSchema,
   searchLiveStreamsQuerySchema,
 } from './live-stream.validation.js';
 
-export const liveStreamRouter = Router();
+export const liveStreamRouter: ExpressRouter = Router();
+export const liveStreamAdminRouter: ExpressRouter = Router();
+
+liveStreamAdminRouter.use(authenticate, authorize(UserRole.ADMIN, UserRole.MODERATOR));
+liveStreamAdminRouter.get(
+  '/recorded',
+  validateRequest({ query: adminLiveStreamsQuerySchema.pick({ page: true, limit: true }) }),
+  liveStreamController.listRecordedForAdmin,
+);
+liveStreamAdminRouter.get(
+  '/',
+  validateRequest({ query: adminLiveStreamsQuerySchema }),
+  liveStreamController.listForAdmin,
+);
+liveStreamAdminRouter.post(
+  '/:id/force-end',
+  validateRequest({ params: liveStreamIdParamsSchema }),
+  liveStreamController.forceEndForAdmin,
+);
 
 // Public / Optional Auth routes for viewing streams & feed
 liveStreamRouter.get(

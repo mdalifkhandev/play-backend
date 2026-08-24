@@ -17,6 +17,8 @@ export interface ILiveRecordingState {
   sid?: string;
   mode?: 'mix' | 'individual';
   fileList?: unknown;
+  cloudinaryUrl?: string;
+  cloudinaryPublicId?: string;
   startedAt?: Date;
   stoppedAt?: Date;
   errorMessage?: string;
@@ -150,6 +152,14 @@ const liveStreamSchema = new Schema<ILiveStream>(
       fileList: {
         type: Schema.Types.Mixed,
       },
+      cloudinaryUrl: {
+        type: String,
+        trim: true,
+      },
+      cloudinaryPublicId: {
+        type: String,
+        trim: true,
+      },
       startedAt: {
         type: Date,
       },
@@ -176,5 +186,6 @@ const liveStreamSchema = new Schema<ILiveStream>(
 liveStreamSchema.index({ status: 1, startedAt: -1 });
 liveStreamSchema.index({ status: 1, likesCount: -1 });
 liveStreamSchema.index({ status: 1, viewerCount: -1 });
+liveStreamSchema.index({ hostId: 1, status: 1, createdAt: -1 });
 
 export const LiveStreamModel = mongoose.model<ILiveStream>('LiveStream', liveStreamSchema);

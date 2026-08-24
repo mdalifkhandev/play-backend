@@ -7,6 +7,7 @@ import { CommentModel } from '../engagement/comment/comment.model.js';
 import { adminNotificationService } from '../notifications/admin-notification.service.js';
 import { ReelStatus } from '../reels/reel.constants.js';
 import { ReelModel } from '../reels/reel.model.js';
+import { LiveStreamModel } from '../live-streams/live-stream.model.js';
 import { UserModel } from '../users/user.model.js';
 import {
   ModerationReportModel,
@@ -114,6 +115,12 @@ export class ModerationService {
       return comment.authorId;
     }
 
+    if (targetType === 'live_stream') {
+      const stream = await LiveStreamModel.findById(targetId).select('hostId').lean<{ hostId: Types.ObjectId }>().exec();
+      if (!stream) throw new NotFoundError('Live stream was not found.', { code: 'LIVE_STREAM_NOT_FOUND' });
+      return stream.hostId;
+    }
+
     const user = await UserModel.findById(targetId).select('_id').lean<{ _id: Types.ObjectId }>().exec();
     if (!user) throw new NotFoundError('User was not found.', { code: 'USER_NOT_FOUND' });
     return user._id;
@@ -132,6 +139,11 @@ export class ModerationService {
 
     if (targetType === 'user' || targetType === 'profile') {
       await this.updateUserStatus(targetId, AccountStatus.SUSPENDED);
+      return;
+    }
+
+    if (targetType === 'live_stream') {
+      await LiveStreamModel.updateOne({ _id: targetId }, { $set: { status: 'ENDED', endedAt: new Date() } }).exec();
       return;
     }
 
@@ -181,6 +193,15 @@ export class ModerationService {
       const comment = await CommentModel.findById(targetId).select('text targetId authorId createdAt').lean().exec();
       return {
         title: comment?.text || 'Reported comment',
+      };
+    }
+
+    if (targetType === 'live_stream') {
+      const stream = await LiveStreamModel.findById(targetId).select('title coverImage status viewerCount peakViewerCount startedAt endedAt').lean().exec();
+      return {
+        title: stream?.title || 'Reported live stream',
+        thumbnailUrl: stream?.coverImage,
+        description: stream ? `${stream.status} · ${stream.viewerCount ?? 0} watching · Peak ${stream.peakViewerCount ?? 0}` : undefined,
       };
     }
 

@@ -16,7 +16,7 @@ import {
   savedRouter,
 } from '../modules/engagement/engagement.routes.js';
 import { storyRouter } from '../modules/stories/story.route.js';
-import { liveStreamRouter } from '../modules/live-streams/live-stream.route.js';
+import { liveStreamAdminRouter, liveStreamRouter } from '../modules/live-streams/live-stream.route.js';
 import { conversationRouter } from '../modules/conversations/conversation.route.js';
 import {
   supportRequestAdminRouter,
@@ -75,5 +75,6 @@ apiRouter.use('/admin/users', userAdminRouter);
 apiRouter.use('/admin/moderation', moderationAdminRouter);
 apiRouter.use('/admin/monetization', monetizationAdminRouter);
 apiRouter.use('/admin/rewards', rewardAdminRouter);
+apiRouter.use('/admin/live-streams', liveStreamAdminRouter);
 apiRouter.use('/admin/search', adminSearchRouter);
 
