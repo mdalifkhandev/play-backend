@@ -6,6 +6,7 @@ import type { Reel } from './reel.model.js';
 export interface PopulatedReelOwner {
   _id: Types.ObjectId;
   email?: string;
+  subscriptionPlan?: string;
   subscriptionStatus?: 'none' | 'active' | 'expired' | 'canceled';
   subscriptionExpiresAt?: Date;
   profile?: {
@@ -205,8 +206,10 @@ export function toReelFeedItemDto(
   const profile = owner?.profile;
   const isPremium = Boolean(
     owner?.subscriptionStatus === 'active' &&
-    owner.subscriptionExpiresAt &&
-    owner.subscriptionExpiresAt.getTime() > Date.now(),
+    (
+      owner.subscriptionPlan?.toLowerCase().includes('lifetime') ||
+      (owner.subscriptionExpiresAt && owner.subscriptionExpiresAt.getTime() > Date.now())
+    ),
   );
 
   const videoUrl = reel.processedMedia?.secureUrl || reel.rawMedia?.secureUrl || '';

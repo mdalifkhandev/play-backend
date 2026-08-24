@@ -773,7 +773,7 @@ export class ReelService {
     })
       .sort({ status: 1, startedAt: -1, endedAt: -1 })
       .limit(Math.min(5, Math.max(1, limit)))
-      .populate('hostId', 'profile email isVerified subscriptionStatus subscriptionExpiresAt')
+      .populate('hostId', 'profile email isVerified subscriptionPlan subscriptionStatus subscriptionExpiresAt')
       .exec();
 
     return streams
@@ -814,8 +814,8 @@ export class ReelService {
     const coverImage = stream.coverImage || profile?.photoUrl || '';
     const isPremium = Boolean(
       host?.subscriptionStatus === 'active' &&
-        host.subscriptionExpiresAt &&
-        host.subscriptionExpiresAt.getTime() > Date.now(),
+        (host.subscriptionPlan?.toLowerCase().includes('lifetime') ||
+          (host.subscriptionExpiresAt && host.subscriptionExpiresAt.getTime() > Date.now())),
     );
 
     return {

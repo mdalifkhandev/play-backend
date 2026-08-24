@@ -12,8 +12,8 @@ export interface PublicUserDto {
   stripeConnectAccountId?: string;
   stripeConnectOnboardingComplete: boolean;
   subscription: {
-    plan?: 'monthly' | 'yearly';
-    status: 'none' | 'active' | 'expired' | 'canceled';
+    plan?: string;
+    status: 'none' | 'active' | 'expired' | 'canceled' | 'hold';
     expiresAt?: string;
     isPremium: boolean;
   };
@@ -50,8 +50,10 @@ export function toPublicUser(user: UserDocument): PublicUserDto {
       ...(user.subscriptionExpiresAt ? { expiresAt: user.subscriptionExpiresAt.toISOString() } : {}),
       isPremium: Boolean(
         user.subscriptionStatus === 'active' &&
-        user.subscriptionExpiresAt &&
-        user.subscriptionExpiresAt.getTime() > Date.now(),
+        (
+          user.subscriptionPlan?.toLowerCase().includes('lifetime') ||
+          (user.subscriptionExpiresAt && user.subscriptionExpiresAt.getTime() > Date.now())
+        ),
       ),
     },
     profile: {

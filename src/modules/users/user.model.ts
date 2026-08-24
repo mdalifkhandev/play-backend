@@ -40,8 +40,8 @@ export interface User {
   diamondBalance: number;
   stripeConnectAccountId?: string;
   stripeConnectOnboardingComplete: boolean;
-  subscriptionPlan?: 'monthly' | 'yearly';
-  subscriptionStatus: 'none' | 'active' | 'expired' | 'canceled';
+  subscriptionPlan?: string;
+  subscriptionStatus: 'none' | 'active' | 'expired' | 'canceled' | 'hold';
   subscriptionExpiresAt?: Date;
   subscriptionProvider?: 'revenuecat' | 'apple_pay' | 'stripe';
   subscriptionPaymentId?: string;
@@ -114,10 +114,10 @@ const userSchema = new Schema<User>(
     diamondBalance: { type: Number, default: 0, min: 0, required: true },
     stripeConnectAccountId: { type: String, trim: true, sparse: true },
     stripeConnectOnboardingComplete: { type: Boolean, default: false, required: true },
-    subscriptionPlan: { type: String, enum: ['monthly', 'yearly'], trim: true },
+    subscriptionPlan: { type: String, trim: true },
     subscriptionStatus: {
       type: String,
-      enum: ['none', 'active', 'expired', 'canceled'],
+      enum: ['none', 'active', 'expired', 'canceled', 'hold'],
       default: 'none',
       required: true,
     },
