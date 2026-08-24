@@ -28,7 +28,7 @@ import { userAdminRouter, userRouter } from '../modules/users/user.route.js';
 import { notificationRouter } from '../modules/notifications/notification.route.js';
 import { kidsModeRouter } from '../modules/kids-mode/kids-mode.route.js';
 import { activityRouter } from '../modules/activities/activity.route.js';
-import { rewardRouter } from '../modules/rewards/reward.route.js';
+import { rewardAdminRouter, rewardRouter } from '../modules/rewards/reward.route.js';
 import { subscriptionRouter } from '../modules/subscriptions/subscription.route.js';
 import { adAdminRouter, adRouter } from '../modules/ads/ad.route.js';
 import { creatorAdminRouter, creatorRouter } from '../modules/creators/creator.route.js';
@@ -74,5 +74,6 @@ apiRouter.use('/admin/creators', creatorAdminRouter);
 apiRouter.use('/admin/users', userAdminRouter);
 apiRouter.use('/admin/moderation', moderationAdminRouter);
 apiRouter.use('/admin/monetization', monetizationAdminRouter);
+apiRouter.use('/admin/rewards', rewardAdminRouter);
 apiRouter.use('/admin/search', adminSearchRouter);
 
