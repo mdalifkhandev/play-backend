@@ -6,7 +6,6 @@ import {
   approveWithdrawalSchema,
   convertDiamondsSchema,
   createPaymentIntentSchema,
-  createSquarePaymentSchema,
   getGiftsQuerySchema,
   getTransactionsQuerySchema,
   getWithdrawalsQuerySchema,
@@ -48,12 +47,6 @@ coinRouter.post(
   authenticate,
   validateRequest(verifyPaymentSchema),
   coinController.verifyPayment,
-);
-coinRouter.post(
-  '/purchase/square-payment',
-  authenticate,
-  validateRequest(createSquarePaymentSchema),
-  coinController.createSquarePayment,
 );
 coinRouter.get(
   '/history',

@@ -1,10 +1,8 @@
-import { randomUUID } from 'node:crypto';
-
 import { BadRequestError } from '../../common/errors/bad-request-error.js';
 import { NotFoundError } from '../../common/errors/not-found-error.js';
 import { env } from '../../config/env.config.js';
 import { UserModel } from '../users/user.model.js';
-import type { SubscriptionPlanId } from './subscription.validation.js';
+import type { SubscriptionPlanId, SyncRevenueCatSubscriptionInput } from './subscription.validation.js';
 
 export type SubscriptionPlan = {
   id: SubscriptionPlanId;
@@ -44,16 +42,6 @@ function getPlan(planId: SubscriptionPlanId): SubscriptionPlan {
   return plan;
 }
 
-function addPlanTime(currentExpiry: Date | undefined, plan: SubscriptionPlan): Date {
-  const base = currentExpiry && currentExpiry.getTime() > Date.now() ? new Date(currentExpiry) : new Date();
-  if (plan.interval === 'year') {
-    base.setFullYear(base.getFullYear() + 1);
-  } else {
-    base.setMonth(base.getMonth() + 1);
-  }
-  return base;
-}
-
 export class SubscriptionService {
   getPlans() {
     return plans;
@@ -89,91 +77,90 @@ export class SubscriptionService {
     };
   }
 
-  async createSquareSubscription(userId: string, planId: SubscriptionPlanId, sourceId: string) {
-    const plan = getPlan(planId);
-    const user = await UserModel.findById(userId)
-      .select('subscriptionExpiresAt subscriptionStatus')
-      .exec();
+  async syncRevenueCatSubscription(userId: string, input: SyncRevenueCatSubscriptionInput) {
+    const plan = getPlan(input.planId);
+    const user = await UserModel.findById(userId).select('_id').exec();
 
     if (!user) {
       throw new NotFoundError('User was not found.');
     }
 
-    if (!env.SQUARE_ACCESS_TOKEN || !env.SQUARE_LOCATION_ID) {
-      throw new BadRequestError('Square payment is not configured.', {
-        code: 'SQUARE_PAYMENT_NOT_CONFIGURED',
+    if (!env.REVENUECAT_SECRET_API_KEY) {
+      throw new BadRequestError('RevenueCat is not configured.', {
+        code: 'REVENUECAT_NOT_CONFIGURED',
       });
     }
 
-    const squareBaseUrl =
-      env.SQUARE_ENVIRONMENT === 'production'
-        ? 'https://connect.squareup.com'
-        : 'https://connect.squareupsandbox.com';
+    const subscriber = await fetchRevenueCatSubscriber(userId, input.platform);
+    const entitlement = subscriber?.entitlements?.[env.REVENUECAT_ENTITLEMENT_ID];
+    const expiresAt = entitlement?.expires_date ? new Date(entitlement.expires_date) : undefined;
+    const isActive = Boolean(entitlement && (!expiresAt || expiresAt.getTime() > Date.now()));
 
-    const squareResponse = await fetch(`${squareBaseUrl}/v2/payments`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${env.SQUARE_ACCESS_TOKEN}`,
-        'Content-Type': 'application/json',
-        'Square-Version': '2026-08-20',
-      },
-      body: JSON.stringify({
-        source_id: sourceId,
-        idempotency_key: `sub-${randomUUID()}`,
-        location_id: env.SQUARE_LOCATION_ID,
-        amount_money: {
-          amount: Math.round(plan.price * 100),
-          currency: plan.currency.toUpperCase(),
-        },
-        note: `${plan.name} subscription`,
-        reference_id: `${userId}-${plan.id}`,
-      }),
-    });
-
-    const squarePayload = await squareResponse.json().catch(() => ({}));
-
-    if (!squareResponse.ok || !squarePayload?.payment?.id) {
-      throw new BadRequestError(
-        squarePayload?.errors?.[0]?.detail || 'Square payment failed.',
-        { code: 'SQUARE_PAYMENT_FAILED' },
-      );
-    }
-
-    const payment = squarePayload.payment as { id: string; status?: string };
-
-    if (payment.status !== 'COMPLETED' && payment.status !== 'APPROVED') {
-      throw new BadRequestError(`Square payment status is ${payment.status || 'unknown'}.`, {
-        code: 'SQUARE_PAYMENT_NOT_COMPLETED',
+    if (!isActive) {
+      throw new BadRequestError('RevenueCat premium entitlement is not active.', {
+        code: 'REVENUECAT_ENTITLEMENT_INACTIVE',
       });
     }
 
-    const expiresAt = addPlanTime(user.subscriptionExpiresAt, plan);
     await UserModel.updateOne(
       { _id: userId },
       {
         $set: {
           subscriptionPlan: plan.id,
           subscriptionStatus: 'active',
-          subscriptionExpiresAt: expiresAt,
-          subscriptionProvider: 'square',
-          subscriptionPaymentId: payment.id,
+          ...(expiresAt ? { subscriptionExpiresAt: expiresAt } : {}),
+          subscriptionProvider: 'revenuecat',
+          subscriptionPaymentId: entitlement?.product_identifier || input.productIdentifier,
         },
       },
     ).exec();
 
     return {
-      paymentProvider: 'square' as const,
-      paymentId: payment.id,
+      paymentProvider: 'revenuecat' as const,
+      productIdentifier: entitlement?.product_identifier || input.productIdentifier || '',
       plan,
       subscription: {
         plan: plan.id,
         status: 'active' as const,
-        expiresAt: expiresAt.toISOString(),
+        expiresAt: expiresAt ? expiresAt.toISOString() : undefined,
+        provider: 'revenuecat' as const,
+        paymentId: entitlement?.product_identifier || input.productIdentifier,
         isPremium: true,
       },
-      status: payment.status,
     };
   }
 }
 
 export const subscriptionService = new SubscriptionService();
+
+type RevenueCatSubscriberResponse = {
+  subscriber?: {
+    entitlements?: Record<string, {
+      expires_date?: string | null;
+      product_identifier?: string;
+    }>;
+  };
+};
+
+async function fetchRevenueCatSubscriber(userId: string, platform: 'ios' | 'android') {
+  const response = await fetch(`https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}`, {
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${env.REVENUECAT_SECRET_API_KEY}`,
+      'Content-Type': 'application/json',
+      'X-Platform': platform,
+    },
+  });
+
+  const payload = await response.json().catch(() => ({})) as RevenueCatSubscriberResponse & {
+    message?: string;
+  };
+
+  if (!response.ok) {
+    throw new BadRequestError(payload.message || 'RevenueCat subscription verification failed.', {
+      code: 'REVENUECAT_VERIFICATION_FAILED',
+    });
+  }
+
+  return payload.subscriber;
+}

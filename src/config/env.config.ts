@@ -49,6 +49,7 @@ const environmentSchema = z
       .optional(),
     LOG_REDACT_CENSOR: z.string().trim().min(1).default('[REDACTED]'),
     SERVICE_NAME: z.string().trim().min(1).default('jesusname7-backend'),
+    PUBLIC_BASE_URL: z.string().trim().url().optional(),
     CORS_ORIGINS: z.string().trim().min(1).optional(),
     JWT_ACCESS_TOKEN_SECRET: z.string().trim().min(32).optional(),
     AUTH_ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
@@ -129,9 +130,8 @@ const environmentSchema = z
     STRIPE_SECRET_KEY: z.string().trim().min(1).optional(),
     STRIPE_PUBLISHABLE_KEY: z.string().trim().min(1).optional(),
     STRIPE_WEBHOOK_SECRET: z.string().trim().optional(),
-    SQUARE_ACCESS_TOKEN: z.string().trim().min(1).optional(),
-    SQUARE_LOCATION_ID: z.string().trim().min(1).optional(),
-    SQUARE_ENVIRONMENT: z.enum(['sandbox', 'production']).default('sandbox'),
+    REVENUECAT_SECRET_API_KEY: z.string().trim().min(1).optional(),
+    REVENUECAT_ENTITLEMENT_ID: z.string().trim().min(1).default('premium'),
     FIREBASE_PROJECT_ID: z.string().trim().min(1).optional(),
     FIREBASE_CLIENT_EMAIL: z.string().trim().email().optional(),
     FIREBASE_PRIVATE_KEY: z.string().trim().min(1).optional(),
@@ -302,6 +302,7 @@ const defaultDevelopmentCorsOrigins = [
   'http://127.0.0.1:5173',
   'http://localhost:5174',
   'http://127.0.0.1:5174',
+  'https://12zjc82c-3000.inc1.devtunnels.ms',
 ];
 
 export const corsOrigins = Object.freeze(

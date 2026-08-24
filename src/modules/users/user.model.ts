@@ -43,7 +43,7 @@ export interface User {
   subscriptionPlan?: 'monthly' | 'yearly';
   subscriptionStatus: 'none' | 'active' | 'expired' | 'canceled';
   subscriptionExpiresAt?: Date;
-  subscriptionProvider?: 'square' | 'apple_pay';
+  subscriptionProvider?: 'revenuecat' | 'apple_pay' | 'stripe';
   subscriptionPaymentId?: string;
   profile: UserProfile;
   kidsModePin?: string;
@@ -122,7 +122,7 @@ const userSchema = new Schema<User>(
       required: true,
     },
     subscriptionExpiresAt: { type: Date },
-    subscriptionProvider: { type: String, enum: ['square', 'apple_pay'], trim: true },
+    subscriptionProvider: { type: String, enum: ['revenuecat', 'apple_pay', 'stripe'], trim: true },
     subscriptionPaymentId: { type: String, trim: true },
     profile: { type: userProfileSchema, default: () => ({ isSetupComplete: false }) },
     kidsModePin: { type: String, trim: true, select: false },

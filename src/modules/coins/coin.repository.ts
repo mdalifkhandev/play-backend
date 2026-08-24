@@ -132,11 +132,9 @@ export class CoinRepository {
     coins: number;
     amount: number;
     currency: string;
-    paymentProvider?: 'stripe' | 'square' | 'diamond_conversion';
+    paymentProvider?: 'stripe' | 'diamond_conversion';
     stripePaymentIntentId?: string;
     stripeClientSecret?: string;
-    squarePaymentId?: string;
-    squareOrderId?: string;
     metadata?: Record<string, unknown>;
   }): Promise<CoinTransactionDocument> {
     const transaction = new CoinTransactionModel({
@@ -148,8 +146,6 @@ export class CoinRepository {
       paymentProvider: data.paymentProvider ?? 'stripe',
       stripePaymentIntentId: data.stripePaymentIntentId,
       stripeClientSecret: data.stripeClientSecret,
-      squarePaymentId: data.squarePaymentId,
-      squareOrderId: data.squareOrderId,
       status: 'pending',
       metadata: data.metadata,
     });
@@ -174,10 +170,6 @@ export class CoinRepository {
 
   async findTransactionByPaymentIntentId(stripePaymentIntentId: string): Promise<CoinTransactionDocument | null> {
     return CoinTransactionModel.findOne({ stripePaymentIntentId }).exec();
-  }
-
-  async findTransactionBySquarePaymentId(squarePaymentId: string): Promise<CoinTransactionDocument | null> {
-    return CoinTransactionModel.findOne({ squarePaymentId }).exec();
   }
 
   async findTransactionById(transactionId: string): Promise<CoinTransactionDocument | null> {
@@ -225,7 +217,7 @@ export class CoinRepository {
 
   async completeTransactionByIdAndAddCoins(
     transactionId: string,
-    paymentFields: { squarePaymentId?: string; squareOrderId?: string } = {},
+    paymentFields: Record<string, never> = {},
   ): Promise<{ transaction: CoinTransactionDocument; newlyCompleted: boolean } | null> {
     const transaction = await this.findTransactionById(transactionId);
 
@@ -586,6 +578,42 @@ export class CoinRepository {
     ]);
 
     return { items, total };
+  }
+
+  async getUserPendingWithdrawalSummary(
+    userId: string,
+  ): Promise<{ coins: number; amountUsd: number; count: number }> {
+    const userObjectId = new Types.ObjectId(userId);
+    const [summary] = await WithdrawalRequestModel.aggregate<{ coins: number; amountUsd: number; count: number }>([
+      {
+        $match: {
+          userId: userObjectId,
+          status: { $in: ['pending', 'approved'] },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          coins: { $sum: '$coins' },
+          amountUsd: { $sum: '$amountUsd' },
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          coins: 1,
+          amountUsd: 1,
+          count: 1,
+        },
+      },
+    ]).exec();
+
+    return {
+      coins: summary?.coins ?? 0,
+      amountUsd: Number((summary?.amountUsd ?? 0).toFixed(2)),
+      count: summary?.count ?? 0,
+    };
   }
 
   async getAdminWithdrawalRequests(

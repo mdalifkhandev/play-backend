@@ -435,31 +435,51 @@ export class CoinService {
     let accountId = user.stripeConnectAccountId;
 
     if (!accountId) {
-      const account = await stripe.accounts.create({
-        type: 'express',
-        email: user.email,
-        capabilities: {
-          transfers: { requested: true },
-        },
-        metadata: {
-          userId: user._id.toString(),
-        },
-      });
+      const account = await this.createStripeConnectAccount(userId, user.email);
       accountId = account.id;
       await coinRepository.updateUserStripeConnectAccount(userId, accountId, false);
     }
 
-    const accountLink = await stripe.accountLinks.create({
-      account: accountId,
-      refresh_url: refreshUrl || 'http://localhost:3000/payouts/stripe-connect/refresh',
-      return_url: returnUrl || 'http://localhost:3000/payouts/stripe-connect/return',
-      type: 'account_onboarding',
-    });
+    const accountLink = await this.createStripeConnectOnboardingLink(
+      accountId,
+      refreshUrl || buildStripeConnectRedirectUrl('/payouts/stripe-connect/refresh'),
+      returnUrl || buildStripeConnectRedirectUrl('/payouts/stripe-connect/return'),
+    );
 
     return {
       url: accountLink.url,
       stripeConnectAccountId: accountId,
     };
+  }
+
+  private async createStripeConnectAccount(userId: string, email?: string) {
+    try {
+      return await stripe.accounts.create({
+        type: 'express',
+        ...(email ? { email } : {}),
+        capabilities: {
+          transfers: { requested: true },
+        },
+        metadata: {
+          userId,
+        },
+      });
+    } catch (error) {
+      throw toStripeConnectSetupError(error);
+    }
+  }
+
+  private async createStripeConnectOnboardingLink(accountId: string, refreshUrl: string, returnUrl: string) {
+    try {
+      return await stripe.accountLinks.create({
+        account: accountId,
+        refresh_url: refreshUrl,
+        return_url: returnUrl,
+        type: 'account_onboarding',
+      });
+    } catch (error) {
+      throw toStripeConnectSetupError(error);
+    }
   }
 
   async checkStripeConnectStatus(userId: string) {
@@ -504,9 +524,30 @@ export class CoinService {
 
   async getWithdrawalSettings(userId: string) {
     const setting = await coinRepository.getCoinSettings();
-    const user = await UserModel.findById(userId).select('coinBalance stripeConnectAccountId stripeConnectOnboardingComplete').exec();
+    const [user, pendingWithdrawal] = await Promise.all([
+      UserModel.findById(userId).select('coinBalance stripeConnectAccountId stripeConnectOnboardingComplete').exec(),
+      coinRepository.getUserPendingWithdrawalSummary(userId),
+    ]);
     const coinBalance = user?.coinBalance ?? 0;
     const estimatedUsdValue = Number((coinBalance / setting.coinsPerDollar).toFixed(2));
+    let stripeConnectOnboardingComplete = user?.stripeConnectOnboardingComplete ?? false;
+
+    if (user?.stripeConnectAccountId) {
+      try {
+        const account = await stripe.accounts.retrieve(user.stripeConnectAccountId);
+        stripeConnectOnboardingComplete = account.payouts_enabled ?? false;
+
+        if (user.stripeConnectOnboardingComplete !== stripeConnectOnboardingComplete) {
+          await coinRepository.updateUserStripeConnectAccount(
+            userId,
+            user.stripeConnectAccountId,
+            stripeConnectOnboardingComplete,
+          );
+        }
+      } catch {
+        stripeConnectOnboardingComplete = user.stripeConnectOnboardingComplete ?? false;
+      }
+    }
 
     return {
       coinsPerDollar: setting.coinsPerDollar,
@@ -514,8 +555,11 @@ export class CoinService {
       maxWithdrawalCoins: setting.maxWithdrawalCoins,
       userCoinBalance: coinBalance,
       estimatedUsdValue,
+      pendingWithdrawalCoins: pendingWithdrawal.coins,
+      pendingWithdrawalUsdValue: pendingWithdrawal.amountUsd,
+      pendingWithdrawalCount: pendingWithdrawal.count,
       stripeConnectAccountId: user?.stripeConnectAccountId,
-      stripeConnectOnboardingComplete: user?.stripeConnectOnboardingComplete ?? false,
+      stripeConnectOnboardingComplete,
       payoutSetupAvailable: Boolean(env.STRIPE_SECRET_KEY),
     };
   }
@@ -702,97 +746,6 @@ export class CoinService {
     };
   }
 
-  async createSquarePayment(userId: string, packageId: string, sourceId: string) {
-    const coinPackage = await coinRepository.getPackageById(packageId);
-
-    if (!coinPackage || !coinPackage.isActive) {
-      throw new NotFoundError('Coin package not found or no longer available.');
-    }
-
-    if (!env.SQUARE_ACCESS_TOKEN || !env.SQUARE_LOCATION_ID) {
-      throw new BadRequestError('Square payment is not configured.', {
-        code: 'SQUARE_PAYMENT_NOT_CONFIGURED',
-      });
-    }
-
-    const transaction = await coinRepository.createTransaction({
-      userId,
-      packageId: coinPackage._id.toString(),
-      coins: coinPackage.coins,
-      amount: coinPackage.price,
-      currency: coinPackage.currency,
-      paymentProvider: 'square',
-      metadata: {
-        packageName: coinPackage.name,
-        source: 'mobile',
-        squareEnvironment: env.SQUARE_ENVIRONMENT,
-      },
-    });
-
-    const amountInCents = Math.round(coinPackage.price * 100);
-    const squareBaseUrl =
-      env.SQUARE_ENVIRONMENT === 'production'
-        ? 'https://connect.squareup.com'
-        : 'https://connect.squareupsandbox.com';
-
-    const squareResponse = await fetch(`${squareBaseUrl}/v2/payments`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${env.SQUARE_ACCESS_TOKEN}`,
-        'Content-Type': 'application/json',
-        'Square-Version': '2026-08-20',
-      },
-      body: JSON.stringify({
-        source_id: sourceId,
-        idempotency_key: `coin-${transaction._id.toString()}`,
-        location_id: env.SQUARE_LOCATION_ID,
-        amount_money: {
-          amount: amountInCents,
-          currency: coinPackage.currency.toUpperCase(),
-        },
-        note: `${coinPackage.coins} coins purchase`,
-        reference_id: transaction._id.toString(),
-      }),
-    });
-
-    const squarePayload = await squareResponse.json().catch(() => ({}));
-
-    if (!squareResponse.ok || !squarePayload?.payment?.id) {
-      throw new BadRequestError(
-        squarePayload?.errors?.[0]?.detail || 'Square payment failed.',
-        { code: 'SQUARE_PAYMENT_FAILED' },
-      );
-    }
-
-    const payment = squarePayload.payment as { id: string; order_id?: string; status?: string };
-
-    if (payment.status !== 'COMPLETED' && payment.status !== 'APPROVED') {
-      throw new BadRequestError(`Square payment status is ${payment.status || 'unknown'}.`, {
-        code: 'SQUARE_PAYMENT_NOT_COMPLETED',
-      });
-    }
-
-    const paymentFields = {
-      squarePaymentId: payment.id,
-      ...(payment.order_id ? { squareOrderId: payment.order_id } : {}),
-    };
-    const completed = await coinRepository.completeTransactionByIdAndAddCoins(
-      transaction._id.toString(),
-      paymentFields,
-    );
-    const currentBalance = await coinRepository.getUserBalance(userId);
-
-    return {
-      paymentProvider: 'square',
-      paymentId: payment.id,
-      transactionId: completed?.transaction._id.toString() ?? transaction._id.toString(),
-      coinsAdded: coinPackage.coins,
-      coinBalance: currentBalance,
-      coinsCredited: completed?.newlyCompleted ?? false,
-      status: payment.status,
-    };
-  }
-
   async updateAdminCoinSettings(adminUserId: string, input: UpdateCoinSettingsInput) {
     const update = {
       coinsPerDollar: input.coinsPerDollar,
@@ -814,3 +767,23 @@ export class CoinService {
 }
 
 export const coinService = new CoinService();
+
+function toStripeConnectSetupError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+
+  return new BadRequestError(
+    message.includes('signed up for Connect')
+      ? 'Withdraw is not ready yet. Please enable Stripe Connect in your Stripe dashboard first.'
+      : `Stripe Connect setup failed: ${message}`,
+    {
+      code: 'STRIPE_CONNECT_NOT_CONFIGURED',
+      details: { stripeMessage: message },
+    },
+  );
+}
+
+function buildStripeConnectRedirectUrl(path: string) {
+  const baseUrl = env.PUBLIC_BASE_URL?.replace(/\/+$/, '') ?? `http://localhost:${env.PORT}`;
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${baseUrl}${normalizedPath}`;
+}

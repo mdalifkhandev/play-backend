@@ -6,7 +6,6 @@ import type {
   ApproveWithdrawalInput,
   ConvertDiamondsInput,
   CreatePaymentIntentInput,
-  CreateSquarePaymentInput,
   GetGiftsQueryInput,
   GetTransactionsQueryInput,
   GetWithdrawalsQueryInput,
@@ -57,13 +56,6 @@ export class CoinController {
     const { paymentIntentId } = request.body as VerifyPaymentInput;
     const result = await coinService.verifyPaymentIntent(userId, paymentIntentId);
     return sendSuccess(response, 200, 'Payment status verified successfully.', result);
-  });
-
-  createSquarePayment = asyncHandler(async (request: Request, response: Response) => {
-    const userId = request.user!.userId;
-    const { packageId, sourceId } = request.body as CreateSquarePaymentInput;
-    const result = await coinService.createSquarePayment(userId, packageId, sourceId);
-    return sendSuccess(response, 201, 'Square payment completed successfully.', result);
   });
 
   handleWebhook = asyncHandler(async (request: Request, response: Response) => {

@@ -3,11 +3,12 @@ import { z } from 'zod';
 export const subscriptionPlanIds = ['monthly', 'yearly'] as const;
 export type SubscriptionPlanId = (typeof subscriptionPlanIds)[number];
 
-export const createSquareSubscriptionSchema = {
+export const syncRevenueCatSubscriptionSchema = {
   body: z.object({
     planId: z.enum(subscriptionPlanIds),
-    sourceId: z.string().trim().min(1, 'Square payment source is required.'),
+    platform: z.enum(['ios', 'android']),
+    productIdentifier: z.string().trim().min(1).max(200).optional(),
   }),
 };
 
-export type CreateSquareSubscriptionInput = z.infer<typeof createSquareSubscriptionSchema.body>;
+export type SyncRevenueCatSubscriptionInput = z.infer<typeof syncRevenueCatSubscriptionSchema.body>;

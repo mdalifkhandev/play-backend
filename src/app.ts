@@ -38,6 +38,22 @@ app.get('/', (_request, response) => {
   });
 });
 
+app.get('/payouts/stripe-connect/return', (_request, response) => {
+  sendStripeConnectRedirectPage(response, {
+    title: 'Payout setup complete',
+    message: 'Returning you to Play...',
+    appUrl: 'play://screens/menu/balance?stripeConnect=return',
+  });
+});
+
+app.get('/payouts/stripe-connect/refresh', (_request, response) => {
+  sendStripeConnectRedirectPage(response, {
+    title: 'Continue payout setup',
+    message: 'Opening Play so you can retry setup...',
+    appUrl: 'play://screens/menu/balance?stripeConnect=refresh',
+  });
+});
+
 app.use(requestIdMiddleware);
 app.use(requestLogMiddleware);
 applySecurityMiddleware(app);
@@ -79,3 +95,50 @@ app.use('/api/v1', apiRouter);
 
 app.use(notFoundMiddleware);
 app.use(globalErrorHandler);
+
+function sendStripeConnectRedirectPage(
+  response: express.Response,
+  options: { title: string; message: string; appUrl: string },
+) {
+  const safeTitle = escapeHtml(options.title);
+  const safeMessage = escapeHtml(options.message);
+  const safeAppUrl = JSON.stringify(options.appUrl);
+
+  response.status(200).type('html').send(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>${safeTitle}</title>
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0a0a0a; color: #fff; font-family: Arial, sans-serif; }
+      main { width: min(420px, calc(100vw - 32px)); text-align: center; }
+      h1 { font-size: 24px; margin: 0 0 10px; }
+      p { color: #aaa; margin: 0 0 24px; line-height: 1.5; }
+      a { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 22px; border-radius: 12px; background: #a3e635; color: #000; text-decoration: none; font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>${safeTitle}</h1>
+      <p>${safeMessage}</p>
+      <a id="open-app" href=${safeAppUrl}>Open Play</a>
+    </main>
+    <script>
+      const appUrl = ${safeAppUrl};
+      setTimeout(() => {
+        window.location.href = appUrl;
+      }, 300);
+    </script>
+  </body>
+</html>`);
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
