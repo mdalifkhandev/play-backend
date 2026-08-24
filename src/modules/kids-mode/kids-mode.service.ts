@@ -4,11 +4,18 @@ import { ForbiddenError } from '../../common/errors/forbidden-error.js';
 import { NotFoundError } from '../../common/errors/not-found-error.js';
 import { UnauthorizedError } from '../../common/errors/unauthorized-error.js';
 import { hashPassword, verifyPassword } from '../../common/utils/hash.util.js';
+import { ReelStatus, ReelVisibility } from '../reels/reel.constants.js';
+import { ReelModel } from '../reels/reel.model.js';
 import { reelService, type ReelFeedResult } from '../reels/reel.service.js';
 import type { ReelFeedQuery } from '../reels/reel.validation.js';
-import type { KidsModeDocument } from './kids-mode.model.js';
+import { KidsModeModel, type KidsModeDocument } from './kids-mode.model.js';
 import { kidsModeRepository, type KidsModeRepository } from './kids-mode.repository.js';
-import type { SetupKidsModeInput, VerifyKidsPinInput } from './kids-mode.validation.js';
+import type {
+  AdminKidsModeContentInput,
+  AdminKidsModeContentQuery,
+  SetupKidsModeInput,
+  VerifyKidsPinInput,
+} from './kids-mode.validation.js';
 
 const MAX_PIN_ATTEMPTS = 5;
 const PIN_LOCK_MS = 15 * 60 * 1_000;
@@ -23,6 +30,33 @@ export interface KidsModeStatus {
   usedSeconds: number;
   remainingSeconds: number;
   limitReached: boolean;
+}
+
+export interface AdminKidsModeContentItem {
+  id: string;
+  thumbnailUrl: string;
+  uploader: string;
+  uploadDate: string;
+  kidFriendly: boolean;
+  reportCount: number;
+}
+
+export interface AdminKidsModeReportItem {
+  id: string;
+  thumbnailUrl: string;
+  reporterCount: number;
+  reason: string;
+  dateReported: string;
+}
+
+export interface AdminKidsModeListResult<T> {
+  items: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 export class KidsModeService {
@@ -127,6 +161,143 @@ export class KidsModeService {
     return reelService.getKidsFeed(query, userId);
   }
 
+  async listAdminContent(query: AdminKidsModeContentQuery): Promise<AdminKidsModeListResult<AdminKidsModeContentItem>> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const filter: Record<string, unknown> = {
+      status: ReelStatus.READY,
+      visibility: ReelVisibility.PUBLIC,
+      deletedAt: { $exists: false },
+    };
+
+    if (query.kidFriendly === 'yes') filter.forKids = true;
+    if (query.kidFriendly === 'no') filter.forKids = false;
+
+    const [items, total] = await Promise.all([
+      ReelModel.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .populate('ownerId', 'email profile.displayName profile.username profile.photoUrl')
+        .lean()
+        .exec(),
+      ReelModel.countDocuments(filter).exec(),
+    ]);
+
+    return {
+      items: items.map(mapAdminKidsContent),
+      pagination: toPagination(page, limit, total),
+    };
+  }
+
+  async updateAdminContent(reelId: string, input: AdminKidsModeContentInput): Promise<AdminKidsModeContentItem> {
+    const reel = await ReelModel.findOneAndUpdate(
+      {
+        _id: reelId,
+        status: ReelStatus.READY,
+        visibility: ReelVisibility.PUBLIC,
+        deletedAt: { $exists: false },
+      },
+      { $set: { forKids: input.forKids } },
+      { new: true },
+    )
+      .populate('ownerId', 'email profile.displayName profile.username profile.photoUrl')
+      .lean()
+      .exec();
+
+    if (!reel) {
+      throw new NotFoundError('Kids Mode content was not found.', { code: 'KIDS_CONTENT_NOT_FOUND' });
+    }
+
+    return mapAdminKidsContent(reel);
+  }
+
+  async listAdminReports(query: AdminKidsModeContentQuery): Promise<AdminKidsModeListResult<AdminKidsModeReportItem>> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const filter = {
+      status: ReelStatus.READY,
+      visibility: ReelVisibility.PUBLIC,
+      deletedAt: { $exists: false },
+      reportCount: { $gt: 0 },
+    };
+
+    const [items, total] = await Promise.all([
+      ReelModel.find(filter)
+        .sort({ reportCount: -1, updatedAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean()
+        .exec(),
+      ReelModel.countDocuments(filter).exec(),
+    ]);
+
+    return {
+      items: items.map(mapAdminKidsReport),
+      pagination: toPagination(page, limit, total),
+    };
+  }
+
+  async removeReportedContent(reelId: string): Promise<{ id: string; kidFriendly: boolean }> {
+    const reel = await ReelModel.findOneAndUpdate(
+      { _id: reelId, deletedAt: { $exists: false } },
+      { $set: { forKids: false } },
+      { new: true },
+    )
+      .select('_id forKids')
+      .lean()
+      .exec();
+
+    if (!reel) {
+      throw new NotFoundError('Reported Kids Mode content was not found.', { code: 'KIDS_CONTENT_NOT_FOUND' });
+    }
+
+    return { id: String(reel._id), kidFriendly: Boolean(reel.forKids) };
+  }
+
+  async dismissReportedContent(reelId: string): Promise<{ id: string; dismissed: true }> {
+    const reel = await ReelModel.findOneAndUpdate(
+      { _id: reelId, deletedAt: { $exists: false } },
+      { $set: { reportCount: 0 } },
+      { new: true },
+    )
+      .select('_id')
+      .lean()
+      .exec();
+
+    if (!reel) {
+      throw new NotFoundError('Reported Kids Mode content was not found.', { code: 'KIDS_CONTENT_NOT_FOUND' });
+    }
+
+    return { id: String(reel._id), dismissed: true };
+  }
+
+  async getAdminStats(): Promise<{
+    totalKidsModeUsers: number;
+    activeKidsProfiles: number;
+    ageBreakdown: { range: string; users: number }[];
+  }> {
+    const [totalKidsModeUsers, activeKidsProfiles, ageGroups] = await Promise.all([
+      KidsModeModel.countDocuments().exec(),
+      KidsModeModel.countDocuments({ isActive: true }).exec(),
+      KidsModeModel.aggregate<{ _id: string; users: number }>([
+        { $group: { _id: '$ageGroup', users: { $sum: 1 } } },
+        { $sort: { _id: 1 } },
+      ]).exec(),
+    ]);
+
+    const ageMap = new Map(ageGroups.map((item) => [item._id, item.users]));
+
+    return {
+      totalKidsModeUsers,
+      activeKidsProfiles,
+      ageBreakdown: KidsAgeGroupsForAdmin.map((range) => ({
+        range,
+        users: ageMap.get(range) ?? 0,
+      })),
+    };
+  }
+
   private async requireConfigured(userId: string, includePin: boolean): Promise<KidsModeDocument> {
     const document = await this.repository.findByUserId(userId, includePin);
     if (!document) {
@@ -193,6 +364,61 @@ export class KidsModeService {
       limitReached,
     };
   }
+}
+
+const KidsAgeGroupsForAdmin = ['3-6', '7-9', '10-15'];
+
+function toPagination(page: number, limit: number, total: number) {
+  return {
+    page,
+    limit,
+    total,
+    totalPages: Math.ceil(total / limit),
+  };
+}
+
+function mapAdminKidsContent(reel: any): AdminKidsModeContentItem {
+  const owner = reel.ownerId;
+  return {
+    id: String(reel._id),
+    thumbnailUrl: getReelThumbnailUrl(reel),
+    uploader:
+      owner?.profile?.displayName ||
+      owner?.profile?.username ||
+      owner?.email ||
+      'Unknown user',
+    uploadDate: formatAdminDate(reel.publishedAt || reel.createdAt),
+    kidFriendly: Boolean(reel.forKids),
+    reportCount: Number(reel.reportCount ?? 0),
+  };
+}
+
+function mapAdminKidsReport(reel: any): AdminKidsModeReportItem {
+  return {
+    id: String(reel._id),
+    thumbnailUrl: getReelThumbnailUrl(reel),
+    reporterCount: Number(reel.reportCount ?? 0),
+    reason: 'Reported for kids review',
+    dateReported: formatAdminDate(reel.updatedAt || reel.createdAt),
+  };
+}
+
+function getReelThumbnailUrl(reel: any): string {
+  return (
+    reel.thumbnail?.secureUrl ||
+    reel.processedMedia?.secureUrl ||
+    reel.rawMedia?.secureUrl ||
+    ''
+  );
+}
+
+function formatAdminDate(value?: Date | string): string {
+  if (!value) return 'Unknown';
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(value));
 }
 
 function toUsageDate(date: Date): string {
