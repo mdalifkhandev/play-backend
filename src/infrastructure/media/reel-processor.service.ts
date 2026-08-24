@@ -8,6 +8,7 @@ import { env } from '../../config/env.config.js';
 import { logger } from '../logger/logger.js';
 import { cloudinaryStorage, type CloudinaryStorage } from '../storage/index.js';
 import { REEL_PROGRESS, REEL_SAFE_ERROR_CODES } from '../../modules/reels/reel.constants.js';
+import { adminNotificationService } from '../../modules/notifications/admin-notification.service.js';
 import type { ReelDocument } from '../../modules/reels/reel.model.js';
 import {
   reelRepository,
@@ -237,6 +238,12 @@ export class ReelProcessorService {
       await this.cleanupPartialUploads(uploadedProcessedPublicId, uploadedThumbnailPublicId);
       const safe = toSafeProcessingError(error);
       await this.reels.markFailed(claimed._id, safe.code, safe.message);
+      void adminNotificationService.notifyAdmins({
+        event: 'reel_processing_failed',
+        title: 'Reel processing failed',
+        body: `Reel ${claimed._id.toString()} failed: ${safe.message}`,
+        relatedEntityId: claimed._id.toString(),
+      });
       throw error;
     } finally {
       if (workDir) {

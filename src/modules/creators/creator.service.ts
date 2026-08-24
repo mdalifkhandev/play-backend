@@ -3,6 +3,7 @@ import { NotFoundError } from '../../common/errors/not-found-error.js';
 import { UserRole } from '../../common/enums/user-role.enum.js';
 import { CreatorRequirementSettingModel } from './creator-requirement-setting.model.js';
 import { creatorRepository, type CreatorRepository } from './creator.repository.js';
+import { adminNotificationService } from '../notifications/admin-notification.service.js';
 import type {
   CreatorApplicationSummaryDTO,
   CreatorEligibilityDTO,
@@ -134,6 +135,12 @@ export class CreatorService {
     }
 
     const application = await this.repository.createApplication(userId, input);
+    void adminNotificationService.notifyAdmins({
+      event: 'creator_application_submitted',
+      title: 'New creator application',
+      body: `${input.fullName || input.email || 'A user'} submitted a creator application for review.`,
+      relatedEntityId: application._id.toString(),
+    });
     return mapApplicationSummary(application);
   }
 

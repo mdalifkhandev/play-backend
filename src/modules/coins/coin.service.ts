@@ -11,6 +11,7 @@ import type { ConvertDiamondsInput, SendGiftInput, UpdateCoinSettingsInput } fro
 import { activityService } from '../activities/activity.service.js';
 import type { GiftTargetType } from './sent-gift.model.js';
 import type { WithdrawalStatus } from './withdrawal-request.model.js';
+import { adminNotificationService } from '../notifications/admin-notification.service.js';
 
 export class CoinService {
   async getPackages() {
@@ -562,6 +563,13 @@ export class CoinService {
     }
 
     const remainingBalance = await coinRepository.getUserBalance(userId);
+
+    void adminNotificationService.notifyAdmins({
+      event: 'withdrawal_request_submitted',
+      title: 'New withdrawal request',
+      body: `A creator requested ${withdrawal.coins} coins withdrawal ($${withdrawal.amountUsd}).`,
+      relatedEntityId: withdrawal._id.toString(),
+    });
 
     return {
       withdrawalId: withdrawal._id.toString(),

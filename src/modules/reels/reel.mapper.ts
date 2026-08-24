@@ -68,7 +68,10 @@ export interface ReelStatusDto {
 }
 
 export interface ReelFeedItemDto {
+  kind?: 'reel' | 'live' | 'live_replay';
   id: string;
+  liveStreamId?: string;
+  liveStatus?: string;
   videoUrl: string;
   thumbnailUrl: string;
   durationMs: number;
@@ -211,6 +214,7 @@ export function toReelFeedItemDto(
   const durationMs = reel.processedMedia?.durationMs || reel.rawMedia?.durationMs || 5000;
 
   return {
+    kind: 'reel',
     id: reel._id.toString(),
     videoUrl,
     thumbnailUrl,

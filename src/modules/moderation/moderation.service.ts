@@ -4,6 +4,7 @@ import { AccountStatus } from '../../common/enums/account-status.enum.js';
 import { AppError } from '../../common/errors/app-error.js';
 import { NotFoundError } from '../../common/errors/not-found-error.js';
 import { CommentModel } from '../engagement/comment/comment.model.js';
+import { adminNotificationService } from '../notifications/admin-notification.service.js';
 import { ReelStatus } from '../reels/reel.constants.js';
 import { ReelModel } from '../reels/reel.model.js';
 import { UserModel } from '../users/user.model.js';
@@ -41,7 +42,15 @@ export class ModerationService {
       { upsert: true },
     ).exec();
 
-    return { reported: result.upsertedCount === 1 };
+    const reported = result.upsertedCount === 1;
+    void adminNotificationService.notifyAdmins({
+      event: 'moderation_report_submitted',
+      title: reported ? 'New content report' : 'Content report repeated',
+      body: `${targetType} was reported for ${reason}.`,
+      relatedEntityId: targetId,
+    });
+
+    return { reported };
   }
 
   async listForAdmin(query: AdminListModerationReportsQuery) {

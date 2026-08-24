@@ -1,5 +1,6 @@
-import { AppError } from '../../common/errors/app-error.js';
+import { AppError as AdAppError } from '../../common/errors/app-error.js';
 import { NotFoundError } from '../../common/errors/not-found-error.js';
+import { adminNotificationService } from '../notifications/admin-notification.service.js';
 import {
   adRepository,
   type AdRepository,
@@ -27,6 +28,12 @@ export class AdService {
 
   async create(ownerId: string, input: CreateAdCampaignInput) {
     const ad = await this.ads.create(ownerId, input);
+    void adminNotificationService.notifyAdmins({
+      event: 'ad_campaign_submitted',
+      title: 'New ad campaign submitted',
+      body: `${input.title || input.category || 'Ad campaign'} is waiting for admin review.`,
+      relatedEntityId: ad._id.toString(),
+    });
     return mapAd(ad);
   }
 
@@ -102,7 +109,7 @@ export class AdService {
     }
 
     if (!['approved', 'active', 'paused'].includes(ad.status)) {
-      throw new AppError('This ad campaign cannot be paused.', 409, {
+      throw new AdAppError('This ad campaign cannot be paused.', 409, {
         code: 'AD_STATUS_NOT_PAUSABLE',
       });
     }
@@ -122,7 +129,7 @@ export class AdService {
     }
 
     if (ad.status !== 'paused') {
-      throw new AppError('Only paused campaigns can be resumed.', 409, {
+      throw new AdAppError('Only paused campaigns can be resumed.', 409, {
         code: 'AD_STATUS_NOT_RESUMABLE',
       });
     }
@@ -189,7 +196,7 @@ function transition(
     return withReason({ status: 'cancelled' }, reason);
   }
 
-  throw new AppError('Unsupported ad action.', 400, { code: 'AD_ACTION_INVALID' });
+  throw new AdAppError('Unsupported ad action.', 400, { code: 'AD_ACTION_INVALID' });
 }
 
 function withReason(update: AdStatusUpdate, reason?: string): AdStatusUpdate {
@@ -202,7 +209,7 @@ function assertStatus(
   action: AdAction,
 ) {
   if (!allowed.includes(currentStatus)) {
-    throw new AppError(`Cannot ${action} an ad with status ${currentStatus}.`, 409, {
+    throw new AdAppError(`Cannot ${action} an ad with status ${currentStatus}.`, 409, {
       code: 'AD_STATUS_TRANSITION_INVALID',
     });
   }

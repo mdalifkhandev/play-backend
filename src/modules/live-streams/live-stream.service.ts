@@ -16,6 +16,7 @@ import type { ILiveStream } from './live-stream.model.js';
 import type { ILiveStreamComment } from './live-stream-comment.model.js';
 import { broadcastLiveStreamStatus } from './live-stream.gateway.js';
 import { activityService } from '../activities/activity.service.js';
+import { adminNotificationService } from '../notifications/admin-notification.service.js';
 import { isRecordingActive, liveStreamRecordingService } from './live-stream-recording.service.js';
 
 const { RtcTokenBuilder, RtcRole } = agoraToken;
@@ -363,11 +364,18 @@ export class LiveStreamService {
         await this.repository.updateRecordingState(streamId, recording);
       }
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       logger.error({ err: error, streamId }, 'Agora cloud recording start failed');
       await this.repository.updateRecordingState(streamId, {
         status: 'failed',
         mode: env.AGORA_RECORDING_MODE,
-        errorMessage: error instanceof Error ? error.message : String(error),
+        errorMessage: message,
+      });
+      void adminNotificationService.notifyAdmins({
+        event: 'live_recording_failed',
+        title: 'Live recording failed',
+        body: `Recording could not start for live stream ${streamId}: ${message}`,
+        relatedEntityId: streamId,
       });
     }
   }
@@ -383,12 +391,19 @@ export class LiveStreamService {
         await this.repository.updateRecordingState(streamId, stoppedRecording);
       }
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       logger.error({ err: error, streamId }, 'Agora cloud recording stop failed');
       await this.repository.updateRecordingState(streamId, {
         ...recording,
         status: 'failed',
         stoppedAt: new Date(),
-        errorMessage: error instanceof Error ? error.message : String(error),
+        errorMessage: message,
+      });
+      void adminNotificationService.notifyAdmins({
+        event: 'live_recording_failed',
+        title: 'Live recording failed',
+        body: `Recording could not stop for live stream ${streamId}: ${message}`,
+        relatedEntityId: streamId,
       });
     }
   }

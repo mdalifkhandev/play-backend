@@ -98,6 +98,7 @@ const environmentSchema = z
     AGORA_RECORDING_STORAGE_ACCESS_KEY: z.string().trim().min(1).optional(),
     AGORA_RECORDING_STORAGE_SECRET_KEY: z.string().trim().min(1).optional(),
     AGORA_RECORDING_FILE_PREFIX: z.string().trim().min(1).default('live-recordings'),
+    AGORA_RECORDING_PUBLIC_BASE_URL: z.string().trim().url().optional(),
     STORY_DURATION_HOURS: z.coerce.number().int().positive().max(168).default(24),
     STORY_IMAGE_MAX_BYTES: z.coerce.number().int().positive().default(10 * 1024 * 1024),
     STORY_VIDEO_MAX_BYTES: z.coerce.number().int().positive().default(100 * 1024 * 1024),

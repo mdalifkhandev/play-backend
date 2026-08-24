@@ -9,6 +9,7 @@ import { withDatabaseTransaction } from '../../infrastructure/database/transacti
 import { logger } from '../../infrastructure/logger/logger.js';
 import { mailService } from '../../infrastructure/mail/mail.service.js';
 import { auditService } from '../audit/audit.service.js';
+import { adminNotificationService } from '../notifications/admin-notification.service.js';
 import { UserModel } from '../users/user.model.js';
 import {
   SupportMessageSenderType,
@@ -224,6 +225,13 @@ export class SupportRequestService {
     request: Pick<SupportRequest, '_id' | 'ticketNumber' | 'requesterUserId' | 'category' | 'subject'>,
     message: string,
   ): Promise<void> {
+    void adminNotificationService.notifyAdmins({
+      event: 'support_request_submitted',
+      title: 'New support request',
+      body: `${request.ticketNumber}: ${request.subject}`,
+      relatedEntityId: request._id.toString(),
+    });
+
     if (!env.SUPPORT_ADMIN_EMAIL) return;
 
     const requesterEmail = await this.findUserEmail(request.requesterUserId.toString());
@@ -248,6 +256,13 @@ export class SupportRequestService {
     request: ReturnType<typeof toSupportRequestDto>,
     message: string,
   ): Promise<void> {
+    void adminNotificationService.notifyAdmins({
+      event: 'support_request_user_replied',
+      title: 'User replied to support',
+      body: `${request.ticketNumber}: ${request.subject}`,
+      relatedEntityId: request.id,
+    });
+
     if (!env.SUPPORT_ADMIN_EMAIL) return;
 
     const requesterEmail = await this.findUserEmail(request.requesterUserId);

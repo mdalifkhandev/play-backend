@@ -26,6 +26,8 @@ import {
   type MediaAssetRepository,
 } from '../media-assets/media-asset.repository.js';
 import { commentRepository } from '../engagement/comment/comment.repository.js';
+import { LiveStreamModel, type ILiveStream } from '../live-streams/live-stream.model.js';
+import { LIVE_STREAM_STATUS } from '../live-streams/live-stream.constants.js';
 import { musicService, type MusicService } from '../music/music.service.js';
 import type { MusicTrack } from '../music/music.types.js';
 import {
@@ -306,14 +308,17 @@ export class ReelService {
         ? encodeReelCursor({ publishedAt: last.publishedAt, id: last._id })
         : null;
 
-    return {
-      items: page.map((r) => {
+    const reelItems = page.map((r) => {
         const item = toReelFeedItemDto(r, viewerStateMap?.get(r._id.toString()));
         const actualCommentCount = commentCountMap.get(r._id.toString());
         return actualCommentCount === undefined
           ? item
           : { ...item, stats: { ...item.stats, comments: actualCommentCount } };
-      }),
+      });
+    const liveItems = await this.getLiveFeedItems(query.limit);
+
+    return {
+      items: this.mixLiveItems(reelItems, liveItems, query.limit),
       nextCursor: nextCursorValue,
       pagination: {
         nextCursor: nextCursorValue,
@@ -384,14 +389,17 @@ export class ReelService {
           })
         : null;
 
-    return {
-      items: page.map(({ reel }) => {
+    const reelItems = page.map(({ reel }) => {
         const item = toReelFeedItemDto(reel, viewerStateMap?.get(reel._id.toString()));
         const actualCommentCount = commentCountMap.get(reel._id.toString());
         return actualCommentCount === undefined
           ? item
           : { ...item, stats: { ...item.stats, comments: actualCommentCount } };
-      }),
+      });
+    const liveItems = await this.getLiveFeedItems(query.limit);
+
+    return {
+      items: this.mixLiveItems(reelItems, liveItems, query.limit),
       nextCursor: nextCursorValue,
       pagination: { nextCursor: nextCursorValue, hasNextPage },
     };
@@ -750,6 +758,133 @@ export class ReelService {
       logger.warn({ err: error }, 'Failed to load Reel comment counts; falling back to stored counters');
       return new Map();
     }
+  }
+
+  private async getLiveFeedItems(limit: number): Promise<ReelFeedItemDto[]> {
+    const streams = await LiveStreamModel.find({
+      $or: [
+        { status: LIVE_STREAM_STATUS.LIVE },
+        {
+          status: LIVE_STREAM_STATUS.ENDED,
+          'recording.status': 'stopped',
+          'recording.fileList': { $exists: true },
+        },
+      ],
+    })
+      .sort({ status: 1, startedAt: -1, endedAt: -1 })
+      .limit(Math.min(5, Math.max(1, limit)))
+      .populate('hostId', 'profile email isVerified subscriptionStatus subscriptionExpiresAt')
+      .exec();
+
+    return streams
+      .map((stream) => this.mapLiveStreamToFeedItem(stream))
+      .filter((item): item is ReelFeedItemDto => Boolean(item));
+  }
+
+  private mixLiveItems(reels: ReelFeedItemDto[], liveItems: ReelFeedItemDto[], limit: number): ReelFeedItemDto[] {
+    if (liveItems.length === 0) return reels;
+
+    const seen = new Set<string>();
+    const mixed: ReelFeedItemDto[] = [];
+
+    for (const item of [...liveItems, ...reels]) {
+      const key = `${item.kind ?? 'reel'}:${item.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      mixed.push(item);
+      if (mixed.length >= limit) break;
+    }
+
+    return mixed;
+  }
+
+  private mapLiveStreamToFeedItem(stream: ILiveStream): ReelFeedItemDto | null {
+    const host = stream.hostId as any;
+    const isLive = stream.status === LIVE_STREAM_STATUS.LIVE;
+    const replayUrl = isLive ? null : this.resolveRecordingPlaybackUrl(stream.recording?.fileList);
+
+    if (!isLive && !replayUrl) {
+      return null;
+    }
+
+    const hostId = host?._id?.toString() || host?.toString() || '';
+    const profile = host?.profile;
+    const createdAt = stream.startedAt ?? stream.createdAt ?? new Date();
+    const publishedAt = isLive ? createdAt : stream.endedAt ?? createdAt;
+    const coverImage = stream.coverImage || profile?.photoUrl || '';
+    const isPremium = Boolean(
+      host?.subscriptionStatus === 'active' &&
+        host.subscriptionExpiresAt &&
+        host.subscriptionExpiresAt.getTime() > Date.now(),
+    );
+
+    return {
+      kind: isLive ? 'live' : 'live_replay',
+      id: `${isLive ? 'live' : 'live-replay'}-${stream._id.toString()}`,
+      liveStreamId: stream._id.toString(),
+      liveStatus: stream.status,
+      videoUrl: replayUrl || coverImage,
+      thumbnailUrl: coverImage || replayUrl || '',
+      durationMs: Math.max(1000, stream.endedAt && stream.startedAt ? stream.endedAt.getTime() - stream.startedAt.getTime() : 0),
+      caption: stream.description || stream.title || null,
+      hashtags: [],
+      mentions: [],
+      location: null,
+      mediaType: isLive ? 'photo' : 'video',
+      upload: {
+        mediaAssetId: stream._id.toString(),
+        provider: 'cloudinary',
+        publicId: stream.channelName,
+        version: 1,
+        secureUrl: replayUrl || coverImage,
+        width: 720,
+        height: 1280,
+        durationMs: 0,
+        fileSizeBytes: 0,
+        mimeType: isLive ? 'image/jpeg' : 'video/mp4',
+        format: isLive ? 'jpg' : 'mp4',
+        hasAudio: true,
+      },
+      edit: {
+        filter: 'none',
+        effect: 'none',
+        overlayText: null,
+      },
+      kids: false,
+      forKids: false,
+      user: {
+        id: hostId,
+        email: host?.email ?? null,
+        username: profile?.username ?? host?.email?.split('@')[0] ?? null,
+        displayName: profile?.displayName ?? profile?.username ?? host?.email?.split('@')[0] ?? null,
+        avatarUrl: profile?.photoUrl ?? null,
+        isPremium,
+      },
+      stats: {
+        likes: stream.likesCount || 0,
+        comments: stream.commentsCount || 0,
+        shares: stream.sharesCount || 0,
+        views: stream.peakViewerCount || stream.viewerCount || 0,
+      },
+      viewerState: null,
+      createdAt: createdAt.toISOString(),
+      publishedAt: publishedAt.toISOString(),
+    };
+  }
+
+  private resolveRecordingPlaybackUrl(fileList: unknown): string | null {
+    const baseUrl = env.AGORA_RECORDING_PUBLIC_BASE_URL?.replace(/\/+$/, '');
+    if (!baseUrl) return null;
+
+    const files = Array.isArray(fileList) ? fileList : [];
+    const preferred = files.find((file) => {
+      const fileName = typeof file === 'string' ? file : (file as any)?.fileName;
+      return typeof fileName === 'string' && /\.(mp4|m3u8)$/i.test(fileName);
+    });
+    const fileName = typeof preferred === 'string' ? preferred : (preferred as any)?.fileName;
+    if (typeof fileName !== 'string') return null;
+
+    return `${baseUrl}/${fileName.replace(/^\/+/, '')}`;
   }
 
   private async requirePublishableAsset(

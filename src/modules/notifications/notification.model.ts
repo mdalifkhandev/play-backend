@@ -11,6 +11,7 @@ export interface Notification {
   title?: string;
   body?: string;
   relatedEntityId?: Types.ObjectId;
+  data?: Record<string, unknown>;
   isRead: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -26,6 +27,7 @@ const notificationSchema = new Schema<Notification>(
     title: { type: String, trim: true, maxlength: 200 },
     body: { type: String, trim: true, maxlength: 1000 },
     relatedEntityId: { type: Schema.Types.ObjectId },
+    data: { type: Schema.Types.Mixed },
     isRead: { type: Boolean, default: false, required: true },
   },
   {
