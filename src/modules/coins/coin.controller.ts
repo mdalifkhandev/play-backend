@@ -5,6 +5,8 @@ import { coinService } from './coin.service.js';
 import type {
   ApproveWithdrawalInput,
   ConvertDiamondsInput,
+  CreateAdminCoinPackageInput,
+  CreateAdminGiftInput,
   CreatePaymentIntentInput,
   GetGiftsQueryInput,
   GetTransactionsQueryInput,
@@ -12,6 +14,8 @@ import type {
   RejectWithdrawalInput,
   SendGiftInput,
   StripeConnectLinkInput,
+  UpdateAdminCoinPackageInput,
+  UpdateAdminGiftInput,
   UpdateCoinSettingsInput,
   VerifyPaymentInput,
   WithdrawCoinsInput,
@@ -140,6 +144,61 @@ export class CoinController {
   });
 
   // --- ADMIN HANDLERS ---
+
+  getAdminPackages = asyncHandler(async (_request: Request, response: Response) => {
+    const result = await coinService.getAdminPackages();
+    return sendSuccess(response, 200, 'Admin coin packages retrieved.', result);
+  });
+
+  createAdminPackage = asyncHandler(async (request: Request, response: Response) => {
+    const result = await coinService.createAdminPackage(request.body as CreateAdminCoinPackageInput);
+    return sendSuccess(response, 201, 'Coin package created.', result);
+  });
+
+  updateAdminPackage = asyncHandler(async (request: Request, response: Response) => {
+    const { packageId } = request.params as { packageId: string };
+    const result = await coinService.updateAdminPackage(packageId, request.body as UpdateAdminCoinPackageInput);
+    return sendSuccess(response, 200, 'Coin package updated.', result);
+  });
+
+  deleteAdminPackage = asyncHandler(async (request: Request, response: Response) => {
+    const { packageId } = request.params as { packageId: string };
+    const result = await coinService.deleteAdminPackage(packageId);
+    return sendSuccess(response, 200, 'Coin package deleted.', result);
+  });
+
+  getAdminGifts = asyncHandler(async (_request: Request, response: Response) => {
+    const result = await coinService.getAdminGiftCatalog();
+    return sendSuccess(response, 200, 'Admin gift catalog retrieved.', result);
+  });
+
+  createAdminGift = asyncHandler(async (request: Request, response: Response) => {
+    const result = await coinService.createAdminGift(request.body as CreateAdminGiftInput);
+    return sendSuccess(response, 201, 'Gift created.', result);
+  });
+
+  updateAdminGift = asyncHandler(async (request: Request, response: Response) => {
+    const { giftId } = request.params as { giftId: string };
+    const result = await coinService.updateAdminGift(giftId, request.body as UpdateAdminGiftInput);
+    return sendSuccess(response, 200, 'Gift updated.', result);
+  });
+
+  deleteAdminGift = asyncHandler(async (request: Request, response: Response) => {
+    const { giftId } = request.params as { giftId: string };
+    const result = await coinService.deleteAdminGift(giftId);
+    return sendSuccess(response, 200, 'Gift deleted.', result);
+  });
+
+  getAdminTransactions = asyncHandler(async (request: Request, response: Response) => {
+    const { page, limit } = request.query as unknown as GetTransactionsQueryInput;
+    const result = await coinService.getAdminTransactionHistory(page, limit);
+    return sendSuccess(response, 200, 'Admin coin transactions retrieved.', result);
+  });
+
+  getAdminSettings = asyncHandler(async (_request: Request, response: Response) => {
+    const result = await coinService.getAdminCoinSettings();
+    return sendSuccess(response, 200, 'Coin settings retrieved.', result);
+  });
 
   approveWithdrawal = asyncHandler(async (request: Request, response: Response) => {
     const adminUserId = request.user!.userId;

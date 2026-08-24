@@ -28,6 +28,61 @@ export class CoinRepository {
     return CoinPackageModel.findById(packageId).exec();
   }
 
+  async getAdminPackages(): Promise<CoinPackageDocument[]> {
+    return CoinPackageModel.find().sort({ sortOrder: 1, price: 1, createdAt: -1 }).exec();
+  }
+
+  async createAdminPackage(data: {
+    name: string;
+    coins: number;
+    price: number;
+    currency: string;
+    isPopular?: boolean;
+    isActive?: boolean;
+    sortOrder?: number;
+    stripePriceId?: string | undefined;
+  }): Promise<CoinPackageDocument> {
+    const payload: Record<string, unknown> = {
+      name: data.name,
+      coins: data.coins,
+      price: data.price,
+      currency: data.currency.toLowerCase(),
+    };
+    if (data.isPopular !== undefined) payload.isPopular = data.isPopular;
+    if (data.isActive !== undefined) payload.isActive = data.isActive;
+    if (data.sortOrder !== undefined) payload.sortOrder = data.sortOrder;
+    if (data.stripePriceId) payload.stripePriceId = data.stripePriceId;
+    return CoinPackageModel.create({
+      ...payload,
+    });
+  }
+
+  async updateAdminPackage(
+    packageId: string,
+    data: Record<string, unknown>,
+  ): Promise<CoinPackageDocument | null> {
+    if (!Types.ObjectId.isValid(packageId)) {
+      return null;
+    }
+    return CoinPackageModel.findByIdAndUpdate(
+      packageId,
+      {
+        $set: {
+          ...data,
+          ...(typeof data.currency === 'string' ? { currency: data.currency.toLowerCase() } : {}),
+        },
+      },
+      { new: true },
+    ).exec();
+  }
+
+  async deleteAdminPackage(packageId: string): Promise<CoinPackageDocument | null> {
+    if (!Types.ObjectId.isValid(packageId)) {
+      return null;
+    }
+    return CoinPackageModel.findByIdAndDelete(packageId).exec();
+  }
+
   async seedDefaultPackages(): Promise<void> {
     const count = await CoinPackageModel.countDocuments();
     if (count > 0) return;
@@ -60,6 +115,50 @@ export class CoinRepository {
       return null;
     }
     return GiftCatalogModel.findById(giftId).exec();
+  }
+
+  async getAdminGifts(): Promise<GiftCatalogDocument[]> {
+    return GiftCatalogModel.find().sort({ sortOrder: 1, coinPrice: 1, createdAt: -1 }).exec();
+  }
+
+  async createAdminGift(data: {
+    name: string;
+    code: string;
+    icon: string;
+    coinPrice: number;
+    isActive?: boolean;
+    sortOrder?: number;
+  }): Promise<GiftCatalogDocument> {
+    return GiftCatalogModel.create({
+      ...data,
+      code: data.code.toLowerCase(),
+    });
+  }
+
+  async updateAdminGift(
+    giftId: string,
+    data: Record<string, unknown>,
+  ): Promise<GiftCatalogDocument | null> {
+    if (!Types.ObjectId.isValid(giftId)) {
+      return null;
+    }
+    return GiftCatalogModel.findByIdAndUpdate(
+      giftId,
+      {
+        $set: {
+          ...data,
+          ...(typeof data.code === 'string' ? { code: data.code.toLowerCase() } : {}),
+        },
+      },
+      { new: true },
+    ).exec();
+  }
+
+  async deleteAdminGift(giftId: string): Promise<GiftCatalogDocument | null> {
+    if (!Types.ObjectId.isValid(giftId)) {
+      return null;
+    }
+    return GiftCatalogModel.findByIdAndDelete(giftId).exec();
   }
 
   async seedDefaultGifts(): Promise<void> {
@@ -328,6 +427,24 @@ export class CoinRepository {
         .populate('packageId', 'name coins price currency isPopular')
         .exec(),
       CoinTransactionModel.countDocuments({ userId: userObjectId }),
+    ]);
+
+    return { transactions, total };
+  }
+
+  async getAdminTransactions(
+    skip: number,
+    limit: number,
+  ): Promise<{ transactions: CoinTransactionDocument[]; total: number }> {
+    const [transactions, total] = await Promise.all([
+      CoinTransactionModel.find()
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('userId', 'email profile.displayName profile.username profile.photoUrl')
+        .populate('packageId', 'name coins price currency isPopular')
+        .exec(),
+      CoinTransactionModel.countDocuments(),
     ]);
 
     return { transactions, total };

@@ -7,7 +7,15 @@ import { coinRepository } from './coin.repository.js';
 import { UserModel } from '../users/user.model.js';
 import { ReelModel } from '../reels/reel.model.js';
 import { LiveStreamModel } from '../live-streams/live-stream.model.js';
-import type { ConvertDiamondsInput, SendGiftInput, UpdateCoinSettingsInput } from './coin.validation.js';
+import type {
+  ConvertDiamondsInput,
+  CreateAdminCoinPackageInput,
+  CreateAdminGiftInput,
+  SendGiftInput,
+  UpdateAdminCoinPackageInput,
+  UpdateAdminGiftInput,
+  UpdateCoinSettingsInput,
+} from './coin.validation.js';
 import { activityService } from '../activities/activity.service.js';
 import type { GiftTargetType } from './sent-gift.model.js';
 import type { WithdrawalStatus } from './withdrawal-request.model.js';
@@ -25,6 +33,32 @@ export class CoinService {
       isPopular: pkg.isPopular,
       sortOrder: pkg.sortOrder,
     }));
+  }
+
+  async getAdminPackages() {
+    const packages = await coinRepository.getAdminPackages();
+    return packages.map(mapCoinPackage);
+  }
+
+  async createAdminPackage(input: CreateAdminCoinPackageInput) {
+    const created = await coinRepository.createAdminPackage(input);
+    return mapCoinPackage(created);
+  }
+
+  async updateAdminPackage(packageId: string, input: UpdateAdminCoinPackageInput) {
+    const updated = await coinRepository.updateAdminPackage(packageId, input);
+    if (!updated) {
+      throw new NotFoundError('Coin package was not found.');
+    }
+    return mapCoinPackage(updated);
+  }
+
+  async deleteAdminPackage(packageId: string) {
+    const deleted = await coinRepository.deleteAdminPackage(packageId);
+    if (!deleted) {
+      throw new NotFoundError('Coin package was not found.');
+    }
+    return { deleted: true, id: deleted._id.toString() };
   }
 
   async getUserCoinBalance(userId: string) {
@@ -86,6 +120,32 @@ export class CoinService {
       coinPrice: g.coinPrice,
       sortOrder: g.sortOrder,
     }));
+  }
+
+  async getAdminGiftCatalog() {
+    const gifts = await coinRepository.getAdminGifts();
+    return gifts.map(mapGiftCatalog);
+  }
+
+  async createAdminGift(input: CreateAdminGiftInput) {
+    const created = await coinRepository.createAdminGift(input);
+    return mapGiftCatalog(created);
+  }
+
+  async updateAdminGift(giftId: string, input: UpdateAdminGiftInput) {
+    const updated = await coinRepository.updateAdminGift(giftId, input);
+    if (!updated) {
+      throw new NotFoundError('Gift was not found.');
+    }
+    return mapGiftCatalog(updated);
+  }
+
+  async deleteAdminGift(giftId: string) {
+    const deleted = await coinRepository.deleteAdminGift(giftId);
+    if (!deleted) {
+      throw new NotFoundError('Gift was not found.');
+    }
+    return { deleted: true, id: deleted._id.toString() };
   }
 
   async sendGift(senderId: string, input: SendGiftInput) {
@@ -406,6 +466,33 @@ export class CoinService {
     return {
       items: transactions.map((t) => ({
         id: t._id.toString(),
+        coins: t.coins,
+        amount: t.amount,
+        currency: t.currency,
+        status: t.status,
+        paymentProvider: t.paymentProvider,
+        stripePaymentIntentId: t.stripePaymentIntentId,
+        createdAt: t.createdAt.toISOString(),
+        completedAt: t.completedAt ? t.completedAt.toISOString() : undefined,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getAdminTransactionHistory(page: number, limit: number) {
+    const skip = (page - 1) * limit;
+    const { transactions, total } = await coinRepository.getAdminTransactions(skip, limit);
+
+    return {
+      items: transactions.map((t) => ({
+        id: t._id.toString(),
+        user: formatTransactionUser(t.userId),
+        type: t.paymentProvider === 'diamond_conversion' ? 'Diamond conversion' : 'Coin purchase',
         coins: t.coins,
         amount: t.amount,
         currency: t.currency,
@@ -764,9 +851,58 @@ export class CoinService {
       updatedAt: updated.updatedAt.toISOString(),
     };
   }
+
+  async getAdminCoinSettings() {
+    const setting = await coinRepository.getCoinSettings();
+    return {
+      coinsPerDollar: setting.coinsPerDollar,
+      minWithdrawalCoins: setting.minWithdrawalCoins,
+      maxWithdrawalCoins: setting.maxWithdrawalCoins,
+      updatedAt: setting.updatedAt.toISOString(),
+    };
+  }
 }
 
 export const coinService = new CoinService();
+
+function mapCoinPackage(pkg: any) {
+  return {
+    id: pkg._id.toString(),
+    name: pkg.name,
+    coins: pkg.coins,
+    price: pkg.price,
+    currency: pkg.currency,
+    isPopular: pkg.isPopular,
+    isActive: pkg.isActive,
+    sortOrder: pkg.sortOrder,
+    stripePriceId: pkg.stripePriceId,
+    createdAt: pkg.createdAt?.toISOString?.(),
+    updatedAt: pkg.updatedAt?.toISOString?.(),
+  };
+}
+
+function mapGiftCatalog(gift: any) {
+  return {
+    id: gift._id.toString(),
+    name: gift.name,
+    code: gift.code,
+    icon: gift.icon,
+    coinPrice: gift.coinPrice,
+    isActive: gift.isActive,
+    sortOrder: gift.sortOrder,
+    createdAt: gift.createdAt?.toISOString?.(),
+    updatedAt: gift.updatedAt?.toISOString?.(),
+  };
+}
+
+function formatTransactionUser(user: any): string {
+  return (
+    user?.profile?.displayName ||
+    user?.profile?.username ||
+    user?.email ||
+    'Unknown user'
+  );
+}
 
 function toStripeConnectSetupError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);

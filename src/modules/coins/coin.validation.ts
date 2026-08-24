@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid id.');
+
 export const createPaymentIntentSchema = {
   body: z.object({
     packageId: z.string().trim().min(1, 'Package ID is required.'),
@@ -91,6 +93,56 @@ export const getWithdrawalsQuerySchema = {
   }),
 };
 
+export const adminCoinPackageParamsSchema = {
+  params: z.object({
+    packageId: objectIdSchema,
+  }),
+};
+
+export const adminGiftParamsSchema = {
+  params: z.object({
+    giftId: objectIdSchema,
+  }),
+};
+
+export const createAdminCoinPackageSchema = {
+  body: z.object({
+    name: z.string().trim().min(1).max(80),
+    coins: z.coerce.number().int().positive(),
+    price: z.coerce.number().min(0),
+    currency: z.string().trim().min(3).max(3).default('usd'),
+    isPopular: z.boolean().optional().default(false),
+    isActive: z.boolean().optional().default(true),
+    sortOrder: z.coerce.number().int().optional().default(0),
+    stripePriceId: z.string().trim().max(120).optional(),
+  }),
+};
+
+export const updateAdminCoinPackageSchema = {
+  params: adminCoinPackageParamsSchema.params,
+  body: createAdminCoinPackageSchema.body.partial().refine((value) => Object.keys(value).length > 0, {
+    message: 'At least one package field is required.',
+  }),
+};
+
+export const createAdminGiftSchema = {
+  body: z.object({
+    name: z.string().trim().min(1).max(80),
+    code: z.string().trim().min(1).max(60),
+    icon: z.string().trim().min(1).max(250),
+    coinPrice: z.coerce.number().int().positive(),
+    isActive: z.boolean().optional().default(true),
+    sortOrder: z.coerce.number().int().optional().default(0),
+  }),
+};
+
+export const updateAdminGiftSchema = {
+  params: adminGiftParamsSchema.params,
+  body: createAdminGiftSchema.body.partial().refine((value) => Object.keys(value).length > 0, {
+    message: 'At least one gift field is required.',
+  }),
+};
+
 export type CreatePaymentIntentInput = z.infer<typeof createPaymentIntentSchema.body>;
 export type VerifyPaymentInput = z.infer<typeof verifyPaymentSchema.body>;
 export type GetTransactionsQueryInput = z.infer<typeof getTransactionsQuerySchema.query>;
@@ -103,3 +155,7 @@ export type ApproveWithdrawalInput = z.infer<typeof approveWithdrawalSchema.body
 export type RejectWithdrawalInput = z.infer<typeof rejectWithdrawalSchema.body>;
 export type UpdateCoinSettingsInput = z.infer<typeof updateCoinSettingsSchema.body>;
 export type GetWithdrawalsQueryInput = z.infer<typeof getWithdrawalsQuerySchema.query>;
+export type CreateAdminCoinPackageInput = z.infer<typeof createAdminCoinPackageSchema.body>;
+export type UpdateAdminCoinPackageInput = z.infer<typeof updateAdminCoinPackageSchema.body>;
+export type CreateAdminGiftInput = z.infer<typeof createAdminGiftSchema.body>;
+export type UpdateAdminGiftInput = z.infer<typeof updateAdminGiftSchema.body>;
