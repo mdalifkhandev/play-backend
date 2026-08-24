@@ -36,6 +36,7 @@ import { moderationAdminRouter, moderationRouter } from '../modules/moderation/m
 import { monetizationAdminRouter } from '../modules/monetization/monetization.route.js';
 import { creatorCategoryRouter } from '../modules/creator-categories/creator-category.route.js';
 import { occupationRouter } from '../modules/occupations/occupation.route.js';
+import { adminSearchRouter } from '../modules/admin-search/admin-search.route.js';
 
 export const apiRouter = Router();
 
@@ -73,4 +74,5 @@ apiRouter.use('/admin/creators', creatorAdminRouter);
 apiRouter.use('/admin/users', userAdminRouter);
 apiRouter.use('/admin/moderation', moderationAdminRouter);
 apiRouter.use('/admin/monetization', monetizationAdminRouter);
+apiRouter.use('/admin/search', adminSearchRouter);
 
