@@ -218,6 +218,19 @@ export class SubscriptionService {
       throw new NotFoundError('Subscription plan was not found.');
     }
 
+    await UserModel.updateMany(
+      { subscriptionPlan: planId },
+      {
+        $set: { subscriptionStatus: 'canceled' },
+        $unset: {
+          subscriptionPlan: '',
+          subscriptionExpiresAt: '',
+          subscriptionProvider: '',
+          subscriptionPaymentId: '',
+        },
+      },
+    ).exec();
+
     await SubscriptionPlanSeedStateModel.updateOne(
       { _id: 'default-subscription-plans' },
       { $setOnInsert: { seededAt: new Date() } },
