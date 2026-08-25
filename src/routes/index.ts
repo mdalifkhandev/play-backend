@@ -42,6 +42,7 @@ import {
   platformSettingAdminRouter,
   platformSettingRouter,
 } from '../modules/platform-settings/platform-setting.route.js';
+import { adminDashboardRouter } from '../modules/admin/admin.route.js';
 
 export const apiRouter = Router();
 
@@ -87,4 +88,5 @@ apiRouter.use('/admin/kids-mode', kidsModeAdminRouter);
 apiRouter.use('/admin/search', adminSearchRouter);
 apiRouter.use('/admin/announcements', announcementAdminRouter);
 apiRouter.use('/admin/settings', platformSettingAdminRouter);
+apiRouter.use('/admin/dashboard', adminDashboardRouter);
 
