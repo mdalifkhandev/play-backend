@@ -4,6 +4,7 @@ import { AdCampaignModel } from '../ads/ad-campaign.model.js';
 import { CoinTransactionModel } from '../coins/coin-transaction.model.js';
 import { WithdrawalRequestModel } from '../coins/withdrawal-request.model.js';
 import { CreatorRequirementSettingModel } from '../creators/creator-requirement-setting.model.js';
+import { SubscriptionPaymentModel } from '../subscriptions/subscription-payment.model.js';
 import { UserModel } from '../users/user.model.js';
 import { creatorEarningService } from './creator-earning.service.js';
 import { CreatorEarningModel } from './creator-earning.model.js';
@@ -111,7 +112,7 @@ export class MonetizationService {
   private async sumAdRevenue() {
     const [result] = await AdCampaignModel.aggregate<{ total: number }>([
       { $match: { status: { $in: ['approved', 'active', 'paused', 'completed'] } } },
-      { $group: { _id: null, total: { $sum: { $ifNull: ['$metrics.spendUsd', '$budgetUsd'] } } } },
+      { $group: { _id: null, total: { $sum: { $ifNull: ['$metrics.spendUsd', 0] } } } },
     ]).exec();
 
     return Number(result?.total ?? 0);
@@ -130,12 +131,12 @@ export class MonetizationService {
   }
 
   private async sumSubscriptionRevenue() {
-    const [monthly, yearly] = await Promise.all([
-      UserModel.countDocuments({ subscriptionStatus: 'active', subscriptionPlan: 'monthly' }),
-      UserModel.countDocuments({ subscriptionStatus: 'active', subscriptionPlan: 'yearly' }),
-    ]);
+    const [result] = await SubscriptionPaymentModel.aggregate<{ total: number }>([
+      { $match: { status: 'completed' } },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]).exec();
 
-    return monthly * 4.99 + yearly * 49.99;
+    return Number(result?.total ?? 0);
   }
 
   private async sumPayouts() {
@@ -209,13 +210,13 @@ export class MonetizationService {
   }
 
   private async getRevenueTrend() {
-    const [ads, coins] = await Promise.all([
+    const [ads, coins, subscriptions] = await Promise.all([
       AdCampaignModel.aggregate<{ month: string; revenue: number }>([
         { $match: { status: { $in: ['approved', 'active', 'paused', 'completed'] } } },
         {
           $group: {
             _id: { $dateToString: { format: '%b', date: '$createdAt' } },
-            revenue: { $sum: { $ifNull: ['$metrics.spendUsd', '$budgetUsd'] } },
+            revenue: { $sum: { $ifNull: ['$metrics.spendUsd', 0] } },
           },
         },
         { $project: { _id: 0, month: '$_id', revenue: 1 } },
@@ -230,10 +231,20 @@ export class MonetizationService {
         },
         { $project: { _id: 0, month: '$_id', revenue: 1 } },
       ]).exec(),
+      SubscriptionPaymentModel.aggregate<{ month: string; revenue: number }>([
+        { $match: { status: 'completed' } },
+        {
+          $group: {
+            _id: { $dateToString: { format: '%b', date: '$completedAt' } },
+            revenue: { $sum: '$amount' },
+          },
+        },
+        { $project: { _id: 0, month: '$_id', revenue: 1 } },
+      ]).exec(),
     ]);
 
     const totals = new Map(months.map((month) => [month, 0]));
-    [...ads, ...coins].forEach((row) => {
+    [...ads, ...coins, ...subscriptions].forEach((row) => {
       if (totals.has(row.month)) totals.set(row.month, (totals.get(row.month) ?? 0) + row.revenue);
     });
 

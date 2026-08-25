@@ -113,6 +113,12 @@ coinRouter.post(
   validateRequest(withdrawCoinsSchema),
   coinController.requestWithdrawal,
 );
+coinRouter.post(
+  '/withdraw/earnings',
+  authenticate,
+  requirePlatformFeature('withdrawals'),
+  coinController.requestEarningWithdrawal,
+);
 coinRouter.get(
   '/withdraw/history',
   authenticate,

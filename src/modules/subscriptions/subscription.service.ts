@@ -3,6 +3,7 @@ import { NotFoundError } from '../../common/errors/not-found-error.js';
 import { env } from '../../config/env.config.js';
 import { stripe } from '../../config/stripe.config.js';
 import { UserModel } from '../users/user.model.js';
+import { SubscriptionPaymentModel } from './subscription-payment.model.js';
 import { SubscriptionPlanModel, SubscriptionPlanSeedStateModel, type SubscriptionPlan as SubscriptionPlanRecord } from './subscription-plan.model.js';
 import type {
   AdminCreateSubscriptionPlanInput,
@@ -403,6 +404,25 @@ export class SubscriptionService {
     }
 
     const expiresAt = getSubscriptionExpiry(plan.interval);
+    await SubscriptionPaymentModel.updateOne(
+      { provider: 'stripe', providerPaymentId: paymentIntent.id },
+      {
+        $setOnInsert: {
+          userId,
+          planId: plan.id,
+          planName: plan.name,
+          interval: plan.interval,
+          amount: plan.price,
+          currency: plan.currency,
+          provider: 'stripe',
+          providerPaymentId: paymentIntent.id,
+          status: 'completed',
+          completedAt: new Date(),
+        },
+      },
+      { upsert: true },
+    ).exec();
+
     await UserModel.updateOne(
       { _id: userId },
       {

@@ -638,6 +638,38 @@ export class CoinRepository {
     return withdrawal.save();
   }
 
+  async createEarningWithdrawalRequestAndHoldBalance(data: {
+    userId: string;
+    stripeConnectAccountId: string;
+    amountUsd: number;
+  }): Promise<WithdrawalRequestDocument> {
+    const userObjectId = new Types.ObjectId(data.userId);
+    const amountUsd = Number(data.amountUsd.toFixed(2));
+
+    const updatedUser = await UserModel.findOneAndUpdate(
+      { _id: userObjectId, availableBalanceUsd: { $gte: amountUsd } },
+      { $inc: { availableBalanceUsd: -amountUsd } },
+      { new: true },
+    ).exec();
+
+    if (!updatedUser) {
+      throw new Error('INSUFFICIENT_EARNINGS');
+    }
+
+    const withdrawal = new WithdrawalRequestModel({
+      userId: userObjectId,
+      stripeConnectAccountId: data.stripeConnectAccountId,
+      withdrawalType: 'earnings',
+      coins: 0,
+      coinsPerDollar: 0,
+      amountUsd,
+      currency: 'usd',
+      status: 'pending',
+    });
+
+    return withdrawal.save();
+  }
+
   async findWithdrawalRequestById(requestId: string): Promise<WithdrawalRequestDocument | null> {
     if (!Types.ObjectId.isValid(requestId)) {
       return null;
@@ -694,9 +726,10 @@ export class CoinRepository {
       return null;
     }
 
-    // Refund coins back to user balance
     await UserModel.findByIdAndUpdate(withdrawal.userId, {
-      $inc: { coinBalance: withdrawal.coins },
+      $inc: withdrawal.withdrawalType === 'earnings'
+        ? { availableBalanceUsd: withdrawal.amountUsd }
+        : { coinBalance: withdrawal.coins },
     }).exec();
 
     return updated;

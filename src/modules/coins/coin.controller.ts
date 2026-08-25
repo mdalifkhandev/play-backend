@@ -136,6 +136,12 @@ export class CoinController {
     return sendSuccess(response, 201, 'Withdrawal request submitted successfully.', result);
   });
 
+  requestEarningWithdrawal = asyncHandler(async (request: Request, response: Response) => {
+    const userId = request.user!.userId;
+    const result = await coinService.requestEarningWithdrawal(userId);
+    return sendSuccess(response, 201, 'Earning withdrawal request submitted successfully.', result);
+  });
+
   getUserWithdrawals = asyncHandler(async (request: Request, response: Response) => {
     const userId = request.user!.userId;
     const { page, limit } = request.query as unknown as GetTransactionsQueryInput;

@@ -711,11 +711,63 @@ export class CoinService {
 
     return {
       withdrawalId: withdrawal._id.toString(),
+      withdrawalType: withdrawal.withdrawalType,
       coins: withdrawal.coins,
       coinsPerDollar: withdrawal.coinsPerDollar,
       amountUsd: withdrawal.amountUsd,
       status: withdrawal.status,
       remainingCoinBalance: remainingBalance,
+      createdAt: withdrawal.createdAt.toISOString(),
+    };
+  }
+
+  async requestEarningWithdrawal(userId: string) {
+    const user = await UserModel.findById(userId).exec();
+    if (!user) {
+      throw new NotFoundError('User not found.');
+    }
+
+    if (!user.stripeConnectAccountId || !user.stripeConnectOnboardingComplete) {
+      throw new BadRequestError('Please setup your payout account before requesting a withdrawal.');
+    }
+
+    const setting = await coinRepository.getCoinSettings();
+    const minimumUsd = Number((setting.minWithdrawalCoins / setting.coinsPerDollar).toFixed(2));
+    const amountUsd = Number((user.availableBalanceUsd ?? 0).toFixed(2));
+
+    if (amountUsd < minimumUsd) {
+      throw new BadRequestError(`Minimum withdrawal amount is $${minimumUsd.toFixed(2)}.`);
+    }
+
+    let withdrawal;
+    try {
+      withdrawal = await coinRepository.createEarningWithdrawalRequestAndHoldBalance({
+        userId,
+        stripeConnectAccountId: user.stripeConnectAccountId,
+        amountUsd,
+      });
+    } catch (err) {
+      if (err instanceof Error && err.message === 'INSUFFICIENT_EARNINGS') {
+        throw new BadRequestError('Insufficient available earning balance.');
+      }
+      throw err;
+    }
+
+    void adminNotificationService.notifyAdmins({
+      event: 'withdrawal_request_submitted',
+      title: 'New earning withdrawal request',
+      body: `A creator requested $${withdrawal.amountUsd} earning withdrawal.`,
+      relatedEntityId: withdrawal._id.toString(),
+    });
+
+    return {
+      withdrawalId: withdrawal._id.toString(),
+      withdrawalType: withdrawal.withdrawalType,
+      coins: withdrawal.coins,
+      coinsPerDollar: withdrawal.coinsPerDollar,
+      amountUsd: withdrawal.amountUsd,
+      status: withdrawal.status,
+      remainingAvailableBalanceUsd: 0,
       createdAt: withdrawal.createdAt.toISOString(),
     };
   }
@@ -738,7 +790,9 @@ export class CoinService {
         amount: amountInCents,
         currency: 'usd',
         destination: withdrawal.stripeConnectAccountId,
-        description: `Payout for ${withdrawal.coins} coins withdrawal`,
+        description: withdrawal.withdrawalType === 'earnings'
+          ? `Creator earning payout ${withdrawal._id.toString()}`
+          : `Payout for ${withdrawal.coins} coins withdrawal`,
         metadata: {
           withdrawalId: withdrawal._id.toString(),
           userId: withdrawal.userId.toString(),
@@ -760,6 +814,7 @@ export class CoinService {
       withdrawalId: requestId,
       stripeTransferId: transfer.id,
       amountUsd: withdrawal.amountUsd,
+      withdrawalType: withdrawal.withdrawalType,
       coins: withdrawal.coins,
       status: updated?.status ?? 'transferred',
     };
@@ -780,7 +835,9 @@ export class CoinService {
     return {
       rejected: true,
       withdrawalId: requestId,
+      withdrawalType: withdrawal.withdrawalType,
       refundedCoins: withdrawal.coins,
+      refundedAmountUsd: withdrawal.withdrawalType === 'earnings' ? withdrawal.amountUsd : 0,
       status: updated?.status ?? 'rejected',
       adminNotes: reason,
     };
@@ -793,6 +850,7 @@ export class CoinService {
     return {
       items: items.map((w) => ({
         id: w._id.toString(),
+        withdrawalType: w.withdrawalType ?? 'coins',
         coins: w.coins,
         coinsPerDollar: w.coinsPerDollar,
         amountUsd: w.amountUsd,
@@ -820,6 +878,7 @@ export class CoinService {
       items: items.map((w) => ({
         id: w._id.toString(),
         user: w.userId,
+        withdrawalType: w.withdrawalType ?? 'coins',
         coins: w.coins,
         coinsPerDollar: w.coinsPerDollar,
         amountUsd: w.amountUsd,

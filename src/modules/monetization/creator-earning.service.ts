@@ -4,7 +4,6 @@ import { logger } from '../../infrastructure/logger/logger.js';
 import { CreatorApplicationModel } from '../creators/creator-application.model.js';
 import { PlatformSettingModel } from '../platform-settings/platform-setting.model.js';
 import { UserModel } from '../users/user.model.js';
-import { MonetizationSettingModel } from './monetization-setting.model.js';
 import { CreatorEarningModel } from './creator-earning.model.js';
 import type { ReelDocument } from '../reels/reel.model.js';
 
@@ -27,20 +26,16 @@ export class CreatorEarningService {
       return;
     }
 
-    const [platformSetting, monetizationSetting] = await Promise.all([
-      PlatformSettingModel.findOne().lean().exec(),
-      MonetizationSettingModel.findOne().lean().exec(),
-    ]);
-
+    const platformSetting = await PlatformSettingModel.findOne().lean().exec();
     const payoutRateUsd = platformSetting?.payoutPerThousandViewsUsd ?? 0;
-    const creatorSharePercent = monetizationSetting?.creatorSharePercent ?? 60;
+    const creatorSharePercent = 100;
 
-    if (payoutRateUsd <= 0 || creatorSharePercent <= 0) {
+    if (payoutRateUsd <= 0) {
       return;
     }
 
     const grossUsd = payoutRateUsd;
-    const amountUsd = Number((grossUsd * (creatorSharePercent / 100)).toFixed(4));
+    const amountUsd = Number(grossUsd.toFixed(4));
 
     if (amountUsd <= 0) {
       return;
