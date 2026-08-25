@@ -1,12 +1,12 @@
 import mongoose, { Schema, model, type HydratedDocument, type Model } from 'mongoose';
 
-export type WithdrawalStatus = 'pending' | 'approved' | 'rejected' | 'transferred' | 'failed';
+export type WithdrawalStatus = 'pending' | 'approved' | 'processing' | 'completed' | 'rejected';
 
 export interface WithdrawalRequest {
   _id: mongoose.Types.ObjectId;
   userId: mongoose.Types.ObjectId;
   stripeConnectAccountId: string;
-  withdrawalType: 'coins' | 'earnings';
+  withdrawalType: 'earnings';
   coins: number;
   coinsPerDollar: number;
   amountUsd: number;
@@ -26,7 +26,7 @@ const withdrawalRequestSchema = new Schema<WithdrawalRequest>(
   {
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     stripeConnectAccountId: { type: String, required: true, trim: true },
-    withdrawalType: { type: String, enum: ['coins', 'earnings'], default: 'coins', required: true, index: true },
+    withdrawalType: { type: String, enum: ['earnings'], default: 'earnings', required: true, index: true },
     coins: { type: Number, required: true, min: 0 },
     coinsPerDollar: { type: Number, required: true, min: 0 },
     amountUsd: { type: Number, required: true, min: 0.01 },
@@ -34,7 +34,7 @@ const withdrawalRequestSchema = new Schema<WithdrawalRequest>(
     status: {
       type: String,
       required: true,
-      enum: ['pending', 'approved', 'rejected', 'transferred', 'failed'],
+      enum: ['pending', 'approved', 'processing', 'completed', 'rejected'],
       default: 'pending',
       index: true,
     },

@@ -23,7 +23,6 @@ import {
   updateAdminGiftSchema,
   updateCoinSettingsSchema,
   verifyPaymentSchema,
-  withdrawCoinsSchema,
 } from './coin.validation.js';
 
 export const coinRouter: Router = Router();
@@ -110,7 +109,6 @@ coinRouter.post(
   '/withdraw',
   authenticate,
   requirePlatformFeature('withdrawals'),
-  validateRequest(withdrawCoinsSchema),
   coinController.requestWithdrawal,
 );
 coinRouter.post(

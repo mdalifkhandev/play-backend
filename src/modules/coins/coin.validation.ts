@@ -89,7 +89,7 @@ export const getWithdrawalsQuerySchema = {
   query: z.object({
     page: z.coerce.number().int().positive().default(1),
     limit: z.coerce.number().int().positive().max(100).default(20),
-    status: z.enum(['pending', 'approved', 'rejected', 'transferred', 'failed', 'all']).default('all'),
+    status: z.enum(['pending', 'approved', 'processing', 'completed', 'rejected', 'all']).default('all'),
   }),
 };
 

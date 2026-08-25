@@ -644,6 +644,7 @@ export class CoinService {
       coinsPerDollar: setting.coinsPerDollar,
       minWithdrawalCoins: setting.minWithdrawalCoins,
       maxWithdrawalCoins: setting.maxWithdrawalCoins,
+      minWithdrawalUsd: 10,
       userCoinBalance: coinBalance,
       estimatedUsdValue,
       availableBalanceUsd: Number((user?.availableBalanceUsd ?? 0).toFixed(2)),
@@ -659,66 +660,9 @@ export class CoinService {
   }
 
   async requestWithdrawal(userId: string, coins: number) {
-    const user = await UserModel.findById(userId).exec();
-    if (!user) {
-      throw new NotFoundError('User not found.');
-    }
-
-    if (!user.stripeConnectAccountId || !user.stripeConnectOnboardingComplete) {
-      throw new BadRequestError('Please setup your payout account before requesting a withdrawal.');
-    }
-
-    const setting = await coinRepository.getCoinSettings();
-
-    if (coins < setting.minWithdrawalCoins) {
-      throw new BadRequestError(`Minimum withdrawal amount is ${setting.minWithdrawalCoins} coins.`);
-    }
-
-    if (coins > setting.maxWithdrawalCoins) {
-      throw new BadRequestError(`Maximum withdrawal amount per request is ${setting.maxWithdrawalCoins} coins.`);
-    }
-
-    if (user.coinBalance < coins) {
-      throw new BadRequestError(`Insufficient coin balance. You have ${user.coinBalance} coins but requested ${coins}.`);
-    }
-
-    const amountUsd = Number((coins / setting.coinsPerDollar).toFixed(2));
-
-    let withdrawal;
-    try {
-      withdrawal = await coinRepository.createWithdrawalRequestAndHoldCoins({
-        userId,
-        stripeConnectAccountId: user.stripeConnectAccountId,
-        coins,
-        coinsPerDollar: setting.coinsPerDollar,
-        amountUsd,
-      });
-    } catch (err) {
-      if (err instanceof Error && err.message === 'INSUFFICIENT_COINS') {
-        throw new BadRequestError('Insufficient coin balance.');
-      }
-      throw err;
-    }
-
-    const remainingBalance = await coinRepository.getUserBalance(userId);
-
-    void adminNotificationService.notifyAdmins({
-      event: 'withdrawal_request_submitted',
-      title: 'New withdrawal request',
-      body: `A creator requested ${withdrawal.coins} coins withdrawal ($${withdrawal.amountUsd}).`,
-      relatedEntityId: withdrawal._id.toString(),
-    });
-
-    return {
-      withdrawalId: withdrawal._id.toString(),
-      withdrawalType: withdrawal.withdrawalType,
-      coins: withdrawal.coins,
-      coinsPerDollar: withdrawal.coinsPerDollar,
-      amountUsd: withdrawal.amountUsd,
-      status: withdrawal.status,
-      remainingCoinBalance: remainingBalance,
-      createdAt: withdrawal.createdAt.toISOString(),
-    };
+    void userId;
+    void coins;
+    throw new BadRequestError('Purchased coins cannot be withdrawn. Only creator earnings can be withdrawn.');
   }
 
   async requestEarningWithdrawal(userId: string) {
@@ -731,8 +675,7 @@ export class CoinService {
       throw new BadRequestError('Please setup your payout account before requesting a withdrawal.');
     }
 
-    const setting = await coinRepository.getCoinSettings();
-    const minimumUsd = Number((setting.minWithdrawalCoins / setting.coinsPerDollar).toFixed(2));
+    const minimumUsd = 10;
     const amountUsd = Number((user.availableBalanceUsd ?? 0).toFixed(2));
 
     if (amountUsd < minimumUsd) {
@@ -782,6 +725,9 @@ export class CoinService {
       throw new BadRequestError(`Withdrawal request is already ${withdrawal.status}. Only pending requests can be approved.`);
     }
 
+    await coinRepository.markWithdrawalStatus(requestId, 'approved', adminUserId, adminNotes);
+    await coinRepository.markWithdrawalStatus(requestId, 'processing', adminUserId, adminNotes);
+
     const amountInCents = Math.round(withdrawal.amountUsd * 100);
 
     let transfer: Stripe.Transfer;
@@ -790,19 +736,18 @@ export class CoinService {
         amount: amountInCents,
         currency: 'usd',
         destination: withdrawal.stripeConnectAccountId,
-        description: withdrawal.withdrawalType === 'earnings'
-          ? `Creator earning payout ${withdrawal._id.toString()}`
-          : `Payout for ${withdrawal.coins} coins withdrawal`,
+        description: `Creator earning payout ${withdrawal._id.toString()}`,
         metadata: {
           withdrawalId: withdrawal._id.toString(),
           userId: withdrawal.userId.toString(),
         },
       });
     } catch (err) {
+      await coinRepository.markWithdrawalStatus(requestId, 'approved', adminUserId, adminNotes);
       throw new BadRequestError(`Stripe Transfer failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 
-    const updated = await coinRepository.approveAndMarkTransferred(
+    const updated = await coinRepository.approveAndMarkCompleted(
       requestId,
       adminUserId,
       transfer.id,
@@ -816,7 +761,7 @@ export class CoinService {
       amountUsd: withdrawal.amountUsd,
       withdrawalType: withdrawal.withdrawalType,
       coins: withdrawal.coins,
-      status: updated?.status ?? 'transferred',
+      status: updated?.status ?? 'completed',
     };
   }
 
@@ -826,8 +771,8 @@ export class CoinService {
       throw new NotFoundError('Withdrawal request not found.');
     }
 
-    if (withdrawal.status !== 'pending') {
-      throw new BadRequestError(`Withdrawal request is already ${withdrawal.status}. Only pending requests can be rejected.`);
+    if (!['pending', 'approved', 'processing'].includes(withdrawal.status)) {
+      throw new BadRequestError(`Withdrawal request is already ${withdrawal.status}. Only pending, approved, or processing requests can be rejected.`);
     }
 
     const updated = await coinRepository.rejectAndRefundWithdrawal(requestId, adminUserId, reason);
@@ -837,7 +782,7 @@ export class CoinService {
       withdrawalId: requestId,
       withdrawalType: withdrawal.withdrawalType,
       refundedCoins: withdrawal.coins,
-      refundedAmountUsd: withdrawal.withdrawalType === 'earnings' ? withdrawal.amountUsd : 0,
+      refundedAmountUsd: withdrawal.amountUsd,
       status: updated?.status ?? 'rejected',
       adminNotes: reason,
     };
@@ -850,7 +795,7 @@ export class CoinService {
     return {
       items: items.map((w) => ({
         id: w._id.toString(),
-        withdrawalType: w.withdrawalType ?? 'coins',
+        withdrawalType: w.withdrawalType ?? 'earnings',
         coins: w.coins,
         coinsPerDollar: w.coinsPerDollar,
         amountUsd: w.amountUsd,
@@ -878,7 +823,7 @@ export class CoinService {
       items: items.map((w) => ({
         id: w._id.toString(),
         user: w.userId,
-        withdrawalType: w.withdrawalType ?? 'coins',
+        withdrawalType: w.withdrawalType ?? 'earnings',
         coins: w.coins,
         coinsPerDollar: w.coinsPerDollar,
         amountUsd: w.amountUsd,
@@ -914,6 +859,7 @@ export class CoinService {
       coinsPerDollar: updated.coinsPerDollar,
       minWithdrawalCoins: updated.minWithdrawalCoins,
       maxWithdrawalCoins: updated.maxWithdrawalCoins,
+      minWithdrawalUsd: 10,
       updatedAt: updated.updatedAt.toISOString(),
     };
   }
@@ -924,6 +870,7 @@ export class CoinService {
       coinsPerDollar: setting.coinsPerDollar,
       minWithdrawalCoins: setting.minWithdrawalCoins,
       maxWithdrawalCoins: setting.maxWithdrawalCoins,
+      minWithdrawalUsd: 10,
       updatedAt: setting.updatedAt.toISOString(),
     };
   }

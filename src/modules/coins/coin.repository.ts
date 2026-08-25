@@ -11,14 +11,7 @@ import { LiveStreamModel } from '../live-streams/live-stream.model.js';
 
 export class CoinRepository {
   async getActivePackages(): Promise<CoinPackageDocument[]> {
-    let packages = await CoinPackageModel.find({ isActive: true }).sort({ sortOrder: 1, price: 1 }).exec();
-
-    if (packages.length === 0) {
-      await this.seedDefaultPackages();
-      packages = await CoinPackageModel.find({ isActive: true }).sort({ sortOrder: 1, price: 1 }).exec();
-    }
-
-    return packages;
+    return CoinPackageModel.find({ isActive: true }).sort({ sortOrder: 1, price: 1 }).exec();
   }
 
   async getPackageById(packageId: string): Promise<CoinPackageDocument | null> {
@@ -84,19 +77,8 @@ export class CoinRepository {
   }
 
   async seedDefaultPackages(): Promise<void> {
-    const count = await CoinPackageModel.countDocuments();
-    if (count > 0) return;
-
-    const defaultPackages = [
-      { name: '100 Coins', coins: 100, price: 0.99, currency: 'usd', isPopular: false, sortOrder: 1 },
-      { name: '500 Coins', coins: 500, price: 1.99, currency: 'usd', isPopular: true, sortOrder: 2 },
-      { name: '1000 Coins', coins: 1000, price: 3.99, currency: 'usd', isPopular: false, sortOrder: 3 },
-      { name: '2000 Coins', coins: 2000, price: 7.99, currency: 'usd', isPopular: false, sortOrder: 4 },
-      { name: '5000 Coins', coins: 5000, price: 16.99, currency: 'usd', isPopular: false, sortOrder: 5 },
-      { name: '10000 Coins', coins: 10000, price: 29.99, currency: 'usd', isPopular: false, sortOrder: 6 },
-    ];
-
-    await CoinPackageModel.insertMany(defaultPackages);
+    // Coin packages are managed from the admin dashboard and stored in DB.
+    return;
   }
 
   async getActiveGifts(): Promise<GiftCatalogDocument[]> {
@@ -612,30 +594,8 @@ export class CoinRepository {
     coinsPerDollar: number;
     amountUsd: number;
   }): Promise<WithdrawalRequestDocument> {
-    const userObjectId = new Types.ObjectId(data.userId);
-
-    // Atomically deduct coins from user's balance
-    const updatedUser = await UserModel.findOneAndUpdate(
-      { _id: userObjectId, coinBalance: { $gte: data.coins } },
-      { $inc: { coinBalance: -data.coins } },
-      { new: true },
-    ).exec();
-
-    if (!updatedUser) {
-      throw new Error('INSUFFICIENT_COINS');
-    }
-
-    const withdrawal = new WithdrawalRequestModel({
-      userId: userObjectId,
-      stripeConnectAccountId: data.stripeConnectAccountId,
-      coins: data.coins,
-      coinsPerDollar: data.coinsPerDollar,
-      amountUsd: data.amountUsd,
-      currency: 'usd',
-      status: 'pending',
-    });
-
-    return withdrawal.save();
+    void data;
+    throw new Error('PURCHASED_COINS_NOT_WITHDRAWABLE');
   }
 
   async createEarningWithdrawalRequestAndHoldBalance(data: {
@@ -677,21 +637,41 @@ export class CoinRepository {
     return WithdrawalRequestModel.findById(requestId).exec();
   }
 
-  async approveAndMarkTransferred(
+  async approveAndMarkCompleted(
     requestId: string,
     adminUserId: string,
     stripeTransferId: string,
     notes?: string,
   ): Promise<WithdrawalRequestDocument | null> {
     return WithdrawalRequestModel.findOneAndUpdate(
-      { _id: requestId, status: 'pending' },
+      { _id: requestId, status: { $in: ['approved', 'processing'] } },
       {
         $set: {
-          status: 'transferred',
+          status: 'completed',
           stripeTransferId,
           processedBy: new Types.ObjectId(adminUserId),
           processedAt: new Date(),
           adminNotes: notes,
+        },
+      },
+      { new: true },
+    ).exec();
+  }
+
+  async markWithdrawalStatus(
+    requestId: string,
+    status: Extract<WithdrawalStatus, 'approved' | 'processing' | 'pending'>,
+    adminUserId?: string,
+    notes?: string,
+  ): Promise<WithdrawalRequestDocument | null> {
+    return WithdrawalRequestModel.findOneAndUpdate(
+      { _id: requestId, status: { $in: ['pending', 'approved', 'processing'] } },
+      {
+        $set: {
+          status,
+          ...(adminUserId ? { processedBy: new Types.ObjectId(adminUserId) } : {}),
+          ...(status === 'pending' ? {} : { processedAt: new Date() }),
+          ...(notes !== undefined ? { adminNotes: notes } : {}),
         },
       },
       { new: true },
@@ -703,14 +683,14 @@ export class CoinRepository {
     adminUserId: string,
     reason: string,
   ): Promise<WithdrawalRequestDocument | null> {
-    const withdrawal = await WithdrawalRequestModel.findOne({ _id: requestId, status: 'pending' }).exec();
+    const withdrawal = await WithdrawalRequestModel.findOne({ _id: requestId, status: { $in: ['pending', 'approved', 'processing'] } }).exec();
 
     if (!withdrawal) {
       return null;
     }
 
     const updated = await WithdrawalRequestModel.findOneAndUpdate(
-      { _id: withdrawal._id, status: 'pending' },
+      { _id: withdrawal._id, status: { $in: ['pending', 'approved', 'processing'] } },
       {
         $set: {
           status: 'rejected',
@@ -727,9 +707,7 @@ export class CoinRepository {
     }
 
     await UserModel.findByIdAndUpdate(withdrawal.userId, {
-      $inc: withdrawal.withdrawalType === 'earnings'
-        ? { availableBalanceUsd: withdrawal.amountUsd }
-        : { coinBalance: withdrawal.coins },
+      $inc: { availableBalanceUsd: withdrawal.amountUsd },
     }).exec();
 
     return updated;
@@ -757,7 +735,7 @@ export class CoinRepository {
       {
         $match: {
           userId: userObjectId,
-          status: { $in: ['pending', 'approved'] },
+          status: { $in: ['pending', 'approved', 'processing'] },
         },
       },
       {
