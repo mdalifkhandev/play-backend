@@ -43,6 +43,7 @@ import {
   platformSettingRouter,
 } from '../modules/platform-settings/platform-setting.route.js';
 import { adminDashboardRouter } from '../modules/admin/admin.route.js';
+import { adminContentRouter } from '../modules/admin-content/admin-content.route.js';
 
 export const apiRouter = Router();
 
@@ -89,4 +90,5 @@ apiRouter.use('/admin/search', adminSearchRouter);
 apiRouter.use('/admin/announcements', announcementAdminRouter);
 apiRouter.use('/admin/settings', platformSettingAdminRouter);
 apiRouter.use('/admin/dashboard', adminDashboardRouter);
+apiRouter.use('/admin/content', adminContentRouter);
 
