@@ -4,6 +4,7 @@ import { UserRole } from '../../common/enums/user-role.enum.js';
 import { authenticate } from '../../common/middleware/auth.middleware.js';
 import { authorize } from '../../common/middleware/authorization.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
+import { requirePlatformFeature } from '../platform-settings/platform-feature.middleware.js';
 import { creatorController } from './creator.controller.js';
 import {
   adminListCreatorApplicationsQuerySchema,
@@ -19,6 +20,7 @@ creatorRouter.use(authenticate);
 creatorRouter.get('/me/eligibility', creatorController.eligibility);
 creatorRouter.post(
   '/applications',
+  requirePlatformFeature('creatorApplications'),
   validateRequest({ body: createCreatorApplicationBodySchema }),
   creatorController.apply,
 );

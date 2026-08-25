@@ -38,6 +38,10 @@ import { creatorCategoryRouter } from '../modules/creator-categories/creator-cat
 import { occupationRouter } from '../modules/occupations/occupation.route.js';
 import { adminSearchRouter } from '../modules/admin-search/admin-search.route.js';
 import { announcementAdminRouter, announcementRouter } from '../modules/announcements/announcement.route.js';
+import {
+  platformSettingAdminRouter,
+  platformSettingRouter,
+} from '../modules/platform-settings/platform-setting.route.js';
 
 export const apiRouter = Router();
 
@@ -46,6 +50,7 @@ apiRouter.use('/auth', authRouter);
 apiRouter.use('/users', userRouter);
 apiRouter.use('/notifications', notificationRouter);
 apiRouter.use('/announcements', announcementRouter);
+apiRouter.use('/settings', platformSettingRouter);
 apiRouter.use('/activities', activityRouter);
 apiRouter.use('/rewards', rewardRouter);
 apiRouter.use('/subscriptions', subscriptionRouter);
@@ -81,4 +86,5 @@ apiRouter.use('/admin/live-streams', liveStreamAdminRouter);
 apiRouter.use('/admin/kids-mode', kidsModeAdminRouter);
 apiRouter.use('/admin/search', adminSearchRouter);
 apiRouter.use('/admin/announcements', announcementAdminRouter);
+apiRouter.use('/admin/settings', platformSettingAdminRouter);
 

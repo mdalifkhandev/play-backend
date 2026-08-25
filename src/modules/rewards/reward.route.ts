@@ -4,6 +4,7 @@ import { UserRole } from '../../common/enums/user-role.enum.js';
 import { authenticate, optionalAuthenticate } from '../../common/middleware/auth.middleware.js';
 import { authorize } from '../../common/middleware/authorization.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
+import { requirePlatformFeature } from '../platform-settings/platform-feature.middleware.js';
 import { rewardController } from './reward.controller.js';
 import {
   createRewardProgramBodySchema,
@@ -18,8 +19,8 @@ import {
 export const rewardRouter: ExpressRouter = Router();
 export const rewardAdminRouter: ExpressRouter = Router();
 
-rewardRouter.get('/me', authenticate, rewardController.me);
-rewardRouter.get('/trending-creators', optionalAuthenticate, rewardController.trendingCreators);
+rewardRouter.get('/me', requirePlatformFeature('rewards'), authenticate, rewardController.me);
+rewardRouter.get('/trending-creators', requirePlatformFeature('rewards'), optionalAuthenticate, rewardController.trendingCreators);
 
 rewardAdminRouter.use(authenticate, authorize(UserRole.ADMIN, UserRole.MODERATOR));
 rewardAdminRouter.get('/dashboard', rewardController.adminDashboard);

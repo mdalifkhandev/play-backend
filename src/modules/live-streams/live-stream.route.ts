@@ -5,6 +5,7 @@ import { authenticate, optionalAuthenticate } from '../../common/middleware/auth
 import { authorize } from '../../common/middleware/authorization.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
 import { blockLiveStreamingDuringKidsMode } from '../kids-mode/kids-mode.middleware.js';
+import { requirePlatformFeature } from '../platform-settings/platform-feature.middleware.js';
 import { liveStreamController } from './live-stream.controller.js';
 import {
   createLiveStreamSchema,
@@ -38,6 +39,7 @@ liveStreamAdminRouter.post(
 // Public / Optional Auth routes for viewing streams & feed
 liveStreamRouter.get(
   '/',
+  requirePlatformFeature('liveStreaming'),
   optionalAuthenticate,
   blockLiveStreamingDuringKidsMode,
   validateRequest({ query: liveStreamFeedQuerySchema }),
@@ -46,6 +48,7 @@ liveStreamRouter.get(
 
 liveStreamRouter.get(
   '/search',
+  requirePlatformFeature('liveStreaming'),
   optionalAuthenticate,
   blockLiveStreamingDuringKidsMode,
   validateRequest({ query: searchLiveStreamsQuerySchema }),
@@ -54,6 +57,7 @@ liveStreamRouter.get(
 
 liveStreamRouter.get(
   '/:id',
+  requirePlatformFeature('liveStreaming'),
   optionalAuthenticate,
   blockLiveStreamingDuringKidsMode,
   validateRequest({ params: liveStreamIdParamsSchema }),
@@ -62,6 +66,7 @@ liveStreamRouter.get(
 
 liveStreamRouter.get(
   '/:id/comments',
+  requirePlatformFeature('liveStreaming'),
   optionalAuthenticate,
   blockLiveStreamingDuringKidsMode,
   validateRequest({ params: liveStreamIdParamsSchema }),
@@ -70,6 +75,7 @@ liveStreamRouter.get(
 
 // Protected routes (Require login)
 liveStreamRouter.use(authenticate);
+liveStreamRouter.use(requirePlatformFeature('liveStreaming'));
 liveStreamRouter.use(blockLiveStreamingDuringKidsMode);
 
 liveStreamRouter.post(

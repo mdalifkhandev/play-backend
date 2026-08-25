@@ -4,6 +4,7 @@ import { UserRole } from '../../common/enums/user-role.enum.js';
 import { authenticate } from '../../common/middleware/auth.middleware.js';
 import { authorize } from '../../common/middleware/authorization.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
+import { requirePlatformFeature } from '../platform-settings/platform-feature.middleware.js';
 import { subscriptionController } from './subscription.controller.js';
 import {
   adminCreateSubscriptionPlanSchema,
@@ -17,23 +18,26 @@ import {
 
 export const subscriptionRouter = Router();
 
-subscriptionRouter.get('/plans', authenticate, subscriptionController.getPlans);
+subscriptionRouter.get('/plans', requirePlatformFeature('subscriptions'), authenticate, subscriptionController.getPlans);
 
 subscriptionRouter.use(authenticate);
-subscriptionRouter.get('/me', subscriptionController.getCurrentSubscription);
-subscriptionRouter.post('/cancel', subscriptionController.cancelCurrentSubscription);
+subscriptionRouter.get('/me', requirePlatformFeature('subscriptions'), subscriptionController.getCurrentSubscription);
+subscriptionRouter.post('/cancel', requirePlatformFeature('subscriptions'), subscriptionController.cancelCurrentSubscription);
 subscriptionRouter.post(
   '/revenuecat/sync',
+  requirePlatformFeature('subscriptions'),
   validateRequest(syncRevenueCatSubscriptionSchema),
   subscriptionController.syncRevenueCatSubscription,
 );
 subscriptionRouter.post(
   '/purchase/create-payment-intent',
+  requirePlatformFeature('subscriptions'),
   validateRequest(createStripeSubscriptionPaymentIntentSchema),
   subscriptionController.createStripePaymentIntent,
 );
 subscriptionRouter.post(
   '/purchase/verify-payment',
+  requirePlatformFeature('subscriptions'),
   validateRequest(verifyStripeSubscriptionPaymentSchema),
   subscriptionController.verifyStripePayment,
 );

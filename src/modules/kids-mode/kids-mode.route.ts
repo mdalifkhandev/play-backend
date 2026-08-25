@@ -5,6 +5,7 @@ import { authenticate } from '../../common/middleware/auth.middleware.js';
 import { authorize } from '../../common/middleware/authorization.middleware.js';
 import { authRateLimiter } from '../../common/middleware/rate-limit.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
+import { requirePlatformFeature } from '../platform-settings/platform-feature.middleware.js';
 import { reelFeedQuerySchema } from '../reels/reel.validation.js';
 import { kidsModeController } from './kids-mode.controller.js';
 import {
@@ -19,6 +20,7 @@ export const kidsModeRouter: Router = Router();
 export const kidsModeAdminRouter: Router = Router();
 
 kidsModeRouter.use(authenticate);
+kidsModeRouter.use(requirePlatformFeature('kidsMode'));
 kidsModeRouter.get('/status', kidsModeController.status);
 kidsModeRouter.post('/setup', authRateLimiter, validateRequest({ body: setupKidsModeBodySchema }), kidsModeController.setup);
 kidsModeRouter.post('/enter', authRateLimiter, validateRequest({ body: verifyKidsPinBodySchema }), kidsModeController.enter);

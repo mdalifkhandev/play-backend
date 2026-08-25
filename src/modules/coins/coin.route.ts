@@ -3,6 +3,7 @@ import { UserRole } from '../../common/enums/user-role.enum.js';
 import { authenticate } from '../../common/middleware/auth.middleware.js';
 import { authorize } from '../../common/middleware/authorization.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
+import { requirePlatformFeature } from '../platform-settings/platform-feature.middleware.js';
 import { coinController } from './coin.controller.js';
 import {
   adminCoinPackageParamsSchema,
@@ -47,12 +48,14 @@ coinRouter.post(
 coinRouter.post(
   '/purchase/create-payment-intent',
   authenticate,
+  requirePlatformFeature('coinPurchase'),
   validateRequest(createPaymentIntentSchema),
   coinController.createPaymentIntent,
 );
 coinRouter.post(
   '/purchase/verify-payment',
   authenticate,
+  requirePlatformFeature('coinPurchase'),
   validateRequest(verifyPaymentSchema),
   coinController.verifyPayment,
 );
@@ -87,28 +90,33 @@ coinRouter.get(
 coinRouter.post(
   '/payouts/stripe-connect/account-link',
   authenticate,
+  requirePlatformFeature('withdrawals'),
   validateRequest(stripeConnectLinkSchema),
   coinController.createStripeConnectLink,
 );
 coinRouter.get(
   '/payouts/stripe-connect/status',
   authenticate,
+  requirePlatformFeature('withdrawals'),
   coinController.checkStripeConnectStatus,
 );
 coinRouter.get(
   '/withdraw/settings',
   authenticate,
+  requirePlatformFeature('withdrawals'),
   coinController.getWithdrawalSettings,
 );
 coinRouter.post(
   '/withdraw',
   authenticate,
+  requirePlatformFeature('withdrawals'),
   validateRequest(withdrawCoinsSchema),
   coinController.requestWithdrawal,
 );
 coinRouter.get(
   '/withdraw/history',
   authenticate,
+  requirePlatformFeature('withdrawals'),
   validateRequest(getTransactionsQuerySchema),
   coinController.getUserWithdrawals,
 );

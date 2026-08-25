@@ -4,6 +4,7 @@ import { UserRole } from '../../common/enums/user-role.enum.js';
 import { authenticate, optionalAuthenticate } from '../../common/middleware/auth.middleware.js';
 import { authorize } from '../../common/middleware/authorization.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
+import { requirePlatformFeature } from '../platform-settings/platform-feature.middleware.js';
 import { adController } from './ad.controller.js';
 import {
   adIdParamsSchema,
@@ -17,11 +18,12 @@ import {
 export const adRouter = Router();
 export const adAdminRouter = Router();
 
-adRouter.get('/feed', optionalAuthenticate, validateRequest({ query: adFeedQuerySchema }), adController.feed);
-adRouter.post('/:adId/impressions', optionalAuthenticate, validateRequest({ params: adIdParamsSchema }), adController.recordImpression);
-adRouter.post('/:adId/clicks', optionalAuthenticate, validateRequest({ params: adIdParamsSchema }), adController.recordClick);
+adRouter.get('/feed', requirePlatformFeature('ads'), optionalAuthenticate, validateRequest({ query: adFeedQuerySchema }), adController.feed);
+adRouter.post('/:adId/impressions', requirePlatformFeature('ads'), optionalAuthenticate, validateRequest({ params: adIdParamsSchema }), adController.recordImpression);
+adRouter.post('/:adId/clicks', requirePlatformFeature('ads'), optionalAuthenticate, validateRequest({ params: adIdParamsSchema }), adController.recordClick);
 
 adRouter.use(authenticate);
+adRouter.use(requirePlatformFeature('ads'));
 adRouter.get('/', validateRequest({ query: listMyAdsQuerySchema }), adController.listMine);
 adRouter.post('/', validateRequest({ body: createAdCampaignBodySchema }), adController.create);
 adRouter.get('/:adId', validateRequest({ params: adIdParamsSchema }), adController.getMine);
