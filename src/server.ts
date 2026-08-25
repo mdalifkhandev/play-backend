@@ -6,13 +6,16 @@ import { connectDatabase, disconnectDatabase } from './infrastructure/database/m
 import { connectRedis, disconnectRedis } from './infrastructure/cache/redis.client.js';
 import { logger } from './infrastructure/logger/logger.js';
 import { initializeSocketServer } from './sockets/socket.server.js';
+import { announcementService } from './modules/announcements/announcement.service.js';
 
 const server = createServer(app);
 const io = initializeSocketServer(server);
+let announcementStatusSyncTimer: NodeJS.Timeout | undefined;
 
 try {
   await connectDatabase();
   await connectRedis();
+  startAnnouncementStatusSync();
 
   server.listen(env.PORT, () => {
     logger.info(
@@ -53,6 +56,11 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
 }
 
 async function closeInfrastructure(): Promise<void> {
+  if (announcementStatusSyncTimer) {
+    clearInterval(announcementStatusSyncTimer);
+    announcementStatusSyncTimer = undefined;
+  }
+
   const [databaseResult, redisResult] = await Promise.allSettled([
     disconnectDatabase(),
     disconnectRedis(),
@@ -67,4 +75,22 @@ async function closeInfrastructure(): Promise<void> {
     logger.error({ err: redisResult.reason }, 'Redis disconnect failed');
     process.exitCode = 1;
   }
+}
+
+function startAnnouncementStatusSync(): void {
+  const sync = async () => {
+    try {
+      const result = await announcementService.syncTimedStatuses();
+      if (result.activated > 0 || result.expired > 0) {
+        logger.info(result, 'Announcement timed statuses synced');
+      }
+    } catch (error) {
+      logger.error({ err: error }, 'Announcement timed status sync failed');
+    }
+  };
+
+  void sync();
+  announcementStatusSyncTimer = setInterval(() => {
+    void sync();
+  }, 60_000);
 }

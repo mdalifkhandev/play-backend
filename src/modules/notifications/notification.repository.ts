@@ -88,6 +88,16 @@ export class NotificationRepository {
     return PushNotificationTokenModel.countDocuments({ userId, isActive: true }).exec();
   }
 
+  async findActiveTokensByUserIds(
+    userIds: readonly (string | Types.ObjectId)[],
+  ): Promise<PushNotificationTokenDocument[]> {
+    if (userIds.length === 0) {
+      return [];
+    }
+
+    return PushNotificationTokenModel.find({ userId: { $in: userIds }, isActive: true }).exec();
+  }
+
   async createNotification(
     data: Omit<Notification, '_id' | 'createdAt' | 'updatedAt' | 'isRead'>,
   ): Promise<NotificationDocument> {
@@ -96,6 +106,16 @@ export class NotificationRepository {
       isRead: false,
     });
     return notification.save();
+  }
+
+  async createManyNotifications(
+    items: Omit<Notification, '_id' | 'createdAt' | 'updatedAt' | 'isRead'>[],
+  ): Promise<NotificationDocument[]> {
+    if (items.length === 0) {
+      return [];
+    }
+
+    return NotificationModel.insertMany(items.map((item) => ({ ...item, isRead: false })));
   }
 
   async getUserNotifications(
@@ -136,6 +156,41 @@ export class NotificationRepository {
   ): Promise<boolean> {
     const result = await NotificationModel.deleteOne({ _id: notificationId, userId }).exec();
     return result.deletedCount > 0;
+  }
+
+  async listAdminNotifications(
+    skip: number,
+    limit: number,
+  ): Promise<{ items: NotificationDocument[]; total: number }> {
+    const query = {
+      'data.source': 'admin',
+    };
+    const [items, total] = await Promise.all([
+      NotificationModel.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate('userId', '_id email profile.displayName profile.username profile.photoUrl')
+        .populate('actorId', '_id email profile.displayName profile.username profile.photoUrl')
+        .exec(),
+      NotificationModel.countDocuments(query),
+    ]);
+
+    return { items, total };
+  }
+
+  async updateAdminNotification(
+    notificationId: string | Types.ObjectId,
+    update: Record<string, unknown>,
+  ): Promise<NotificationDocument | null> {
+    return NotificationModel.findByIdAndUpdate(
+      notificationId,
+      { $set: update },
+      { new: true, runValidators: true },
+    )
+      .populate('userId', '_id email profile.displayName profile.username profile.photoUrl')
+      .populate('actorId', '_id email profile.displayName profile.username profile.photoUrl')
+      .exec();
   }
 }
 

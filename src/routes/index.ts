@@ -37,6 +37,7 @@ import { monetizationAdminRouter } from '../modules/monetization/monetization.ro
 import { creatorCategoryRouter } from '../modules/creator-categories/creator-category.route.js';
 import { occupationRouter } from '../modules/occupations/occupation.route.js';
 import { adminSearchRouter } from '../modules/admin-search/admin-search.route.js';
+import { announcementAdminRouter, announcementRouter } from '../modules/announcements/announcement.route.js';
 
 export const apiRouter = Router();
 
@@ -44,6 +45,7 @@ apiRouter.use('/health', healthRouter);
 apiRouter.use('/auth', authRouter);
 apiRouter.use('/users', userRouter);
 apiRouter.use('/notifications', notificationRouter);
+apiRouter.use('/announcements', announcementRouter);
 apiRouter.use('/activities', activityRouter);
 apiRouter.use('/rewards', rewardRouter);
 apiRouter.use('/subscriptions', subscriptionRouter);
@@ -78,4 +80,5 @@ apiRouter.use('/admin/rewards', rewardAdminRouter);
 apiRouter.use('/admin/live-streams', liveStreamAdminRouter);
 apiRouter.use('/admin/kids-mode', kidsModeAdminRouter);
 apiRouter.use('/admin/search', adminSearchRouter);
+apiRouter.use('/admin/announcements', announcementAdminRouter);
 

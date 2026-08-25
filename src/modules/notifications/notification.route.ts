@@ -7,11 +7,14 @@ import { validateRequest } from '../../common/middleware/validation.middleware.j
 import { notificationController } from './notification.controller.js';
 import {
   adminSendPushNotificationBodySchema,
+  adminNotificationHistoryQuerySchema,
+  adminNotificationParamsSchema,
   deletePushTokenBodySchema,
   registerPushTokenBodySchema,
   sendPushNotificationBodySchema,
   getNotificationsQuerySchema,
   markNotificationsAsReadBodySchema,
+  adminUpdateNotificationBodySchema,
 } from './notification.validation.js';
 
 export const notificationRouter = Router();
@@ -55,4 +58,21 @@ notificationRouter.post(
   authorize(UserRole.ADMIN),
   validateRequest({ body: adminSendPushNotificationBodySchema }),
   notificationController.adminSendToUser,
+);
+notificationRouter.get(
+  '/admin/history',
+  authorize(UserRole.ADMIN, UserRole.MODERATOR),
+  validateRequest({ query: adminNotificationHistoryQuerySchema }),
+  notificationController.adminGetHistory,
+);
+notificationRouter.get(
+  '/admin/templates',
+  authorize(UserRole.ADMIN, UserRole.MODERATOR),
+  notificationController.adminGetTemplates,
+);
+notificationRouter.patch(
+  '/admin/:notificationId',
+  authorize(UserRole.ADMIN, UserRole.MODERATOR),
+  validateRequest({ ...adminNotificationParamsSchema, body: adminUpdateNotificationBodySchema }),
+  notificationController.adminUpdateNotification,
 );

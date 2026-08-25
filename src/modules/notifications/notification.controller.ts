@@ -10,6 +10,8 @@ import type {
   SendPushNotificationInput,
   GetNotificationsQuery,
   MarkNotificationsAsReadInput,
+  AdminNotificationHistoryQuery,
+  AdminUpdateNotificationInput,
 } from './notification.validation.js';
 
 export class NotificationController {
@@ -45,10 +47,30 @@ export class NotificationController {
 
   adminSendToUser = asyncHandler(async (request: Request, response: Response) => {
     const input = request.body as AdminSendPushNotificationInput;
-    const { userId, ...notification } = input;
-    const result = await notificationService.sendToUser(userId, notification);
+    const result = await notificationService.adminSend(input);
 
     return sendSuccess(response, 200, 'Push notification sent successfully.', result);
+  });
+
+  adminGetHistory = asyncHandler(async (request: Request, response: Response) => {
+    const result = await notificationService.getAdminNotificationHistory(
+      request.query as unknown as AdminNotificationHistoryQuery,
+    );
+    return sendSuccess(response, 200, 'Admin notification history retrieved successfully.', result);
+  });
+
+  adminGetTemplates = asyncHandler(async (_request: Request, response: Response) => {
+    const result = notificationService.getAdminTemplates();
+    return sendSuccess(response, 200, 'Notification templates retrieved successfully.', result);
+  });
+
+  adminUpdateNotification = asyncHandler(async (request: Request, response: Response) => {
+    const { notificationId } = request.params as { notificationId: string };
+    const result = await notificationService.updateAdminNotification(
+      notificationId,
+      request.body as AdminUpdateNotificationInput,
+    );
+    return sendSuccess(response, 200, 'Notification updated successfully.', result);
   });
 
   getUserNotifications = asyncHandler(async (request: Request, response: Response) => {
