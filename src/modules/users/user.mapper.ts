@@ -17,6 +17,7 @@ export interface PublicUserDto {
     expiresAt?: string;
     isPremium: boolean;
   };
+  preferredLanguageCode?: string;
   profile: {
     username?: string;
     displayName?: string;
@@ -56,6 +57,7 @@ export function toPublicUser(user: UserDocument): PublicUserDto {
         ),
       ),
     },
+    ...(user.preferredLanguageCode ? { preferredLanguageCode: user.preferredLanguageCode } : {}),
     profile: {
       ...(profile.username ? { username: profile.username } : {}),
       ...(profile.displayName ? { displayName: profile.displayName } : {}),

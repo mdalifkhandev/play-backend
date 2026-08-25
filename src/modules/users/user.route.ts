@@ -16,6 +16,7 @@ import {
   discoverUsersQuerySchema,
   kidsModePinSchema,
   updateKidsProfileSchema,
+  updatePreferredLanguageSchema,
   usernameProfileParamsSchema,
 } from './user.validation.js';
 
@@ -79,6 +80,13 @@ userRouter.put(
   authenticate,
   validateRequest({ body: updateKidsProfileSchema }),
   userController.updateKidsProfile,
+);
+
+userRouter.put(
+  '/me/language',
+  authenticate,
+  validateRequest({ body: updatePreferredLanguageSchema }),
+  userController.updatePreferredLanguage,
 );
 
 userRouter.get(

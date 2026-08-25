@@ -6,6 +6,7 @@ import { NotFoundError } from '../../common/errors/not-found-error.js';
 import { sendSuccess } from '../../common/responses/api-response.js';
 import { asyncHandler } from '../../common/utils/async-handler.js';
 import { ReelModel, ReelReportModel } from '../reels/index.js';
+import { platformSettingService } from '../platform-settings/platform-setting.service.js';
 import { FollowModel } from './follow.model.js';
 import { toPublicUser } from './user.mapper.js';
 import { UserModel, type User } from './user.model.js';
@@ -16,6 +17,7 @@ import type {
   AdminUserActionInput,
   AdminUserParams,
   DiscoverUsersQuery,
+  UpdatePreferredLanguageInput,
   UsernameProfileParams,
 } from './user.validation.js';
 
@@ -256,6 +258,35 @@ export class UserController {
 
     return sendSuccess(response, 200, 'User profile retrieved successfully.', {
       user: toPublicUser(user),
+    });
+  });
+
+  updatePreferredLanguage = asyncHandler(async (request: Request, response: Response) => {
+    const userId = request.user?.userId;
+    const { languageCode } = request.body as UpdatePreferredLanguageInput;
+
+    if (!userId) {
+      throw new NotFoundError('User was not found.', { code: 'USER_NOT_FOUND' });
+    }
+
+    const normalizedCode = languageCode.trim().toLowerCase();
+    const publicSettings = await platformSettingService.getPublicSettings();
+    const language = publicSettings.languages.find((item) => item.code.toLowerCase() === normalizedCode);
+
+    if (!language) {
+      throw new NotFoundError('Language was not found.', { code: 'LANGUAGE_NOT_FOUND' });
+    }
+
+    const user = await userRepository.updateById(userId, {
+      preferredLanguageCode: language.code,
+    });
+
+    if (!user) {
+      throw new NotFoundError('User was not found.', { code: 'USER_NOT_FOUND' });
+    }
+
+    return sendSuccess(response, 200, 'Language updated successfully.', {
+      preferredLanguageCode: language.code,
     });
   });
 

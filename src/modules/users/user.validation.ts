@@ -27,6 +27,12 @@ export const discoverUsersQuerySchema = z
 
 export const usernameProfileParamsSchema = z.object({ username: usernameSchema }).strict();
 
+export const updatePreferredLanguageSchema = z
+  .object({
+    languageCode: z.string().trim().min(2, 'Language code is required.').max(12, 'Language code is too long.'),
+  })
+  .strict();
+
 const objectIdSchema = z
   .string()
   .trim()
@@ -53,6 +59,7 @@ export type KidsModePinInput = z.infer<typeof kidsModePinSchema>;
 export type UpdateKidsProfileInput = z.infer<typeof updateKidsProfileSchema>;
 export type DiscoverUsersQuery = z.infer<typeof discoverUsersQuerySchema>;
 export type UsernameProfileParams = z.infer<typeof usernameProfileParamsSchema>;
+export type UpdatePreferredLanguageInput = z.infer<typeof updatePreferredLanguageSchema>;
 export type AdminListUsersQuery = z.infer<typeof adminListUsersQuerySchema>;
 export type AdminUserParams = z.infer<typeof adminUserParamsSchema>;
 export type AdminUserActionInput = z.infer<typeof adminUserActionBodySchema>;

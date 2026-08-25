@@ -47,6 +47,7 @@ export interface User {
   subscriptionExpiresAt?: Date;
   subscriptionProvider?: 'revenuecat' | 'apple_pay' | 'stripe';
   subscriptionPaymentId?: string;
+  preferredLanguageCode?: string;
   profile: UserProfile;
   kidsModePin?: string;
   kidsProfile?: KidsProfile;
@@ -128,6 +129,7 @@ const userSchema = new Schema<User>(
     subscriptionExpiresAt: { type: Date },
     subscriptionProvider: { type: String, enum: ['revenuecat', 'apple_pay', 'stripe'], trim: true },
     subscriptionPaymentId: { type: String, trim: true },
+    preferredLanguageCode: { type: String, trim: true, lowercase: true, maxlength: 12 },
     profile: { type: userProfileSchema, default: () => ({ isSetupComplete: false }) },
     kidsModePin: { type: String, trim: true, select: false },
     kidsProfile: { type: kidsProfileSchema, default: () => ({ isActive: false }) },
