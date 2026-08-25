@@ -5,6 +5,8 @@ import { CoinTransactionModel } from '../coins/coin-transaction.model.js';
 import { WithdrawalRequestModel } from '../coins/withdrawal-request.model.js';
 import { CreatorRequirementSettingModel } from '../creators/creator-requirement-setting.model.js';
 import { UserModel } from '../users/user.model.js';
+import { creatorEarningService } from './creator-earning.service.js';
+import { CreatorEarningModel } from './creator-earning.model.js';
 import { MonetizationSettingModel } from './monetization-setting.model.js';
 import type {
   UpdateCreatorRequirementSettingsInput,
@@ -84,6 +86,11 @@ export class MonetizationService {
     return mapCreatorRequirementSettings(setting);
   }
 
+  async releasePendingEarnings() {
+    const released = await creatorEarningService.releaseAvailablePendingEarnings();
+    return { released };
+  }
+
   private async getSetting() {
     let setting = await MonetizationSettingModel.findOne().exec();
     if (!setting) {
@@ -132,11 +139,16 @@ export class MonetizationService {
   }
 
   private async sumPayouts() {
-    const rows = await WithdrawalRequestModel.aggregate<{ _id: string; total: number }>([
+    const [withdrawals, earnings] = await Promise.all([
+      WithdrawalRequestModel.aggregate<{ _id: string; total: number }>([
       { $group: { _id: '$status', total: { $sum: '$amountUsd' } } },
-    ]).exec();
+      ]).exec(),
+      CreatorEarningModel.aggregate<{ _id: string; total: number }>([
+        { $group: { _id: '$status', total: { $sum: '$amountUsd' } } },
+      ]).exec(),
+    ]);
 
-    return rows.reduce(
+    const payoutTotals = withdrawals.reduce(
       (acc, row) => {
         if (row._id === 'pending') acc.pending += row.total;
         if (['approved', 'transferred'].includes(row._id)) acc.completed += row.total;
@@ -144,15 +156,22 @@ export class MonetizationService {
       },
       { pending: 0, completed: 0 },
     );
+
+    earnings.forEach((row) => {
+      if (row._id === 'pending' || row._id === 'held') payoutTotals.pending += row.total;
+      if (row._id === 'available' || row._id === 'paid') payoutTotals.completed += row.total;
+    });
+
+    return payoutTotals;
   }
 
   private async getCreatorEarnings() {
-    const rows = await WithdrawalRequestModel.aggregate<{
+    const rows = await CreatorEarningModel.aggregate<{
       _id: Types.ObjectId;
       total: number;
       thisMonth: number;
       pending: number;
-      transferred: number;
+      available: number;
     }>([
       {
         $group: {
@@ -164,7 +183,7 @@ export class MonetizationService {
             },
           },
           pending: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } },
-          transferred: { $sum: { $cond: [{ $in: ['$status', ['approved', 'transferred']] }, 1, 0] } },
+          available: { $sum: { $cond: [{ $eq: ['$status', 'available'] }, 1, 0] } },
         },
       },
       { $sort: { total: -1 } },
@@ -184,7 +203,7 @@ export class MonetizationService {
         name: user?.profile?.displayName || user?.profile?.username || user?.email || 'Creator',
         total: Number(row.total.toFixed(2)),
         thisMonth: Number(row.thisMonth.toFixed(2)),
-        payout: row.pending > 0 ? 'Pending' : row.transferred > 0 ? 'Paid' : 'Processing',
+        payout: row.pending > 0 ? 'Pending' : row.available > 0 ? 'Available' : 'Processing',
       };
     });
   }

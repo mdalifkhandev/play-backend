@@ -28,6 +28,7 @@ import {
 import { commentRepository } from '../engagement/comment/comment.repository.js';
 import { LiveStreamModel, type ILiveStream } from '../live-streams/live-stream.model.js';
 import { LIVE_STREAM_STATUS } from '../live-streams/live-stream.constants.js';
+import { creatorEarningService } from '../monetization/creator-earning.service.js';
 import { musicService, type MusicService } from '../music/music.service.js';
 import type { MusicTrack } from '../music/music.types.js';
 import {
@@ -583,6 +584,7 @@ export class ReelService {
     }
 
     const viewCount = await this.reels.incrementViewCount(reel._id);
+    void creatorEarningService.recordEligibleReelView(reel, viewCount);
     return { viewCount, counted: true };
   }
 

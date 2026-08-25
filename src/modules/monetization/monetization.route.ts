@@ -24,3 +24,4 @@ monetizationAdminRouter.put(
   validateRequest({ body: updateCreatorRequirementSettingsBodySchema }),
   monetizationController.updateCreatorRequirements,
 );
+monetizationAdminRouter.post('/earnings/release', monetizationController.releasePendingEarnings);

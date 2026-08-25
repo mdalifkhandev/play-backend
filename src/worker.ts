@@ -9,6 +9,7 @@ import {
   disconnectQueueConnections,
 } from './infrastructure/queue/bullmq.connection.js';
 import { logger } from './infrastructure/logger/logger.js';
+import { creatorEarningService } from './modules/monetization/creator-earning.service.js';
 import {
   REEL_PROCESS_JOB_NAME,
   REEL_QUEUE_NAME,
@@ -51,6 +52,16 @@ logger.info(
   'Reel media worker started',
 );
 
+const earningReleaseInterval = setInterval(() => {
+  void creatorEarningService.releaseAvailablePendingEarnings().catch((error) => {
+    logger.error({ err: error }, 'Creator earning release job failed');
+  });
+}, 60 * 60 * 1000);
+
+void creatorEarningService.releaseAvailablePendingEarnings().catch((error) => {
+  logger.error({ err: error }, 'Initial creator earning release job failed');
+});
+
 const shutdownSignals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 
 for (const signal of shutdownSignals) {
@@ -61,6 +72,7 @@ for (const signal of shutdownSignals) {
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   logger.info({ signal }, 'Shutting down Reel media worker');
+  clearInterval(earningReleaseInterval);
 
   try {
     await worker.close();

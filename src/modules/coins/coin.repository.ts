@@ -371,6 +371,25 @@ export class CoinRepository {
     return user?.coinBalance ?? 0;
   }
 
+  async getUserMoneyBalance(userId: string): Promise<{
+    availableBalanceUsd: number;
+    pendingBalanceUsd: number;
+    totalBalanceUsd: number;
+  }> {
+    const user = await UserModel.findById(userId)
+      .select('availableBalanceUsd pendingBalanceUsd')
+      .lean()
+      .exec();
+    const availableBalanceUsd = Number((user?.availableBalanceUsd ?? 0).toFixed(2));
+    const pendingBalanceUsd = Number((user?.pendingBalanceUsd ?? 0).toFixed(2));
+
+    return {
+      availableBalanceUsd,
+      pendingBalanceUsd,
+      totalBalanceUsd: Number((availableBalanceUsd + pendingBalanceUsd).toFixed(2)),
+    };
+  }
+
   async getUserDiamondBalance(userId: string): Promise<number> {
     const user = await UserModel.findById(userId).select('diamondBalance').lean().exec();
     return user?.diamondBalance ?? 0;

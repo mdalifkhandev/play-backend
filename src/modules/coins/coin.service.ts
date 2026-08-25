@@ -62,10 +62,14 @@ export class CoinService {
   }
 
   async getUserCoinBalance(userId: string) {
-    const balance = await coinRepository.getUserBalance(userId);
+    const [balance, moneyBalance] = await Promise.all([
+      coinRepository.getUserBalance(userId),
+      coinRepository.getUserMoneyBalance(userId),
+    ]);
     return {
       userId,
       coinBalance: balance,
+      ...moneyBalance,
     };
   }
 
@@ -612,7 +616,7 @@ export class CoinService {
   async getWithdrawalSettings(userId: string) {
     const setting = await coinRepository.getCoinSettings();
     const [user, pendingWithdrawal] = await Promise.all([
-      UserModel.findById(userId).select('coinBalance stripeConnectAccountId stripeConnectOnboardingComplete').exec(),
+      UserModel.findById(userId).select('coinBalance availableBalanceUsd pendingBalanceUsd stripeConnectAccountId stripeConnectOnboardingComplete').exec(),
       coinRepository.getUserPendingWithdrawalSummary(userId),
     ]);
     const coinBalance = user?.coinBalance ?? 0;
@@ -642,6 +646,9 @@ export class CoinService {
       maxWithdrawalCoins: setting.maxWithdrawalCoins,
       userCoinBalance: coinBalance,
       estimatedUsdValue,
+      availableBalanceUsd: Number((user?.availableBalanceUsd ?? 0).toFixed(2)),
+      pendingBalanceUsd: Number((user?.pendingBalanceUsd ?? 0).toFixed(2)),
+      totalBalanceUsd: Number(((user?.availableBalanceUsd ?? 0) + (user?.pendingBalanceUsd ?? 0)).toFixed(2)),
       pendingWithdrawalCoins: pendingWithdrawal.coins,
       pendingWithdrawalUsdValue: pendingWithdrawal.amountUsd,
       pendingWithdrawalCount: pendingWithdrawal.count,

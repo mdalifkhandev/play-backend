@@ -29,6 +29,11 @@ export class MonetizationController {
     );
     return sendSuccess(response, 200, 'Creator requirement settings updated.', result);
   });
+
+  releasePendingEarnings = asyncHandler(async (_request: Request, response: Response) => {
+    const result = await monetizationService.releasePendingEarnings();
+    return sendSuccess(response, 200, 'Pending creator earnings released.', result);
+  });
 }
 
 export const monetizationController = new MonetizationController();

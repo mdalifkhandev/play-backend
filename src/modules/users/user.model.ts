@@ -38,6 +38,8 @@ export interface User {
   lockedUntil?: Date;
   coinBalance: number;
   diamondBalance: number;
+  availableBalanceUsd: number;
+  pendingBalanceUsd: number;
   stripeConnectAccountId?: string;
   stripeConnectOnboardingComplete: boolean;
   subscriptionPlan?: string;
@@ -112,6 +114,8 @@ const userSchema = new Schema<User>(
     lockedUntil: { type: Date },
     coinBalance: { type: Number, default: 0, min: 0, required: true },
     diamondBalance: { type: Number, default: 0, min: 0, required: true },
+    availableBalanceUsd: { type: Number, default: 0, min: 0, required: true },
+    pendingBalanceUsd: { type: Number, default: 0, min: 0, required: true },
     stripeConnectAccountId: { type: String, trim: true, sparse: true },
     stripeConnectOnboardingComplete: { type: Boolean, default: false, required: true },
     subscriptionPlan: { type: String, trim: true },
