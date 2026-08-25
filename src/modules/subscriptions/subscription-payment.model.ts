@@ -3,6 +3,7 @@ import mongoose, { Schema, model, type HydratedDocument, type Model } from 'mong
 export interface SubscriptionPayment {
   _id: mongoose.Types.ObjectId;
   userId: mongoose.Types.ObjectId;
+  subscriptionId?: mongoose.Types.ObjectId;
   planId: string;
   planName: string;
   interval: 'month' | 'year' | 'lifetime';
@@ -21,6 +22,7 @@ export type SubscriptionPaymentDocument = HydratedDocument<SubscriptionPayment>;
 const subscriptionPaymentSchema = new Schema<SubscriptionPayment>(
   {
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    subscriptionId: { type: Schema.Types.ObjectId, ref: 'UserSubscription', index: true },
     planId: { type: String, required: true, trim: true, lowercase: true },
     planName: { type: String, required: true, trim: true },
     interval: { type: String, enum: ['month', 'year', 'lifetime'], required: true },

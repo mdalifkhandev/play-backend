@@ -42,6 +42,7 @@ export interface User {
   pendingBalanceUsd: number;
   stripeConnectAccountId?: string;
   stripeConnectOnboardingComplete: boolean;
+  currentSubscriptionId?: Types.ObjectId;
   subscriptionPlan?: string;
   subscriptionStatus: 'none' | 'active' | 'expired' | 'canceled' | 'hold';
   subscriptionExpiresAt?: Date;
@@ -119,6 +120,7 @@ const userSchema = new Schema<User>(
     pendingBalanceUsd: { type: Number, default: 0, min: 0, required: true },
     stripeConnectAccountId: { type: String, trim: true, sparse: true },
     stripeConnectOnboardingComplete: { type: Boolean, default: false, required: true },
+    currentSubscriptionId: { type: Schema.Types.ObjectId, ref: 'UserSubscription' },
     subscriptionPlan: { type: String, trim: true },
     subscriptionStatus: {
       type: String,
@@ -142,6 +144,7 @@ const userSchema = new Schema<User>(
 
 userSchema.index({ 'profile.username': 1 }, { unique: true, sparse: true });
 userSchema.index({ status: 1, role: 1 });
+userSchema.index({ currentSubscriptionId: 1 });
 userSchema.index({ subscriptionStatus: 1, subscriptionExpiresAt: 1 });
 
 export const UserModel: Model<User> =

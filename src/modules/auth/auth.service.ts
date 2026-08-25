@@ -12,6 +12,7 @@ import { createSecureToken, hashPassword, sha256, verifyPassword } from '../../c
 import { signAccessToken } from '../../common/utils/jwt.util.js';
 import { mailService } from '../../infrastructure/mail/mail.service.js';
 import { legalConsentService } from '../legal-consents/legal-consent.service.js';
+import { subscriptionService } from '../subscriptions/subscription.service.js';
 import { userRepository } from '../users/user.repository.js';
 import { toPublicUser, type PublicUserDto } from '../users/user.mapper.js';
 import type { UserDocument, UserProfile } from '../users/user.model.js';
@@ -426,8 +427,10 @@ export class AuthService {
 
     await authRepository.revokeSession(session._id, nextSession._id);
 
+    const normalizedUser = await subscriptionService.normalizeUserSubscription(user);
+
     return {
-      user: toPublicUser(user),
+      user: toPublicUser(normalizedUser),
       tokens: await this.createTokenSet(user, nextSession._id.toString(), nextRefreshToken, nextExpiresAt),
     };
   }
@@ -457,7 +460,9 @@ export class AuthService {
       });
     }
 
-    return { user: toPublicUser(user) };
+    const normalizedUser = await subscriptionService.normalizeUserSubscription(user);
+
+    return { user: toPublicUser(normalizedUser) };
   }
 
   async updateProfile(userId: string, input: UpdateProfileInput): Promise<{ user: PublicUserDto }> {
@@ -610,10 +615,12 @@ export class AuthService {
       ...(context.userAgent ? { userAgent: context.userAgent } : {}),
     });
 
+    const normalizedUser = await subscriptionService.normalizeUserSubscription(user);
+
     return {
-      user: toPublicUser(user),
+      user: toPublicUser(normalizedUser),
       tokens: await this.createTokenSet(
-        user,
+        normalizedUser,
         session._id.toString(),
         refreshToken,
         refreshExpiresAt,

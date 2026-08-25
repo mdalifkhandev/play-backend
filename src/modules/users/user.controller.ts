@@ -7,6 +7,7 @@ import { sendSuccess } from '../../common/responses/api-response.js';
 import { asyncHandler } from '../../common/utils/async-handler.js';
 import { ReelModel, ReelReportModel } from '../reels/index.js';
 import { platformSettingService } from '../platform-settings/platform-setting.service.js';
+import { subscriptionService } from '../subscriptions/subscription.service.js';
 import { FollowModel } from './follow.model.js';
 import { toPublicUser } from './user.mapper.js';
 import { UserModel, type User } from './user.model.js';
@@ -243,8 +244,10 @@ export class UserController {
       throw new NotFoundError('User was not found.', { code: 'USER_NOT_FOUND' });
     }
 
+    const normalizedUser = await subscriptionService.normalizeUserSubscription(user as any);
+
     return sendSuccess(response, 200, 'User profile retrieved successfully.', {
-      user: toPublicUser(user as any),
+      user: toPublicUser(normalizedUser as any),
     });
   });
 
@@ -256,8 +259,10 @@ export class UserController {
       throw new NotFoundError('User was not found.', { code: 'USER_NOT_FOUND' });
     }
 
+    const normalizedUser = await subscriptionService.normalizeUserSubscription(user);
+
     return sendSuccess(response, 200, 'User profile retrieved successfully.', {
-      user: toPublicUser(user),
+      user: toPublicUser(normalizedUser),
     });
   });
 
