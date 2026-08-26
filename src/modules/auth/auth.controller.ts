@@ -30,6 +30,19 @@ export class AuthController {
     return sendSuccess(response, 200, 'Login successful.', result);
   });
 
+  adminLogin = asyncHandler(async (request: Request, response: Response) => {
+    const result = await authService.login(request.body, getRequestContext(request));
+    
+    if (result.user.role === 'user' || result.user.role === 'creator') {
+      throw new UnauthorizedError('Access denied. Admin privileges required.', {
+        code: 'FORBIDDEN',
+      });
+    }
+
+    setRefreshCookie(response, result.tokens.refreshToken, result.tokens.refreshTokenExpiresAt);
+    return sendSuccess(response, 200, 'Admin login successful.', result);
+  });
+
   googleLogin = asyncHandler(async (request: Request, response: Response) => {
     const result = await authService.googleLogin(request.body, getRequestContext(request));
     setRefreshCookie(response, result.tokens.refreshToken, result.tokens.refreshTokenExpiresAt);

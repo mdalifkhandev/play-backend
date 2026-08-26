@@ -13,6 +13,8 @@ import type {
   ReportTargetParams,
 } from './moderation.validation.js';
 
+import { AdminAuditService } from '../admin-audit/admin-audit.service.js';
+
 export class ModerationController {
   report = (targetType: ModerationTargetType) =>
     asyncHandler(async (request: Request, response: Response) => {
@@ -36,7 +38,18 @@ export class ModerationController {
   review = asyncHandler(async (request: Request, response: Response) => {
     const { reportId } = request.params as ModerationReportParams;
     const { action, reason } = request.body as AdminModerationActionInput;
-    const result = await moderationService.review(reportId, userId(request), action, reason);
+    const adminId = userId(request);
+    const result = await moderationService.review(reportId, adminId, action, reason);
+
+    await AdminAuditService.logAction({
+      adminId,
+      action: `moderation_${action}`,
+      resource: 'moderation_report',
+      targetId: reportId,
+      ...(reason ? { details: { reason } } : {}),
+      ...(request.ip ? { ipAddress: request.ip } : {}),
+    });
+
     return sendSuccess(response, 200, 'Moderation action completed successfully.', result);
   });
 }

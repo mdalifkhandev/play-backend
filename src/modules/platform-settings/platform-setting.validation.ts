@@ -6,10 +6,6 @@ const languageSchema = z.object({
   active: z.boolean(),
 });
 
-const payoutRateSchema = z.object({
-  region: z.string().trim().min(1).max(80),
-  rateUsd: z.coerce.number().min(0).max(1000),
-});
 
 const featureFlagsSchema = z.object({
   liveStreaming: z.boolean(),
@@ -28,10 +24,23 @@ export const updatePlatformSettingsBodySchema = z
     maintenanceMessage: z.string().trim().min(1).max(300).optional(),
     videosBetweenAds: z.coerce.number().int().min(1).max(100).optional(),
     payoutPerThousandViewsUsd: z.coerce.number().min(0).max(1000).optional(),
-    payoutRates: z.array(payoutRateSchema).min(1).max(20).optional(),
+    creatorSharePercentage: z.coerce.number().int().min(0).max(100).optional(),
+    platformSharePercentage: z.coerce.number().int().min(0).max(100).optional(),
     languages: z.array(languageSchema).min(1).max(50).optional(),
     featureFlags: featureFlagsSchema.partial().optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (data) => {
+      if (data.creatorSharePercentage !== undefined && data.platformSharePercentage !== undefined) {
+        return data.creatorSharePercentage + data.platformSharePercentage === 100;
+      }
+      return true;
+    },
+    {
+      message: 'Creator and Platform share percentages must sum to 100',
+      path: ['platformSharePercentage'],
+    },
+  );
 
 export type UpdatePlatformSettingsInput = z.infer<typeof updatePlatformSettingsBodySchema>;

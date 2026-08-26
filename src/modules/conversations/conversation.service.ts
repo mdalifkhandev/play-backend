@@ -240,8 +240,7 @@ export class ConversationService {
       });
     }
 
-    // Auto-mark as read when user fetches messages
-    await this.repository.markAsRead(conversationId, userId);
+    // Auto-mark as read is disabled here so that the client's explicit socketMarkRead can trigger the read_receipt event.
 
     const { messages, total } = await this.repository.getMessages(conversationId, page, limit);
 

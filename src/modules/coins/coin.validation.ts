@@ -80,8 +80,8 @@ export const rejectWithdrawalSchema = {
 export const updateCoinSettingsSchema = {
   body: z.object({
     coinsPerDollar: z.coerce.number().positive('Coins per dollar must be greater than 0.'),
-    minWithdrawalCoins: z.coerce.number().positive().optional(),
-    maxWithdrawalCoins: z.coerce.number().positive().optional(),
+    minWithdrawalUsd: z.coerce.number().positive().optional(),
+    maxWithdrawalUsd: z.coerce.number().positive().optional(),
   }),
 };
 
@@ -89,7 +89,7 @@ export const getWithdrawalsQuerySchema = {
   query: z.object({
     page: z.coerce.number().int().positive().default(1),
     limit: z.coerce.number().int().positive().max(100).default(20),
-    status: z.enum(['pending', 'approved', 'processing', 'completed', 'rejected', 'all']).default('all'),
+    status: z.enum(['pending', 'approved', 'processing', 'completed', 'rejected', 'failed', 'all']).default('all'),
   }),
 };
 

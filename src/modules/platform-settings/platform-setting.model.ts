@@ -6,10 +6,6 @@ export interface PlatformLanguage {
   active: boolean;
 }
 
-export interface PlatformPayoutRate {
-  region: string;
-  rateUsd: number;
-}
 
 export interface PlatformFeatureFlags {
   liveStreaming: boolean;
@@ -28,7 +24,8 @@ export interface PlatformSetting {
   maintenanceMessage: string;
   videosBetweenAds: number;
   payoutPerThousandViewsUsd: number;
-  payoutRates: PlatformPayoutRate[];
+  creatorSharePercentage: number;
+  platformSharePercentage: number;
   languages: PlatformLanguage[];
   featureFlags: PlatformFeatureFlags;
   updatedBy?: mongoose.Types.ObjectId;
@@ -47,14 +44,6 @@ const platformLanguageSchema = new Schema<PlatformLanguage>(
   { _id: false },
 );
 
-const platformPayoutRateSchema = new Schema<PlatformPayoutRate>(
-  {
-    region: { type: String, required: true, trim: true, maxlength: 80 },
-    rateUsd: { type: Number, required: true, min: 0, default: 0 },
-  },
-  { _id: false },
-);
-
 const platformSettingSchema = new Schema<PlatformSetting>(
   {
     maintenanceMode: { type: Boolean, required: true, default: false },
@@ -67,15 +56,8 @@ const platformSettingSchema = new Schema<PlatformSetting>(
     },
     videosBetweenAds: { type: Number, required: true, min: 1, max: 100, default: 6 },
     payoutPerThousandViewsUsd: { type: Number, required: true, min: 0, max: 1000, default: 3.5 },
-    payoutRates: {
-      type: [platformPayoutRateSchema],
-      default: [
-        { region: 'North America', rateUsd: 4.2 },
-        { region: 'Europe', rateUsd: 3.8 },
-        { region: 'Asia Pacific', rateUsd: 2.1 },
-        { region: 'Latin America', rateUsd: 1.6 },
-      ],
-    },
+    creatorSharePercentage: { type: Number, required: true, min: 0, max: 100, default: 60 },
+    platformSharePercentage: { type: Number, required: true, min: 0, max: 100, default: 40 },
     languages: {
       type: [platformLanguageSchema],
       default: [

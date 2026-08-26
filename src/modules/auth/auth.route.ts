@@ -55,6 +55,7 @@ authRouter.use(authAuditMiddleware);
 
 authRouter.post('/sign-up', authRateLimiter, validateRequest({ body: signUpBodySchema }), authController.signUp);
 authRouter.post('/login', authRateLimiter, validateRequest({ body: loginBodySchema }), authController.login);
+authRouter.post('/admin-login', authRateLimiter, validateRequest({ body: loginBodySchema }), authController.adminLogin);
 authRouter.post('/google', authRateLimiter, validateRequest({ body: googleLoginBodySchema }), authController.googleLogin);
 authRouter.post('/apple', authRateLimiter, validateRequest({ body: appleLoginBodySchema }), authController.appleLogin);
 authRouter.post('/verify-email', authRateLimiter, validateRequest({ body: verifyCodeBodySchema }), authController.verifyEmail);

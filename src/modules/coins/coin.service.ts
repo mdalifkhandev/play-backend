@@ -100,10 +100,9 @@ export class CoinService {
   async convertDiamonds(userId: string, input: ConvertDiamondsInput) {
     const setting = await coinRepository.getCoinSettings();
     const amountUsd = Number((input.diamonds / setting.coinsPerDollar).toFixed(2));
-    const result = await coinRepository.convertDiamondsToCoins({
+    const result = await coinRepository.convertDiamondsToUsd({
       userId,
       diamonds: input.diamonds,
-      coins: input.diamonds,
       amountUsd,
     });
 
@@ -118,7 +117,7 @@ export class CoinService {
       converted: true,
       diamondsConverted: input.diamonds,
       amountUsd,
-      coinBalance: result.coinBalance,
+      availableBalanceUsd: result.availableBalanceUsd,
       diamondBalance: result.diamondBalance,
       diamondsPerDollar: setting.coinsPerDollar,
     };
@@ -634,8 +633,6 @@ export class CoinService {
       UserModel.findById(userId).select('coinBalance availableBalanceUsd pendingBalanceUsd stripeConnectAccountId stripeConnectOnboardingComplete').exec(),
       coinRepository.getUserPendingWithdrawalSummary(userId),
     ]);
-    const coinBalance = user?.coinBalance ?? 0;
-    const estimatedUsdValue = Number((coinBalance / setting.coinsPerDollar).toFixed(2));
     let stripeConnectOnboardingComplete = user?.stripeConnectOnboardingComplete ?? false;
 
     if (user?.stripeConnectAccountId) {
@@ -657,27 +654,17 @@ export class CoinService {
 
     return {
       coinsPerDollar: setting.coinsPerDollar,
-      minWithdrawalCoins: setting.minWithdrawalCoins,
-      maxWithdrawalCoins: setting.maxWithdrawalCoins,
-      minWithdrawalUsd: 10,
-      userCoinBalance: coinBalance,
-      estimatedUsdValue,
+      minWithdrawalUsd: setting.minWithdrawalUsd,
+      maxWithdrawalUsd: setting.maxWithdrawalUsd,
       availableBalanceUsd: Number((user?.availableBalanceUsd ?? 0).toFixed(2)),
       pendingBalanceUsd: Number((user?.pendingBalanceUsd ?? 0).toFixed(2)),
       totalBalanceUsd: Number(((user?.availableBalanceUsd ?? 0) + (user?.pendingBalanceUsd ?? 0)).toFixed(2)),
-      pendingWithdrawalCoins: pendingWithdrawal.coins,
       pendingWithdrawalUsdValue: pendingWithdrawal.amountUsd,
       pendingWithdrawalCount: pendingWithdrawal.count,
       stripeConnectAccountId: user?.stripeConnectAccountId,
       stripeConnectOnboardingComplete,
       payoutSetupAvailable: Boolean(env.STRIPE_SECRET_KEY),
     };
-  }
-
-  async requestWithdrawal(userId: string, coins: number) {
-    void userId;
-    void coins;
-    throw new BadRequestError('Purchased coins cannot be withdrawn. Only creator earnings can be withdrawn.');
   }
 
   async requestEarningWithdrawal(userId: string) {
@@ -690,11 +677,16 @@ export class CoinService {
       throw new BadRequestError('Please setup your payout account before requesting a withdrawal.');
     }
 
-    const minimumUsd = 10;
+    const setting = await coinRepository.getCoinSettings();
+    const minimumUsd = setting.minWithdrawalUsd;
+    const maximumUsd = setting.maxWithdrawalUsd;
     const amountUsd = Number((user.availableBalanceUsd ?? 0).toFixed(2));
 
     if (amountUsd < minimumUsd) {
       throw new BadRequestError(`Minimum withdrawal amount is $${minimumUsd.toFixed(2)}.`);
+    }
+    if (amountUsd > maximumUsd) {
+      throw new BadRequestError(`Maximum withdrawal amount is $${maximumUsd.toFixed(2)}.`);
     }
 
     let withdrawal;
@@ -721,8 +713,6 @@ export class CoinService {
     return {
       withdrawalId: withdrawal._id.toString(),
       withdrawalType: withdrawal.withdrawalType,
-      coins: withdrawal.coins,
-      coinsPerDollar: withdrawal.coinsPerDollar,
       amountUsd: withdrawal.amountUsd,
       status: withdrawal.status,
       remainingAvailableBalanceUsd: 0,
@@ -862,20 +852,19 @@ export class CoinService {
   async updateAdminCoinSettings(adminUserId: string, input: UpdateCoinSettingsInput) {
     const update = {
       coinsPerDollar: input.coinsPerDollar,
-      ...(input.minWithdrawalCoins !== undefined
-        ? { minWithdrawalCoins: input.minWithdrawalCoins }
+      ...(input.minWithdrawalUsd !== undefined
+        ? { minWithdrawalUsd: input.minWithdrawalUsd }
         : {}),
-      ...(input.maxWithdrawalCoins !== undefined
-        ? { maxWithdrawalCoins: input.maxWithdrawalCoins }
+      ...(input.maxWithdrawalUsd !== undefined
+        ? { maxWithdrawalUsd: input.maxWithdrawalUsd }
         : {}),
     };
     const updated = await coinRepository.updateCoinSettings(update, adminUserId);
     await cacheService.deleteByPrefix(cacheKeyPrefixes.coins);
     return {
       coinsPerDollar: updated.coinsPerDollar,
-      minWithdrawalCoins: updated.minWithdrawalCoins,
-      maxWithdrawalCoins: updated.maxWithdrawalCoins,
-      minWithdrawalUsd: 10,
+      minWithdrawalUsd: updated.minWithdrawalUsd,
+      maxWithdrawalUsd: updated.maxWithdrawalUsd,
       updatedAt: updated.updatedAt.toISOString(),
     };
   }
@@ -885,9 +874,8 @@ export class CoinService {
       const setting = await coinRepository.getCoinSettings();
       return {
         coinsPerDollar: setting.coinsPerDollar,
-        minWithdrawalCoins: setting.minWithdrawalCoins,
-        maxWithdrawalCoins: setting.maxWithdrawalCoins,
-        minWithdrawalUsd: 10,
+        minWithdrawalUsd: setting.minWithdrawalUsd,
+        maxWithdrawalUsd: setting.maxWithdrawalUsd,
         updatedAt: setting.updatedAt.toISOString(),
       };
     });

@@ -164,29 +164,29 @@ export class CoinRepository {
     if (!setting) {
       setting = await CoinSettingModel.create({
         coinsPerDollar: 100,
-        minWithdrawalCoins: 1000,
-        maxWithdrawalCoins: 500000,
+        minWithdrawalUsd: 10,
+        maxWithdrawalUsd: 5000,
       });
     }
     return setting;
   }
 
   async updateCoinSettings(
-    data: { coinsPerDollar?: number; minWithdrawalCoins?: number; maxWithdrawalCoins?: number },
+    data: { coinsPerDollar?: number; minWithdrawalUsd?: number; maxWithdrawalUsd?: number },
     adminUserId: string,
   ): Promise<CoinSettingDocument> {
     let setting = await CoinSettingModel.findOne().exec();
     if (!setting) {
       setting = new CoinSettingModel({
         coinsPerDollar: 100,
-        minWithdrawalCoins: 1000,
-        maxWithdrawalCoins: 500000,
+        minWithdrawalUsd: 10,
+        maxWithdrawalUsd: 5000,
       });
     }
 
     if (data.coinsPerDollar !== undefined) setting.coinsPerDollar = data.coinsPerDollar;
-    if (data.minWithdrawalCoins !== undefined) setting.minWithdrawalCoins = data.minWithdrawalCoins;
-    if (data.maxWithdrawalCoins !== undefined) setting.maxWithdrawalCoins = data.maxWithdrawalCoins;
+    if (data.minWithdrawalUsd !== undefined) setting.minWithdrawalUsd = data.minWithdrawalUsd;
+    if (data.maxWithdrawalUsd !== undefined) setting.maxWithdrawalUsd = data.maxWithdrawalUsd;
     setting.updatedBy = new Types.ObjectId(adminUserId);
 
     return setting.save();
@@ -377,40 +377,27 @@ export class CoinRepository {
     return user?.diamondBalance ?? 0;
   }
 
-  async convertDiamondsToCoins(data: {
+  async convertDiamondsToUsd(data: {
     userId: string;
     diamonds: number;
-    coins: number;
     amountUsd: number;
-  }): Promise<{ diamondBalance: number; coinBalance: number } | null> {
+  }): Promise<{ diamondBalance: number; availableBalanceUsd: number } | null> {
     const userObjectId = new Types.ObjectId(data.userId);
+    const amountUsd = Number(data.amountUsd.toFixed(2));
+    
     const updatedUser = await UserModel.findOneAndUpdate(
       { _id: userObjectId, diamondBalance: { $gte: data.diamonds } },
-      { $inc: { diamondBalance: -data.diamonds, coinBalance: data.coins } },
+      { $inc: { diamondBalance: -data.diamonds, availableBalanceUsd: amountUsd } },
       { new: true },
-    ).select('diamondBalance coinBalance').lean().exec();
+    ).select('diamondBalance availableBalanceUsd').lean().exec();
 
     if (!updatedUser) {
       return null;
     }
 
-    await CoinTransactionModel.create({
-      userId: userObjectId,
-      coins: data.coins,
-      amount: data.amountUsd,
-      currency: 'usd',
-      paymentProvider: 'diamond_conversion',
-      status: 'completed',
-      completedAt: new Date(),
-      metadata: {
-        source: 'diamond_conversion',
-        diamonds: data.diamonds,
-      },
-    });
-
     return {
       diamondBalance: updatedUser.diamondBalance ?? 0,
-      coinBalance: updatedUser.coinBalance ?? 0,
+      availableBalanceUsd: updatedUser.availableBalanceUsd ?? 0,
     };
   }
 
@@ -620,8 +607,6 @@ export class CoinRepository {
       userId: userObjectId,
       stripeConnectAccountId: data.stripeConnectAccountId,
       withdrawalType: 'earnings',
-      coins: 0,
-      coinsPerDollar: 0,
       amountUsd,
       currency: 'usd',
       status: 'pending',

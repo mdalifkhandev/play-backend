@@ -18,7 +18,6 @@ import type {
   UpdateAdminGiftInput,
   UpdateCoinSettingsInput,
   VerifyPaymentInput,
-  WithdrawCoinsInput,
 } from './coin.validation.js';
 import type { GiftTargetType } from './sent-gift.model.js';
 import type { WithdrawalStatus } from './withdrawal-request.model.js';
@@ -129,12 +128,6 @@ export class CoinController {
     return sendSuccess(response, 200, 'Withdrawal settings retrieved successfully.', result);
   });
 
-  requestWithdrawal = asyncHandler(async (request: Request, response: Response) => {
-    const userId = request.user!.userId;
-    const { coins } = request.body as WithdrawCoinsInput;
-    const result = await coinService.requestWithdrawal(userId, coins);
-    return sendSuccess(response, 201, 'Withdrawal request submitted successfully.', result);
-  });
 
   requestEarningWithdrawal = asyncHandler(async (request: Request, response: Response) => {
     const userId = request.user!.userId;

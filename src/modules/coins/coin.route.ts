@@ -106,12 +106,6 @@ coinRouter.get(
   coinController.getWithdrawalSettings,
 );
 coinRouter.post(
-  '/withdraw',
-  authenticate,
-  requirePlatformFeature('withdrawals'),
-  coinController.requestWithdrawal,
-);
-coinRouter.post(
   '/withdraw/earnings',
   authenticate,
   requirePlatformFeature('withdrawals'),
