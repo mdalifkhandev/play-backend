@@ -121,13 +121,13 @@ export class NotificationService {
       users.map((user) => ({
         userId: user._id,
         type: input.notificationType,
+        source: 'admin' as const,
         title: input.title,
         body: input.body,
         data: {
           ...(input.data || {}),
           ...(input.deepLink ? { deepLink: input.deepLink } : {}),
           audience: input.audience,
-          source: 'admin',
         },
       })),
     );

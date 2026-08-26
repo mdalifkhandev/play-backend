@@ -3,11 +3,15 @@ import mongoose, { Schema, model, type HydratedDocument, type Model, type Types 
 export const notificationTypes = ['like', 'comment', 'follow', 'chat_message', 'milestone', 'system'] as const;
 export type NotificationType = (typeof notificationTypes)[number];
 
+export const notificationSources = ['admin', 'moderator', 'system', 'user_event'] as const;
+export type NotificationSource = (typeof notificationSources)[number];
+
 export interface Notification {
   _id: Types.ObjectId;
   userId: Types.ObjectId;
   actorId?: Types.ObjectId;
   type: NotificationType;
+  source?: NotificationSource;
   title?: string;
   body?: string;
   relatedEntityId?: Types.ObjectId;
@@ -24,6 +28,7 @@ const notificationSchema = new Schema<Notification>(
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     actorId: { type: Schema.Types.ObjectId, ref: 'User' },
     type: { type: String, enum: notificationTypes, required: true },
+    source: { type: String, enum: notificationSources, index: true },
     title: { type: String, trim: true, maxlength: 200 },
     body: { type: String, trim: true, maxlength: 1000 },
     relatedEntityId: { type: Schema.Types.ObjectId },

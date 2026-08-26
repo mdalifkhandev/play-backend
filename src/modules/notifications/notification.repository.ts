@@ -162,21 +162,21 @@ export class NotificationRepository {
     skip: number,
     limit: number,
   ): Promise<{ items: NotificationDocument[]; total: number }> {
-    const query = {
-      'data.source': 'admin',
+    const filter: Record<string, unknown> = {
+      source: { $in: ['admin', 'moderator'] },
     };
     const [items, total] = await Promise.all([
-      NotificationModel.find(query)
+      NotificationModel.find(filter)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .populate('userId', '_id email profile.displayName profile.username profile.photoUrl')
         .populate('actorId', '_id email profile.displayName profile.username profile.photoUrl')
-        .exec(),
-      NotificationModel.countDocuments(query),
+        .exec() as unknown as Promise<NotificationDocument[]>,
+      NotificationModel.countDocuments(filter),
     ]);
 
-    return { items, total };
+    return { items: await items, total };
   }
 
   async updateAdminNotification(

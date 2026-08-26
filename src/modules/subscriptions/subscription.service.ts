@@ -85,7 +85,7 @@ export class SubscriptionService {
   async getPlans() {
     return cacheService.getOrSet(cacheKeys.activeSubscriptionPlans, SUBSCRIPTION_PLAN_CACHE_TTL_SECONDS, async () => {
       await ensureDefaultPlans();
-      const plans = await SubscriptionPlanModel.find({ isActive: true })
+      const plans = await SubscriptionPlanModel.find({ isActive: true, isDeleted: { $ne: true } })
         .sort({ sortOrder: 1, price: 1, createdAt: 1 })
         .lean()
         .exec();
@@ -96,7 +96,7 @@ export class SubscriptionService {
 
   async listPlansForAdmin() {
     await ensureDefaultPlans();
-    const plans = await SubscriptionPlanModel.find()
+    const plans = await SubscriptionPlanModel.find({ isDeleted: { $ne: true } })
       .sort({ sortOrder: 1, price: 1, createdAt: 1 })
       .lean()
       .exec();
@@ -262,51 +262,15 @@ export class SubscriptionService {
   }
 
   async deletePlan(planId: SubscriptionPlanId) {
-    const deleted = await SubscriptionPlanModel.findOneAndDelete({ planId }).lean().exec();
+    const deleted = await SubscriptionPlanModel.findOneAndUpdate(
+      { planId, isDeleted: { $ne: true } },
+      { $set: { isDeleted: true, isActive: false } },
+      { new: false },
+    ).lean().exec();
+
     if (!deleted) {
       throw new NotFoundError('Subscription plan was not found.');
     }
-
-    await UserModel.updateMany(
-      { subscriptionPlan: planId },
-      {
-        $set: { subscriptionStatus: 'canceled' },
-        $unset: {
-          subscriptionPlan: '',
-          subscriptionExpiresAt: '',
-          subscriptionProvider: '',
-          subscriptionPaymentId: '',
-        },
-      },
-    ).exec();
-
-    const subscriptions = await UserSubscriptionModel.find({ planId }).select('_id').lean().exec();
-    const subscriptionIds = subscriptions.map((subscription) => subscription._id);
-    await UserSubscriptionModel.updateMany(
-      { planId },
-      { $set: { status: 'canceled', canceledAt: new Date() } },
-    ).exec();
-    if (subscriptionIds.length) {
-      await UserModel.updateMany(
-        { currentSubscriptionId: { $in: subscriptionIds } },
-        {
-          $set: { subscriptionStatus: 'canceled' },
-          $unset: {
-            currentSubscriptionId: '',
-            subscriptionPlan: '',
-            subscriptionExpiresAt: '',
-            subscriptionProvider: '',
-            subscriptionPaymentId: '',
-          },
-        },
-      ).exec();
-    }
-
-    await SubscriptionPlanSeedStateModel.updateOne(
-      { _id: 'default-subscription-plans' },
-      { $setOnInsert: { seededAt: new Date() } },
-      { upsert: true },
-    ).exec();
 
     await cacheService.deleteByPrefix(cacheKeyPrefixes.subscriptions);
 

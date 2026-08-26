@@ -11,6 +11,7 @@ export interface SubscriptionPlan {
   productIdentifier?: string;
   features: string[];
   isActive: boolean;
+  isDeleted: boolean;
   sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
@@ -44,6 +45,7 @@ const subscriptionPlanSchema = new Schema<SubscriptionPlan>(
     productIdentifier: { type: String, trim: true, maxlength: 200 },
     features: { type: [String], default: [], validate: { validator: (items: string[]) => items.length <= 20 } },
     isActive: { type: Boolean, default: true, required: true, index: true },
+    isDeleted: { type: Boolean, default: false, required: true },
     sortOrder: { type: Number, default: 0, required: true },
   },
   { timestamps: true, versionKey: false },
