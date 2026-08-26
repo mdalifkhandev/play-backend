@@ -328,6 +328,52 @@ export class ReelService {
     };
   }
 
+  async getFollowingFeed(query: ReelFeedQuery, viewerId: string): Promise<ReelFeedResult> {
+    const cursor = query.cursor ? decodeReelCursor(query.cursor) : undefined;
+    const records = await this.reels.listFollowingReadyPublic(
+      viewerId,
+      query.limit + 1,
+      cursor,
+      query.hashtag,
+    );
+    const hasNextPage = records.length > query.limit;
+    const page = hasNextPage ? records.slice(0, query.limit) : records;
+    const last = page.at(-1);
+    const reelIds = page.map((reel) => reel._id.toString());
+    let viewerStateMap: Map<string, { isLiked: boolean; isSaved: boolean }> | undefined;
+
+    if (reelIds.length > 0) {
+      const { engagementRepository: engRepo } = await import(
+        '../engagement/engagement.repository.js'
+      );
+      viewerStateMap = await engRepo.getBulkViewerState(viewerId, 'reel', reelIds);
+    }
+
+    const commentCountMap = await this.getCommentCountMap(reelIds);
+    const nextCursorValue =
+      hasNextPage && last?.publishedAt
+        ? encodeReelCursor({ publishedAt: last.publishedAt, id: last._id })
+        : null;
+
+    const reelItems = page.map((reel) => {
+      const item = toReelFeedItemDto(reel, viewerStateMap?.get(reel._id.toString()));
+      const actualCommentCount = commentCountMap.get(reel._id.toString());
+      return actualCommentCount === undefined
+        ? item
+        : { ...item, stats: { ...item.stats, comments: actualCommentCount } };
+    });
+    const liveItems = await this.getLiveFeedItems(query.limit);
+
+    return {
+      items: this.mixLiveItems(reelItems, liveItems, query.limit),
+      nextCursor: nextCursorValue,
+      pagination: {
+        nextCursor: nextCursorValue,
+        hasNextPage,
+      },
+    };
+  }
+
 
   async getForYouFeed(
     query: ReelForYouQuery,

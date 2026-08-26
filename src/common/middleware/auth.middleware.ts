@@ -65,6 +65,10 @@ async function attachAuthenticatedUser(
 
     await authRepository.touchSession(payload.sessionId);
   } catch (error) {
+    if (!required) {
+      return;
+    }
+
     if (error instanceof UnauthorizedError) {
       throw error;
     }

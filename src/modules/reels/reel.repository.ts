@@ -4,6 +4,8 @@ import { ReelQueueSubmissionState, ReelStatus, ReelVisibility } from './reel.con
 import type { ReelCursor } from './reel-cursor.js';
 import type { ReelForYouCursor } from './reel-for-you-cursor.js';
 import type { ReelWithOwner } from './reel.mapper.js';
+import { SaveModel } from '../engagement/save.model.js';
+import { FollowModel } from '../users/follow.model.js';
 import {
   ReelModel,
   type CreateReelRecord,
@@ -103,6 +105,46 @@ export class ReelRepository {
       .exec();
   }
 
+  async listFollowingReadyPublic(
+    viewerId: string,
+    limit: number,
+    cursor?: ReelCursor,
+    hashtag?: string,
+  ): Promise<ReelWithOwner[]> {
+    const following = await FollowModel.find({ followerId: new Types.ObjectId(viewerId) })
+      .select('followingId')
+      .lean<Array<{ followingId: Types.ObjectId }>>()
+      .exec();
+    const followingIds = following.map((follow) => follow.followingId);
+
+    if (followingIds.length === 0) {
+      return [];
+    }
+
+    const filter: Record<string, unknown> = {
+      ownerId: { $in: followingIds },
+      status: ReelStatus.READY,
+      visibility: ReelVisibility.PUBLIC,
+      deletedAt: { $exists: false },
+      ...(hashtag ? { hashtags: hashtag.toLowerCase() } : {}),
+      ...(cursor
+        ? {
+            $or: [
+              { createdAt: { $lt: cursor.publishedAt } },
+              { createdAt: cursor.publishedAt, _id: { $lt: cursor.id } },
+            ],
+          }
+        : {}),
+    };
+
+    return ReelModel.find(filter)
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit)
+      .populate({ path: 'ownerId', select: OWNER_PROJECTION })
+      .lean<ReelWithOwner[]>()
+      .exec();
+  }
+
   async listKidsReadyPublic(
     limit: number,
     cursor?: ReelCursor,
@@ -173,6 +215,7 @@ export class ReelRepository {
             { $multiply: [{ $ln: { $add: [{ $ifNull: ['$viewCount', 0] }, 1] } }, 1.2] },
             { $multiply: [{ $ln: { $add: [{ $ifNull: ['$likeCount', 0] }, 1] } }, 4] },
             { $multiply: [{ $ln: { $add: [{ $ifNull: ['$commentCount', 0] }, 1] } }, 6] },
+            { $multiply: [{ $ln: { $add: [{ $ifNull: ['$saveCount', 0] }, 1] } }, 7] },
             { $multiply: [{ $ln: { $add: [{ $ifNull: ['$shareCount', 0] }, 1] } }, 9] },
             { $max: [0, { $subtract: [14, { $divide: [ageHoursExpression, 12] }] }] },
             {
@@ -203,6 +246,27 @@ export class ReelRepository {
             $lt: [{ $ifNull: ['$reportCount', 0] }, FOR_YOU_REPORT_THRESHOLD],
           },
           ...(excludedReelIds.length > 0 ? { _id: { $nin: excludedReelIds } } : {}),
+        },
+      },
+      {
+        $lookup: {
+          from: SaveModel.collection.name,
+          let: { reelId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                targetType: 'reel',
+                $expr: { $eq: ['$targetId', '$$reelId'] },
+              },
+            },
+            { $count: 'count' },
+          ],
+          as: 'saveStats',
+        },
+      },
+      {
+        $addFields: {
+          saveCount: { $ifNull: [{ $arrayElemAt: ['$saveStats.count', 0] }, 0] },
         },
       },
       {

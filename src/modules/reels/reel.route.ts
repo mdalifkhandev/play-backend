@@ -25,6 +25,8 @@ reelRouter.get('/kids', optionalAuthenticate, validateRequest({ query: reelFeedQ
 
 reelRouter.get('/search', optionalAuthenticate, validateRequest({ query: searchReelsQuerySchema }), reelController.search);
 
+reelRouter.get('/following', authenticate, validateRequest({ query: reelFeedQuerySchema }), reelController.followingFeed);
+
 reelRouter.get(
   '/for-you',
   optionalAuthenticate,
