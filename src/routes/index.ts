@@ -37,6 +37,7 @@ import { monetizationAdminRouter } from '../modules/monetization/monetization.ro
 import { creatorCategoryRouter } from '../modules/creator-categories/creator-category.route.js';
 import { occupationRouter } from '../modules/occupations/occupation.route.js';
 import { adminSearchRouter } from '../modules/admin-search/admin-search.route.js';
+import { adminAuditRouter } from '../modules/admin-audit/admin-audit.route.js';
 import { announcementAdminRouter, announcementRouter } from '../modules/announcements/announcement.route.js';
 import {
   platformSettingAdminRouter,
@@ -87,6 +88,7 @@ apiRouter.use('/admin/rewards', rewardAdminRouter);
 apiRouter.use('/admin/live-streams', liveStreamAdminRouter);
 apiRouter.use('/admin/kids-mode', kidsModeAdminRouter);
 apiRouter.use('/admin/search', adminSearchRouter);
+apiRouter.use('/admin/audit-logs', adminAuditRouter);
 apiRouter.use('/admin/announcements', announcementAdminRouter);
 apiRouter.use('/admin/settings', platformSettingAdminRouter);
 apiRouter.use('/admin/dashboard', adminDashboardRouter);

@@ -13,6 +13,7 @@ export interface WithdrawalRequest {
   currency: string;
   status: WithdrawalStatus;
   stripeTransferId?: string;
+  failureReason?: string;
   adminNotes?: string;
   processedBy?: mongoose.Types.ObjectId;
   processedAt?: Date;
@@ -39,6 +40,7 @@ const withdrawalRequestSchema = new Schema<WithdrawalRequest>(
       index: true,
     },
     stripeTransferId: { type: String, trim: true, index: true },
+    failureReason: { type: String, trim: true, maxlength: 700 },
     adminNotes: { type: String, trim: true, maxlength: 500 },
     processedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     processedAt: { type: Date },

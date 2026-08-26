@@ -1,5 +1,6 @@
 import { Router } from 'express';
 
+import { adminAuditMiddleware } from '../../common/middleware/admin-audit.middleware.js';
 import { authenticate, optionalAuthenticate } from '../../common/middleware/auth.middleware.js';
 import { authorize } from '../../common/middleware/authorization.middleware.js';
 import { UserRole } from '../../common/enums/user-role.enum.js';
@@ -23,7 +24,7 @@ import {
 export const userRouter = Router();
 export const userAdminRouter = Router();
 
-userAdminRouter.use(authenticate, authorize(UserRole.ADMIN, UserRole.MODERATOR));
+userAdminRouter.use(authenticate, adminAuditMiddleware, authorize(UserRole.ADMIN, UserRole.MODERATOR, UserRole.SUPPORT));
 
 userAdminRouter.get(
   '/',

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import { UserRole } from '../../common/enums/user-role.enum.js';
+import { adminAuditMiddleware } from '../../common/middleware/admin-audit.middleware.js';
 import { authenticate } from '../../common/middleware/auth.middleware.js';
 import { authorize } from '../../common/middleware/authorization.middleware.js';
 import { supportRequestRateLimiter } from '../../common/middleware/rate-limit.middleware.js';
@@ -49,7 +50,8 @@ supportRequestRouter.post(
 
 supportRequestAdminRouter.use(
   authenticate,
-  authorize(UserRole.ADMIN, UserRole.MODERATOR),
+  adminAuditMiddleware,
+  authorize(UserRole.ADMIN, UserRole.MODERATOR, UserRole.SUPPORT),
 );
 supportRequestAdminRouter.get(
   '/',

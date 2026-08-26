@@ -4,6 +4,7 @@ import { asyncHandler } from '../../common/utils/async-handler.js';
 import { coinService } from './coin.service.js';
 import type {
   ApproveWithdrawalInput,
+  CompleteWithdrawalInput,
   ConvertDiamondsInput,
   CreateAdminCoinPackageInput,
   CreateAdminGiftInput,
@@ -12,6 +13,7 @@ import type {
   GetTransactionsQueryInput,
   GetWithdrawalsQueryInput,
   RejectWithdrawalInput,
+  RetryWithdrawalInput,
   SendGiftInput,
   StripeConnectLinkInput,
   UpdateAdminCoinPackageInput,
@@ -205,6 +207,22 @@ export class CoinController {
     const { adminNotes } = request.body as ApproveWithdrawalInput;
     const result = await coinService.approveWithdrawal(adminUserId, requestId, adminNotes);
     return sendSuccess(response, 200, 'Withdrawal approved and funds transferred.', result);
+  });
+
+  retryWithdrawal = asyncHandler(async (request: Request, response: Response) => {
+    const adminUserId = request.user!.userId;
+    const { requestId } = request.params as { requestId: string };
+    const { adminNotes } = request.body as RetryWithdrawalInput;
+    const result = await coinService.retryWithdrawal(adminUserId, requestId, adminNotes);
+    return sendSuccess(response, 200, 'Withdrawal retry completed.', result);
+  });
+
+  completeWithdrawal = asyncHandler(async (request: Request, response: Response) => {
+    const adminUserId = request.user!.userId;
+    const { requestId } = request.params as { requestId: string };
+    const { stripeTransferId, adminNotes } = request.body as CompleteWithdrawalInput;
+    const result = await coinService.markWithdrawalCompleted(adminUserId, requestId, stripeTransferId, adminNotes);
+    return sendSuccess(response, 200, 'Withdrawal marked completed.', result);
   });
 
   rejectWithdrawal = asyncHandler(async (request: Request, response: Response) => {

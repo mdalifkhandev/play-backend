@@ -1,6 +1,7 @@
 import { Router, type Router as ExpressRouter } from 'express';
 
 import { UserRole } from '../../common/enums/user-role.enum.js';
+import { adminAuditMiddleware } from '../../common/middleware/admin-audit.middleware.js';
 import { authenticate, optionalAuthenticate } from '../../common/middleware/auth.middleware.js';
 import { authorize } from '../../common/middleware/authorization.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
@@ -19,7 +20,7 @@ import {
 export const liveStreamRouter: ExpressRouter = Router();
 export const liveStreamAdminRouter: ExpressRouter = Router();
 
-liveStreamAdminRouter.use(authenticate, authorize(UserRole.ADMIN, UserRole.MODERATOR));
+liveStreamAdminRouter.use(authenticate, adminAuditMiddleware, authorize(UserRole.ADMIN, UserRole.MODERATOR));
 liveStreamAdminRouter.get(
   '/recorded',
   validateRequest({ query: adminLiveStreamsQuerySchema.pick({ page: true, limit: true }) }),

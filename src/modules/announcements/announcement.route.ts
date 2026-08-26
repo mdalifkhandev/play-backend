@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import { UserRole } from '../../common/enums/user-role.enum.js';
+import { adminAuditMiddleware } from '../../common/middleware/admin-audit.middleware.js';
 import { authenticate } from '../../common/middleware/auth.middleware.js';
 import { authorize } from '../../common/middleware/authorization.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
@@ -17,7 +18,7 @@ export const announcementAdminRouter: Router = Router();
 
 announcementRouter.get('/active', announcementController.listActive);
 
-announcementAdminRouter.use(authenticate, authorize(UserRole.ADMIN, UserRole.MODERATOR));
+announcementAdminRouter.use(authenticate, adminAuditMiddleware, authorize(UserRole.ADMIN, UserRole.MODERATOR));
 announcementAdminRouter.get('/', validateRequest({ query: listAnnouncementsQuerySchema }), announcementController.listAdmin);
 announcementAdminRouter.post('/', validateRequest(createAnnouncementSchema), announcementController.create);
 announcementAdminRouter.patch(

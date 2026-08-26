@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import { UserRole } from '../../common/enums/user-role.enum.js';
+import { adminAuditMiddleware } from '../../common/middleware/admin-audit.middleware.js';
 import { authenticate } from '../../common/middleware/auth.middleware.js';
 import { authorize } from '../../common/middleware/authorization.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
@@ -42,7 +43,7 @@ subscriptionRouter.post(
   subscriptionController.verifyStripePayment,
 );
 
-subscriptionRouter.use('/admin', authorize(UserRole.ADMIN, UserRole.MODERATOR));
+subscriptionRouter.use('/admin', adminAuditMiddleware, authorize(UserRole.ADMIN, UserRole.FINANCE));
 subscriptionRouter.get('/admin/plans', subscriptionController.listPlansForAdmin);
 subscriptionRouter.get('/admin/subscribers', subscriptionController.listSubscribersForAdmin);
 subscriptionRouter.patch(

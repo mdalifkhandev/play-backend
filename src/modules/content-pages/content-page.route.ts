@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import { UserRole } from '../../common/enums/user-role.enum.js';
+import { adminAuditMiddleware } from '../../common/middleware/admin-audit.middleware.js';
 import { authenticate } from '../../common/middleware/auth.middleware.js';
 import { authorize } from '../../common/middleware/authorization.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
@@ -20,7 +21,7 @@ contentPageRouter.get('/about-us', contentPageController.getAboutUs);
 contentPageRouter.get('/privacy-policy', contentPageController.getPrivacyPolicy);
 contentPageRouter.get('/terms-conditions', contentPageController.getTermsConditions);
 
-contentPageAdminRouter.use(authenticate, authorize(UserRole.ADMIN));
+contentPageAdminRouter.use(authenticate, adminAuditMiddleware, authorize(UserRole.ADMIN));
 contentPageAdminRouter.get(
   '/',
   validateRequest({ query: listContentPagesQuerySchema }),

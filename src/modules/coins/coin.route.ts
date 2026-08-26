@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { UserRole } from '../../common/enums/user-role.enum.js';
+import { adminAuditMiddleware } from '../../common/middleware/admin-audit.middleware.js';
 import { authenticate } from '../../common/middleware/auth.middleware.js';
 import { authorize } from '../../common/middleware/authorization.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
@@ -9,6 +10,7 @@ import {
   adminCoinPackageParamsSchema,
   adminGiftParamsSchema,
   approveWithdrawalSchema,
+  completeWithdrawalSchema,
   convertDiamondsSchema,
   createAdminCoinPackageSchema,
   createAdminGiftSchema,
@@ -17,6 +19,7 @@ import {
   getTransactionsQuerySchema,
   getWithdrawalsQuerySchema,
   rejectWithdrawalSchema,
+  retryWithdrawalSchema,
   sendGiftSchema,
   stripeConnectLinkSchema,
   updateAdminCoinPackageSchema,
@@ -120,98 +123,82 @@ coinRouter.get(
 );
 
 // Admin routes
+coinRouter.use('/admin', authenticate, adminAuditMiddleware, authorize(UserRole.ADMIN, UserRole.FINANCE));
+
 coinRouter.get(
   '/admin/packages',
-  authenticate,
-  authorize(UserRole.ADMIN, UserRole.MODERATOR),
   coinController.getAdminPackages,
 );
 coinRouter.post(
   '/admin/packages',
-  authenticate,
-  authorize(UserRole.ADMIN, UserRole.MODERATOR),
   validateRequest(createAdminCoinPackageSchema),
   coinController.createAdminPackage,
 );
 coinRouter.patch(
   '/admin/packages/:packageId',
-  authenticate,
-  authorize(UserRole.ADMIN, UserRole.MODERATOR),
   validateRequest(updateAdminCoinPackageSchema),
   coinController.updateAdminPackage,
 );
 coinRouter.delete(
   '/admin/packages/:packageId',
-  authenticate,
-  authorize(UserRole.ADMIN, UserRole.MODERATOR),
   validateRequest(adminCoinPackageParamsSchema),
   coinController.deleteAdminPackage,
 );
 coinRouter.get(
   '/admin/gifts',
-  authenticate,
-  authorize(UserRole.ADMIN, UserRole.MODERATOR),
   coinController.getAdminGifts,
 );
 coinRouter.post(
   '/admin/gifts',
-  authenticate,
-  authorize(UserRole.ADMIN, UserRole.MODERATOR),
   validateRequest(createAdminGiftSchema),
   coinController.createAdminGift,
 );
 coinRouter.patch(
   '/admin/gifts/:giftId',
-  authenticate,
-  authorize(UserRole.ADMIN, UserRole.MODERATOR),
   validateRequest(updateAdminGiftSchema),
   coinController.updateAdminGift,
 );
 coinRouter.delete(
   '/admin/gifts/:giftId',
-  authenticate,
-  authorize(UserRole.ADMIN, UserRole.MODERATOR),
   validateRequest(adminGiftParamsSchema),
   coinController.deleteAdminGift,
 );
 coinRouter.get(
   '/admin/settings',
-  authenticate,
-  authorize(UserRole.ADMIN, UserRole.MODERATOR),
   coinController.getAdminSettings,
 );
 coinRouter.get(
   '/admin/transactions',
-  authenticate,
-  authorize(UserRole.ADMIN, UserRole.MODERATOR),
   validateRequest(getTransactionsQuerySchema),
   coinController.getAdminTransactions,
 );
 coinRouter.get(
   '/admin/withdrawals',
-  authenticate,
-  authorize(UserRole.ADMIN, UserRole.MODERATOR),
   validateRequest(getWithdrawalsQuerySchema),
   coinController.getAdminWithdrawals,
 );
 coinRouter.post(
   '/admin/withdrawals/:requestId/approve',
-  authenticate,
-  authorize(UserRole.ADMIN, UserRole.MODERATOR),
   validateRequest(approveWithdrawalSchema),
   coinController.approveWithdrawal,
 );
 coinRouter.post(
   '/admin/withdrawals/:requestId/reject',
-  authenticate,
-  authorize(UserRole.ADMIN, UserRole.MODERATOR),
   validateRequest(rejectWithdrawalSchema),
   coinController.rejectWithdrawal,
 );
+coinRouter.post(
+  '/admin/withdrawals/:requestId/retry',
+  validateRequest(retryWithdrawalSchema),
+  coinController.retryWithdrawal,
+);
+coinRouter.post(
+  '/admin/withdrawals/:requestId/complete',
+  validateRequest(completeWithdrawalSchema),
+  coinController.completeWithdrawal,
+);
 coinRouter.put(
   '/admin/settings',
-  authenticate,
-  authorize(UserRole.ADMIN, UserRole.MODERATOR),
   validateRequest(updateCoinSettingsSchema),
   coinController.updateCoinSettings,
 );

@@ -8,7 +8,7 @@ import { Router } from 'express';
 
 export const adminSearchRouter = Router();
 
-adminSearchRouter.use(authenticate, authorize(UserRole.ADMIN, UserRole.MODERATOR));
+adminSearchRouter.use(authenticate, authorize(UserRole.ADMIN, UserRole.MODERATOR, UserRole.SUPPORT, UserRole.FINANCE));
 
 adminSearchRouter.get(
   '/',

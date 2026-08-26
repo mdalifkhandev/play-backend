@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import { UserRole } from '../../common/enums/user-role.enum.js';
+import { adminAuditMiddleware } from '../../common/middleware/admin-audit.middleware.js';
 import { authenticate, optionalAuthenticate } from '../../common/middleware/auth.middleware.js';
 import { authorize } from '../../common/middleware/authorization.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
@@ -30,7 +31,7 @@ adRouter.get('/:adId', validateRequest({ params: adIdParamsSchema }), adControll
 adRouter.post('/:adId/pause', validateRequest({ params: adIdParamsSchema }), adController.pauseMine);
 adRouter.post('/:adId/resume', validateRequest({ params: adIdParamsSchema }), adController.resumeMine);
 
-adAdminRouter.use(authenticate, authorize(UserRole.ADMIN, UserRole.MODERATOR));
+adAdminRouter.use(authenticate, adminAuditMiddleware, authorize(UserRole.ADMIN, UserRole.MODERATOR));
 adAdminRouter.get('/', validateRequest({ query: listAdminAdsQuerySchema }), adController.listForAdmin);
 adAdminRouter.get('/:adId', validateRequest({ params: adIdParamsSchema }), adController.getForAdmin);
 adAdminRouter.patch(

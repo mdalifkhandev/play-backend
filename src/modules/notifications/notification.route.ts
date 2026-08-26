@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import { UserRole } from '../../common/enums/user-role.enum.js';
+import { adminAuditMiddleware } from '../../common/middleware/admin-audit.middleware.js';
 import { authenticate } from '../../common/middleware/auth.middleware.js';
 import { authorize } from '../../common/middleware/authorization.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
@@ -53,9 +54,10 @@ notificationRouter.post(
   validateRequest({ body: sendPushNotificationBodySchema }),
   notificationController.sendToMe,
 );
+notificationRouter.use('/admin', adminAuditMiddleware);
 notificationRouter.post(
   '/admin/send',
-  authorize(UserRole.ADMIN),
+  authorize(UserRole.ADMIN, UserRole.MODERATOR),
   validateRequest({ body: adminSendPushNotificationBodySchema }),
   notificationController.adminSendToUser,
 );

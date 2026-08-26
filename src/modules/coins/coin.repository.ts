@@ -645,19 +645,44 @@ export class CoinRepository {
 
   async markWithdrawalStatus(
     requestId: string,
-    status: Extract<WithdrawalStatus, 'approved' | 'processing' | 'pending'>,
+    status: Extract<WithdrawalStatus, 'approved' | 'processing' | 'pending' | 'failed'>,
     adminUserId?: string,
     notes?: string,
+    failureReason?: string,
   ): Promise<WithdrawalRequestDocument | null> {
     return WithdrawalRequestModel.findOneAndUpdate(
-      { _id: requestId, status: { $in: ['pending', 'approved', 'processing'] } },
+      { _id: requestId, status: { $in: ['pending', 'approved', 'processing', 'failed'] } },
       {
         $set: {
           status,
           ...(adminUserId ? { processedBy: new Types.ObjectId(adminUserId) } : {}),
           ...(status === 'pending' ? {} : { processedAt: new Date() }),
           ...(notes !== undefined ? { adminNotes: notes } : {}),
+          ...(failureReason !== undefined ? { failureReason } : {}),
         },
+        ...(status === 'processing' ? { $unset: { failureReason: '' } } : {}),
+      },
+      { new: true },
+    ).exec();
+  }
+
+  async markWithdrawalCompletedManually(
+    requestId: string,
+    adminUserId: string,
+    stripeTransferId: string,
+    notes?: string,
+  ): Promise<WithdrawalRequestDocument | null> {
+    return WithdrawalRequestModel.findOneAndUpdate(
+      { _id: requestId, status: { $in: ['approved', 'processing'] } },
+      {
+        $set: {
+          status: 'completed',
+          stripeTransferId,
+          processedBy: new Types.ObjectId(adminUserId),
+          processedAt: new Date(),
+          ...(notes !== undefined ? { adminNotes: notes } : {}),
+        },
+        $unset: { failureReason: '' },
       },
       { new: true },
     ).exec();
@@ -668,14 +693,14 @@ export class CoinRepository {
     adminUserId: string,
     reason: string,
   ): Promise<WithdrawalRequestDocument | null> {
-    const withdrawal = await WithdrawalRequestModel.findOne({ _id: requestId, status: { $in: ['pending', 'approved', 'processing'] } }).exec();
+    const withdrawal = await WithdrawalRequestModel.findOne({ _id: requestId, status: { $in: ['pending', 'approved', 'processing', 'failed'] } }).exec();
 
     if (!withdrawal) {
       return null;
     }
 
     const updated = await WithdrawalRequestModel.findOneAndUpdate(
-      { _id: withdrawal._id, status: { $in: ['pending', 'approved', 'processing'] } },
+      { _id: withdrawal._id, status: { $in: ['pending', 'approved', 'processing', 'failed'] } },
       {
         $set: {
           status: 'rejected',

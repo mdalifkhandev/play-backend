@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import { UserRole } from '../../common/enums/user-role.enum.js';
+import { adminAuditMiddleware } from '../../common/middleware/admin-audit.middleware.js';
 import { authenticate } from '../../common/middleware/auth.middleware.js';
 import { authorize } from '../../common/middleware/authorization.middleware.js';
 import { authRateLimiter } from '../../common/middleware/rate-limit.middleware.js';
@@ -27,7 +28,7 @@ kidsModeRouter.post('/enter', authRateLimiter, validateRequest({ body: verifyKid
 kidsModeRouter.post('/exit', authRateLimiter, validateRequest({ body: verifyKidsPinBodySchema }), kidsModeController.exit);
 kidsModeRouter.get('/feed', validateRequest({ query: reelFeedQuerySchema }), kidsModeController.feed);
 
-kidsModeAdminRouter.use(authenticate, authorize(UserRole.ADMIN, UserRole.MODERATOR));
+kidsModeAdminRouter.use(authenticate, adminAuditMiddleware, authorize(UserRole.ADMIN, UserRole.MODERATOR));
 kidsModeAdminRouter.get('/contents', validateRequest({ query: adminKidsModeContentQuerySchema }), kidsModeController.adminContent);
 kidsModeAdminRouter.patch(
   '/contents/:reelId',

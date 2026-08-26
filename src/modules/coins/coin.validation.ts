@@ -68,6 +68,18 @@ export const approveWithdrawalSchema = {
   }),
 };
 
+export const retryWithdrawalSchema = approveWithdrawalSchema;
+
+export const completeWithdrawalSchema = {
+  params: z.object({
+    requestId: z.string().trim().min(1, 'Request ID is required.'),
+  }),
+  body: z.object({
+    stripeTransferId: z.string().trim().max(120).optional(),
+    adminNotes: z.string().trim().max(500).optional(),
+  }),
+};
+
 export const rejectWithdrawalSchema = {
   params: z.object({
     requestId: z.string().trim().min(1, 'Request ID is required.'),
@@ -152,6 +164,8 @@ export type StripeConnectLinkInput = z.infer<typeof stripeConnectLinkSchema.body
 export type WithdrawCoinsInput = z.infer<typeof withdrawCoinsSchema.body>;
 export type ConvertDiamondsInput = z.infer<typeof convertDiamondsSchema.body>;
 export type ApproveWithdrawalInput = z.infer<typeof approveWithdrawalSchema.body>;
+export type RetryWithdrawalInput = z.infer<typeof retryWithdrawalSchema.body>;
+export type CompleteWithdrawalInput = z.infer<typeof completeWithdrawalSchema.body>;
 export type RejectWithdrawalInput = z.infer<typeof rejectWithdrawalSchema.body>;
 export type UpdateCoinSettingsInput = z.infer<typeof updateCoinSettingsSchema.body>;
 export type GetWithdrawalsQueryInput = z.infer<typeof getWithdrawalsQuerySchema.query>;

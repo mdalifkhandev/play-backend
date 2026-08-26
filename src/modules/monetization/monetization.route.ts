@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import { UserRole } from '../../common/enums/user-role.enum.js';
+import { adminAuditMiddleware } from '../../common/middleware/admin-audit.middleware.js';
 import { authenticate } from '../../common/middleware/auth.middleware.js';
 import { authorize } from '../../common/middleware/authorization.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
@@ -12,7 +13,7 @@ import {
 
 export const monetizationAdminRouter = Router();
 
-monetizationAdminRouter.use(authenticate, authorize(UserRole.ADMIN, UserRole.MODERATOR));
+monetizationAdminRouter.use(authenticate, adminAuditMiddleware, authorize(UserRole.ADMIN, UserRole.FINANCE));
 monetizationAdminRouter.get('/dashboard', monetizationController.getDashboard);
 monetizationAdminRouter.put(
   '/settings',

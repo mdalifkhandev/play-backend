@@ -1,6 +1,7 @@
 import { Router, type Router as ExpressRouter } from 'express';
 
 import { UserRole } from '../../common/enums/user-role.enum.js';
+import { adminAuditMiddleware } from '../../common/middleware/admin-audit.middleware.js';
 import { authenticate } from '../../common/middleware/auth.middleware.js';
 import { authorize } from '../../common/middleware/authorization.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
@@ -12,7 +13,7 @@ export const platformSettingAdminRouter: ExpressRouter = Router();
 
 platformSettingRouter.get('/public', platformSettingController.getPublicSettings);
 
-platformSettingAdminRouter.use(authenticate, authorize(UserRole.ADMIN, UserRole.MODERATOR));
+platformSettingAdminRouter.use(authenticate, adminAuditMiddleware, authorize(UserRole.ADMIN));
 platformSettingAdminRouter.get('/', platformSettingController.getAdminSettings);
 platformSettingAdminRouter.patch(
   '/',

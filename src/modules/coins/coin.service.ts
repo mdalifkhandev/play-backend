@@ -18,7 +18,7 @@ import type {
 } from './coin.validation.js';
 import { activityService } from '../activities/activity.service.js';
 import type { GiftTargetType } from './sent-gift.model.js';
-import type { WithdrawalStatus } from './withdrawal-request.model.js';
+import type { WithdrawalRequestDocument, WithdrawalStatus } from './withdrawal-request.model.js';
 import { adminNotificationService } from '../notifications/admin-notification.service.js';
 import { cacheKeyPrefixes, cacheKeys } from '../../infrastructure/cache/cache-keys.js';
 import { cacheService } from '../../infrastructure/cache/cache.service.js';
@@ -731,7 +731,93 @@ export class CoinService {
     }
 
     await coinRepository.markWithdrawalStatus(requestId, 'approved', adminUserId, adminNotes);
-    await coinRepository.markWithdrawalStatus(requestId, 'processing', adminUserId, adminNotes);
+    const { transfer, updated } = await this.transferWithdrawalToStripe(withdrawal, adminUserId, adminNotes);
+
+    return {
+      approved: true,
+      withdrawalId: requestId,
+      stripeTransferId: transfer.id,
+      amountUsd: withdrawal.amountUsd,
+      withdrawalType: withdrawal.withdrawalType,
+      coins: withdrawal.coins,
+      status: updated?.status ?? 'completed',
+    };
+  }
+
+  async retryWithdrawal(adminUserId: string, requestId: string, adminNotes?: string) {
+    const withdrawal = await coinRepository.findWithdrawalRequestById(requestId);
+    if (!withdrawal) {
+      throw new NotFoundError('Withdrawal request not found.');
+    }
+
+    if (withdrawal.status !== 'failed') {
+      throw new BadRequestError(`Only failed withdrawal requests can be retried. Current status is ${withdrawal.status}.`);
+    }
+
+    const { transfer, updated } = await this.transferWithdrawalToStripe(withdrawal, adminUserId, adminNotes);
+
+    return {
+      retried: true,
+      withdrawalId: requestId,
+      stripeTransferId: transfer.id,
+      amountUsd: withdrawal.amountUsd,
+      withdrawalType: withdrawal.withdrawalType,
+      status: updated?.status ?? 'completed',
+    };
+  }
+
+  async markWithdrawalCompleted(adminUserId: string, requestId: string, stripeTransferId?: string, adminNotes?: string) {
+    const withdrawal = await coinRepository.findWithdrawalRequestById(requestId);
+    if (!withdrawal) {
+      throw new NotFoundError('Withdrawal request not found.');
+    }
+
+    if (!['approved', 'processing'].includes(withdrawal.status)) {
+      throw new BadRequestError(`Only approved or processing withdrawals can be marked completed. Current status is ${withdrawal.status}.`);
+    }
+
+    const transferId = stripeTransferId?.trim() || `manual-${requestId}`;
+    const updated = await coinRepository.markWithdrawalCompletedManually(requestId, adminUserId, transferId, adminNotes);
+
+    return {
+      completed: true,
+      withdrawalId: requestId,
+      stripeTransferId: updated?.stripeTransferId ?? transferId,
+      amountUsd: withdrawal.amountUsd,
+      withdrawalType: withdrawal.withdrawalType,
+      status: updated?.status ?? 'completed',
+    };
+  }
+
+  async rejectWithdrawal(adminUserId: string, requestId: string, reason: string) {
+    const withdrawal = await coinRepository.findWithdrawalRequestById(requestId);
+    if (!withdrawal) {
+      throw new NotFoundError('Withdrawal request not found.');
+    }
+
+    if (!['pending', 'approved', 'processing', 'failed'].includes(withdrawal.status)) {
+      throw new BadRequestError(`Withdrawal request is already ${withdrawal.status}. Only pending, approved, processing, or failed requests can be rejected.`);
+    }
+
+    const updated = await coinRepository.rejectAndRefundWithdrawal(requestId, adminUserId, reason);
+
+    return {
+      rejected: true,
+      withdrawalId: requestId,
+      withdrawalType: withdrawal.withdrawalType,
+      refundedCoins: withdrawal.coins,
+      refundedAmountUsd: withdrawal.amountUsd,
+      status: updated?.status ?? 'rejected',
+      adminNotes: reason,
+    };
+  }
+
+  private async transferWithdrawalToStripe(
+    withdrawal: WithdrawalRequestDocument,
+    adminUserId: string,
+    adminNotes?: string,
+  ) {
+    await coinRepository.markWithdrawalStatus(withdrawal._id.toString(), 'processing', adminUserId, adminNotes);
 
     const amountInCents = Math.round(withdrawal.amountUsd * 100);
 
@@ -748,49 +834,25 @@ export class CoinService {
         },
       });
     } catch (err) {
-      await coinRepository.markWithdrawalStatus(requestId, 'approved', adminUserId, adminNotes);
-      throw new BadRequestError(`Stripe Transfer failed: ${err instanceof Error ? err.message : String(err)}`);
+      const failureReason = err instanceof Error ? err.message : String(err);
+      await coinRepository.markWithdrawalStatus(
+        withdrawal._id.toString(),
+        'failed',
+        adminUserId,
+        adminNotes,
+        failureReason,
+      );
+      throw new BadRequestError(`Stripe Transfer failed: ${failureReason}`);
     }
 
     const updated = await coinRepository.approveAndMarkCompleted(
-      requestId,
+      withdrawal._id.toString(),
       adminUserId,
       transfer.id,
       adminNotes,
     );
 
-    return {
-      approved: true,
-      withdrawalId: requestId,
-      stripeTransferId: transfer.id,
-      amountUsd: withdrawal.amountUsd,
-      withdrawalType: withdrawal.withdrawalType,
-      coins: withdrawal.coins,
-      status: updated?.status ?? 'completed',
-    };
-  }
-
-  async rejectWithdrawal(adminUserId: string, requestId: string, reason: string) {
-    const withdrawal = await coinRepository.findWithdrawalRequestById(requestId);
-    if (!withdrawal) {
-      throw new NotFoundError('Withdrawal request not found.');
-    }
-
-    if (!['pending', 'approved', 'processing'].includes(withdrawal.status)) {
-      throw new BadRequestError(`Withdrawal request is already ${withdrawal.status}. Only pending, approved, or processing requests can be rejected.`);
-    }
-
-    const updated = await coinRepository.rejectAndRefundWithdrawal(requestId, adminUserId, reason);
-
-    return {
-      rejected: true,
-      withdrawalId: requestId,
-      withdrawalType: withdrawal.withdrawalType,
-      refundedCoins: withdrawal.coins,
-      refundedAmountUsd: withdrawal.amountUsd,
-      status: updated?.status ?? 'rejected',
-      adminNotes: reason,
-    };
+    return { transfer, updated };
   }
 
   async getUserWithdrawalHistory(userId: string, page: number, limit: number) {
@@ -807,6 +869,7 @@ export class CoinService {
         currency: w.currency,
         status: w.status,
         stripeTransferId: w.stripeTransferId,
+        failureReason: w.failureReason,
         adminNotes: w.adminNotes,
         createdAt: w.createdAt.toISOString(),
         processedAt: w.processedAt ? w.processedAt.toISOString() : undefined,
@@ -836,6 +899,7 @@ export class CoinService {
         status: w.status,
         stripeConnectAccountId: w.stripeConnectAccountId,
         stripeTransferId: w.stripeTransferId,
+        failureReason: w.failureReason,
         adminNotes: w.adminNotes,
         createdAt: w.createdAt.toISOString(),
         processedAt: w.processedAt ? w.processedAt.toISOString() : undefined,

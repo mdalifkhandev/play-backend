@@ -1,6 +1,7 @@
 import { Router, type Router as ExpressRouter } from 'express';
 
 import { UserRole } from '../../common/enums/user-role.enum.js';
+import { adminAuditMiddleware } from '../../common/middleware/admin-audit.middleware.js';
 import { authenticate, optionalAuthenticate } from '../../common/middleware/auth.middleware.js';
 import { authorize } from '../../common/middleware/authorization.middleware.js';
 import { validateRequest } from '../../common/middleware/validation.middleware.js';
@@ -22,7 +23,7 @@ export const rewardAdminRouter: ExpressRouter = Router();
 rewardRouter.get('/me', requirePlatformFeature('rewards'), authenticate, rewardController.me);
 rewardRouter.get('/trending-creators', requirePlatformFeature('rewards'), optionalAuthenticate, rewardController.trendingCreators);
 
-rewardAdminRouter.use(authenticate, authorize(UserRole.ADMIN, UserRole.MODERATOR));
+rewardAdminRouter.use(authenticate, adminAuditMiddleware, authorize(UserRole.ADMIN, UserRole.MODERATOR));
 rewardAdminRouter.get('/dashboard', rewardController.adminDashboard);
 rewardAdminRouter.put('/settings', validateRequest({ body: updateRewardSettingsBodySchema }), rewardController.updateSettings);
 rewardAdminRouter.post('/programs', validateRequest({ body: createRewardProgramBodySchema }), rewardController.createProgram);
