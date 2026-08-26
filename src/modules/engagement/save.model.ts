@@ -29,6 +29,10 @@ saveSchema.index(
   { userId: 1, targetType: 1, createdAt: -1 },
   { name: 'ix_saves_user_type_created' },
 );
+saveSchema.index(
+  { targetType: 1, targetId: 1, createdAt: -1 },
+  { name: 'ix_saves_target_created' },
+);
 
 export const SaveModel: Model<Save> =
   (mongoose.models.Save as Model<Save> | undefined) ?? model<Save>('Save', saveSchema);

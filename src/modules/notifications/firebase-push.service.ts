@@ -3,6 +3,11 @@ import { getMessaging, type MulticastMessage } from 'firebase-admin/messaging';
 
 import { AppError } from '../../common/errors/app-error.js';
 import { env } from '../../config/env.config.js';
+import {
+  externalTimeoutMs,
+  toExternalProviderError,
+  withExternalTimeout,
+} from '../../infrastructure/http/external-timeout.js';
 
 const FIREBASE_APP_NAME = 'jesusname7-push';
 
@@ -48,7 +53,22 @@ export class FirebasePushService {
         data: input.data ?? {},
       };
 
-      const result = await messaging.sendEachForMulticast(message);
+      let result: Awaited<ReturnType<typeof messaging.sendEachForMulticast>>;
+      try {
+        result = await withExternalTimeout(messaging.sendEachForMulticast(message), {
+          provider: 'firebase',
+          operation: 'sendEachForMulticast',
+          timeoutMs: externalTimeoutMs.firebasePush,
+          code: 'FIREBASE_PUSH_TIMEOUT',
+        });
+      } catch (error) {
+        throw toExternalProviderError(
+          error,
+          'firebase',
+          'sendEachForMulticast',
+          'FIREBASE_PUSH_FAILED',
+        );
+      }
       successCount += result.successCount;
       failureCount += result.failureCount;
 

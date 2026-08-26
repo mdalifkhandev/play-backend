@@ -35,6 +35,10 @@ const userSubscriptionSchema = new Schema<UserSubscription>(
 );
 
 userSubscriptionSchema.index({ userId: 1, status: 1, updatedAt: -1 });
+userSubscriptionSchema.index(
+  { userId: 1, status: 1, createdAt: -1 },
+  { name: 'ix_user_subscriptions_user_status_created' },
+);
 userSubscriptionSchema.index({ provider: 1, providerSubscriptionId: 1 }, { sparse: true });
 
 export const UserSubscriptionModel: Model<UserSubscription> =

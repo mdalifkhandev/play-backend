@@ -101,6 +101,10 @@ const adCampaignSchema = new Schema<AdCampaign>(
 adCampaignSchema.index({ status: 1, createdAt: -1 });
 adCampaignSchema.index({ ownerId: 1, createdAt: -1 });
 adCampaignSchema.index({ placement: 1, status: 1, startsAt: 1, endsAt: 1 });
+adCampaignSchema.index(
+  { status: 1, placement: 1, createdAt: -1 },
+  { name: 'ix_ads_status_placement_created' },
+);
 
 export const AdCampaignModel: Model<AdCampaign> =
   model<AdCampaign>('AdCampaign', adCampaignSchema);

@@ -2,10 +2,12 @@ import { UserRole } from '../../common/enums/user-role.enum.js';
 import { AdCampaignModel } from '../ads/ad-campaign.model.js';
 import { CoinTransactionModel } from '../coins/coin-transaction.model.js';
 import { CreatorApplicationModel } from '../creators/creator-application.model.js';
+import { ModerationReportModel } from '../moderation/moderation-report.model.js';
 import { NotificationModel } from '../notifications/notification.model.js';
 import { SessionModel } from '../sessions/session.model.js';
 import { SubscriptionPaymentModel } from '../subscriptions/subscription-payment.model.js';
 import { UserModel } from '../users/user.model.js';
+import { WithdrawalRequestModel } from '../coins/withdrawal-request.model.js';
 
 type DateRange = {
   start: Date;
@@ -17,6 +19,9 @@ export type AdminDashboardSummary = {
   totalCreators: number;
   revenueToday: number;
   revenueThisMonth: number;
+  pendingPayouts: number;
+  activeUsers24h: number;
+  pendingReports: number;
   totalUsersChangePercent: number;
   totalCreatorsChangePercent: number;
   revenueTodayChangePercent: number;
@@ -51,6 +56,9 @@ export class AdminService {
       revenueYesterday,
       revenueThisMonth,
       revenuePreviousMonth,
+      pendingPayouts,
+      activeUsers24h,
+      pendingReports,
     ] = await Promise.all([
       UserModel.countDocuments(userQuery),
       CreatorApplicationModel.countDocuments({ status: 'approved' }),
@@ -68,6 +76,9 @@ export class AdminService {
       getRevenueForRange({ start: yesterdayStart, end: todayStart }),
       getRevenueForRange({ start: currentMonthStart, end: nextMonthStart }),
       getRevenueForRange({ start: previousMonthStart, end: currentMonthStart }),
+      getPendingPayoutsTotal(),
+      getActiveUsers24h(now),
+      ModerationReportModel.countDocuments({ status: 'pending' }),
     ]);
 
     return {
@@ -75,6 +86,9 @@ export class AdminService {
       totalCreators,
       revenueToday: roundMoney(revenueToday),
       revenueThisMonth: roundMoney(revenueThisMonth),
+      pendingPayouts: roundMoney(pendingPayouts),
+      activeUsers24h,
+      pendingReports,
       totalUsersChangePercent: percentageChange(recentUsers, previousUsers),
       totalCreatorsChangePercent: percentageChange(recentCreators, previousCreators),
       revenueTodayChangePercent: percentageChange(revenueToday, revenueYesterday),
@@ -85,6 +99,19 @@ export class AdminService {
       recentActivity: await getRecentActivity(now),
     };
   }
+}
+
+async function getPendingPayoutsTotal() {
+  const [result] = await WithdrawalRequestModel.aggregate<{ total: number }>([
+    {
+      $match: {
+        status: { $in: ['pending', 'approved', 'processing'] },
+      },
+    },
+    { $group: { _id: null, total: { $sum: '$amountUsd' } } },
+  ]);
+
+  return result?.total ?? 0;
 }
 
 async function getRevenueForRange(range: DateRange) {
@@ -232,8 +259,20 @@ async function getActiveUsers(now: Date) {
   });
 }
 
+async function getActiveUsers24h(now: Date) {
+  const start = new Date(now);
+  start.setHours(start.getHours() - 24);
+  const userIds = await SessionModel.distinct('userId', {
+    revokedAt: { $exists: false },
+    expiresAt: { $gt: now },
+    lastUsedAt: { $gte: start, $lt: now },
+  });
+
+  return userIds.length;
+}
+
 async function getRecentActivity(now: Date) {
-  const [users, applications, notifications] = await Promise.all([
+  const [users, applications, notifications, reports] = await Promise.all([
     UserModel.find({ role: { $in: [UserRole.USER, UserRole.CREATOR] } })
       .sort({ createdAt: -1 })
       .limit(4)
@@ -250,6 +289,12 @@ async function getRecentActivity(now: Date) {
       .sort({ createdAt: -1 })
       .limit(4)
       .select('_id title body createdAt')
+      .lean()
+      .exec(),
+    ModerationReportModel.find()
+      .sort({ createdAt: -1 })
+      .limit(4)
+      .select('_id targetType reason status createdAt')
       .lean()
       .exec(),
   ]);
@@ -275,6 +320,13 @@ async function getRecentActivity(now: Date) {
       text: notification.title || notification.body || 'System notification created',
       time: timeAgo(notification.createdAt, now),
       createdAt: notification.createdAt,
+    })),
+    ...reports.map((report) => ({
+      id: report._id.toString(),
+      type: 'flag' as const,
+      text: `${report.targetType} report for ${report.reason} is ${report.status}`,
+      time: timeAgo(report.createdAt, now),
+      createdAt: report.createdAt,
     })),
   ]
     .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())

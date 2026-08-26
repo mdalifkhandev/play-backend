@@ -2,6 +2,10 @@ import { Types } from 'mongoose';
 
 import { PlatformSettingModel, type PlatformFeatureFlags, type PlatformSettingDocument } from './platform-setting.model.js';
 import type { UpdatePlatformSettingsInput } from './platform-setting.validation.js';
+import { cacheKeyPrefixes, cacheKeys } from '../../infrastructure/cache/cache-keys.js';
+import { cacheService } from '../../infrastructure/cache/cache.service.js';
+
+const PUBLIC_SETTINGS_CACHE_TTL_SECONDS = 60;
 
 export class PlatformSettingService {
   async getAdminSettings() {
@@ -9,16 +13,18 @@ export class PlatformSettingService {
   }
 
   async getPublicSettings() {
-    const setting = await this.getOrCreate();
+    return cacheService.getOrSet(cacheKeys.publicPlatformSettings, PUBLIC_SETTINGS_CACHE_TTL_SECONDS, async () => {
+      const setting = await this.getOrCreate();
 
-    return {
-      maintenanceMode: setting.maintenanceMode,
-      maintenanceMessage: setting.maintenanceMessage,
-      videosBetweenAds: setting.videosBetweenAds,
-      languages: setting.languages.filter((language) => language.active),
-      featureFlags: setting.featureFlags,
-      updatedAt: setting.updatedAt.toISOString(),
-    };
+      return {
+        maintenanceMode: setting.maintenanceMode,
+        maintenanceMessage: setting.maintenanceMessage,
+        videosBetweenAds: setting.videosBetweenAds,
+        languages: setting.languages.filter((language) => language.active),
+        featureFlags: setting.featureFlags,
+        updatedAt: setting.updatedAt.toISOString(),
+      };
+    });
   }
 
   async updateAdminSettings(adminUserId: string, input: UpdatePlatformSettingsInput) {
@@ -41,6 +47,8 @@ export class PlatformSettingService {
       { $set: update },
       { new: true, upsert: true, runValidators: true },
     ).exec();
+
+    await cacheService.deleteByPrefix(cacheKeyPrefixes.platformSettings);
 
     return this.mapSetting(setting);
   }

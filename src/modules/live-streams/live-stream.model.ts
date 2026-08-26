@@ -187,5 +187,9 @@ liveStreamSchema.index({ status: 1, startedAt: -1 });
 liveStreamSchema.index({ status: 1, likesCount: -1 });
 liveStreamSchema.index({ status: 1, viewerCount: -1 });
 liveStreamSchema.index({ hostId: 1, status: 1, createdAt: -1 });
+liveStreamSchema.index(
+  { status: 1, hostId: 1, createdAt: -1 },
+  { name: 'ix_live_streams_status_host_created' },
+);
 
 export const LiveStreamModel = mongoose.model<ILiveStream>('LiveStream', liveStreamSchema);

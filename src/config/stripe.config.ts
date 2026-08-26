@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import { env } from './env.config.js';
+import { externalTimeoutMs } from '../infrastructure/http/external-timeout.js';
 
 let stripeInstance: Stripe | null = null;
 
@@ -11,6 +12,8 @@ export function getStripeInstance(): Stripe {
     }
     stripeInstance = new Stripe(secretKey, {
       apiVersion: '2025-02-24.acacia' as Stripe.LatestApiVersion,
+      maxNetworkRetries: 2,
+      timeout: externalTimeoutMs.stripe,
     });
   }
   return stripeInstance;

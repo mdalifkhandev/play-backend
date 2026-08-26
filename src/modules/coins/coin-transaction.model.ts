@@ -52,6 +52,10 @@ const coinTransactionSchema = new Schema<CoinTransaction>(
 );
 
 coinTransactionSchema.index({ userId: 1, createdAt: -1 });
+coinTransactionSchema.index(
+  { userId: 1, status: 1, createdAt: -1 },
+  { name: 'ix_coin_transactions_user_status_created' },
+);
 coinTransactionSchema.index({ stripePaymentIntentId: 1 }, { unique: true, sparse: true });
 
 export const CoinTransactionModel: Model<CoinTransaction> =

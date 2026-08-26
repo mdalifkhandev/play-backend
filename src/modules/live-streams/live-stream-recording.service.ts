@@ -1,6 +1,7 @@
 import agoraToken from 'agora-token';
 
 import { env } from '../../config/env.config.js';
+import { externalTimeoutMs } from '../../infrastructure/http/external-timeout.js';
 import { logger } from '../../infrastructure/logger/logger.js';
 import type { ILiveStream, ILiveRecordingState } from './live-stream.model.js';
 
@@ -254,14 +255,24 @@ export class LiveStreamRecordingService {
     body: Record<string, unknown>,
   ): Promise<T> {
     const url = `https://api.agora.io/v1/apps/${encodeURIComponent(appId)}${path}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${customerId}:${customerSecret}`).toString('base64')}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
+    let response: Response;
+
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${customerId}:${customerSecret}`).toString('base64')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(externalTimeoutMs.agoraRecording),
+      });
+    } catch (error) {
+      if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
+        throw new Error('Agora cloud recording request timed out.');
+      }
+      throw error;
+    }
 
     const text = await response.text();
     const data = text ? JSON.parse(text) : {};

@@ -6,6 +6,8 @@ import { UserModel, type UserDocument } from '../users/user.model.js';
 import { SubscriptionPaymentModel } from './subscription-payment.model.js';
 import { SubscriptionPlanModel, SubscriptionPlanSeedStateModel, type SubscriptionPlan as SubscriptionPlanRecord } from './subscription-plan.model.js';
 import { UserSubscriptionModel } from './user-subscription.model.js';
+import { cacheKeyPrefixes, cacheKeys } from '../../infrastructure/cache/cache-keys.js';
+import { cacheService } from '../../infrastructure/cache/cache.service.js';
 import type {
   AdminCreateSubscriptionPlanInput,
   AdminUpdateSubscriberStatusInput,
@@ -15,6 +17,8 @@ import type {
   SyncRevenueCatSubscriptionInput,
   VerifyStripeSubscriptionPaymentInput,
 } from './subscription.validation.js';
+
+const SUBSCRIPTION_PLAN_CACHE_TTL_SECONDS = 300;
 
 export type SubscriptionPlan = {
   id: SubscriptionPlanId;
@@ -91,13 +95,15 @@ export class SubscriptionService {
   }
 
   async getPlans() {
-    await ensureDefaultPlans();
-    const plans = await SubscriptionPlanModel.find({ isActive: true })
-      .sort({ sortOrder: 1, price: 1, createdAt: 1 })
-      .lean()
-      .exec();
+    return cacheService.getOrSet(cacheKeys.activeSubscriptionPlans, SUBSCRIPTION_PLAN_CACHE_TTL_SECONDS, async () => {
+      await ensureDefaultPlans();
+      const plans = await SubscriptionPlanModel.find({ isActive: true })
+        .sort({ sortOrder: 1, price: 1, createdAt: 1 })
+        .lean()
+        .exec();
 
-    return plans.map(mapPlan);
+      return plans.map(mapPlan);
+    });
   }
 
   async listPlansForAdmin() {
@@ -230,6 +236,7 @@ export class SubscriptionService {
     if (input.productIdentifier) payload.productIdentifier = input.productIdentifier;
 
     const plan = await new SubscriptionPlanModel(payload).save();
+    await cacheService.deleteByPrefix(cacheKeyPrefixes.subscriptions);
 
     return mapPlan(plan.toObject());
   }
@@ -265,6 +272,8 @@ export class SubscriptionService {
     if (!updated) {
       throw new NotFoundError('Subscription plan was not found.');
     }
+
+    await cacheService.deleteByPrefix(cacheKeyPrefixes.subscriptions);
 
     return mapPlan(updated);
   }
@@ -315,6 +324,8 @@ export class SubscriptionService {
       { $setOnInsert: { seededAt: new Date() } },
       { upsert: true },
     ).exec();
+
+    await cacheService.deleteByPrefix(cacheKeyPrefixes.subscriptions);
 
     return { id: deleted.planId };
   }

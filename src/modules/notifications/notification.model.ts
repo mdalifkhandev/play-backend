@@ -38,6 +38,10 @@ const notificationSchema = new Schema<Notification>(
 
 notificationSchema.index({ userId: 1, createdAt: -1 });
 notificationSchema.index({ userId: 1, isRead: 1 });
+notificationSchema.index(
+  { userId: 1, isRead: 1, createdAt: -1 },
+  { name: 'ix_notifications_user_read_created' },
+);
 
 export const NotificationModel: Model<Notification> =
   (mongoose.models.Notification as Model<Notification> | undefined) ??

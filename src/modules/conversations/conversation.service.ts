@@ -4,6 +4,10 @@ import { Types } from 'mongoose';
 import { AppError } from '../../common/errors/app-error.js';
 import { env } from '../../config/env.config.js';
 import { logger } from '../../infrastructure/logger/logger.js';
+import {
+  enqueueBestEffort,
+  enqueueSendUserPushJob,
+} from '../../infrastructure/queue/background.queue.js';
 import { cloudinaryStorage } from '../../infrastructure/storage/index.js';
 import { notificationService } from '../notifications/notification.service.js';
 import { ConversationRepository, conversationRepository } from './conversation.repository.js';
@@ -479,8 +483,8 @@ export class ConversationService {
       );
     }
 
-    try {
-      const result = await notificationService.sendToUser(recipientId, {
+    await enqueueBestEffort(
+      enqueueSendUserPushJob(recipientId, {
         title: senderName,
         body,
         data: {
@@ -489,29 +493,14 @@ export class ConversationService {
           messageId: message.id,
           senderId: message.sender.id,
         },
-      });
-
-      logger.info(
-        {
-          recipientId,
-          conversationId: message.conversationId,
-          messageId: message.id,
-          successCount: result.successCount,
-          failureCount: result.failureCount,
-        },
-        'Chat push notification sent',
-      );
-    } catch (error) {
-      logger.warn(
-        {
-          err: error,
-          recipientId,
-          conversationId: message.conversationId,
-          messageId: message.id,
-        },
-        'Chat push notification skipped',
-      );
-    }
+      }),
+      {
+        recipientId,
+        conversationId: message.conversationId,
+        messageId: message.id,
+        job: 'chat-push',
+      },
+    );
   }
 }
 

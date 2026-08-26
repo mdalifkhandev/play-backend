@@ -6,10 +6,14 @@ import type {
   ListAnnouncementsQuery,
   UpdateAnnouncementInput,
 } from './announcement.validation.js';
+import { cacheKeyPrefixes, cacheKeys } from '../../infrastructure/cache/cache-keys.js';
+import { cacheService } from '../../infrastructure/cache/cache.service.js';
+
+const ACTIVE_ANNOUNCEMENT_CACHE_TTL_SECONDS = 30;
 
 export class AnnouncementService {
   async listAdmin(query: ListAnnouncementsQuery) {
-    await announcementRepository.syncTimedStatuses();
+    await this.syncTimedStatuses();
 
     const page = query.page;
     const limit = query.limit;
@@ -28,14 +32,17 @@ export class AnnouncementService {
   }
 
   async listActive() {
-    await announcementRepository.syncTimedStatuses();
+    await this.syncTimedStatuses();
 
-    const items = await announcementRepository.findActiveForUser();
-    return items.map(mapAnnouncement);
+    return cacheService.getOrSet(cacheKeys.activeAnnouncements, ACTIVE_ANNOUNCEMENT_CACHE_TTL_SECONDS, async () => {
+      const items = await announcementRepository.findActiveForUser();
+      return items.map(mapAnnouncement);
+    });
   }
 
   async create(adminUserId: string, input: CreateAnnouncementInput) {
     const item = await announcementRepository.create({ ...input, createdBy: adminUserId });
+    await cacheService.deleteByPrefix(cacheKeyPrefixes.announcements);
     return mapAnnouncement(item);
   }
 
@@ -44,6 +51,8 @@ export class AnnouncementService {
     if (!item) {
       throw new NotFoundError('Announcement was not found.');
     }
+
+    await cacheService.deleteByPrefix(cacheKeyPrefixes.announcements);
 
     return mapAnnouncement(item);
   }
@@ -54,6 +63,8 @@ export class AnnouncementService {
       throw new NotFoundError('Announcement was not found.');
     }
 
+    await cacheService.deleteByPrefix(cacheKeyPrefixes.announcements);
+
     return {
       deleted: true,
       id: item._id.toString(),
@@ -61,7 +72,11 @@ export class AnnouncementService {
   }
 
   async syncTimedStatuses() {
-    return announcementRepository.syncTimedStatuses();
+    const result = await announcementRepository.syncTimedStatuses();
+    if (result.activated > 0 || result.expired > 0) {
+      await cacheService.deleteByPrefix(cacheKeyPrefixes.announcements);
+    }
+    return result;
   }
 }
 

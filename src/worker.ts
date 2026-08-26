@@ -11,6 +11,16 @@ import {
 import { logger } from './infrastructure/logger/logger.js';
 import { creatorEarningService } from './modules/monetization/creator-earning.service.js';
 import {
+  BACKGROUND_QUEUE_NAME,
+  BACKGROUND_RECOMPUTE_REEL_RANKING_JOB,
+  BACKGROUND_RELEASE_CREATOR_EARNINGS_JOB,
+  BACKGROUND_SEND_USER_PUSH_JOB,
+  enqueueReleaseCreatorEarningsJob,
+  type BackgroundJobPayload,
+} from './infrastructure/queue/background.queue.js';
+import { notificationService } from './modules/notifications/notification.service.js';
+import { reelRepository } from './modules/reels/reel.repository.js';
+import {
   REEL_PROCESS_JOB_NAME,
   REEL_QUEUE_NAME,
 } from './modules/reels/reel.constants.js';
@@ -36,6 +46,35 @@ const worker = new Worker<ProcessReelJobPayload>(
   },
 );
 
+const backgroundWorker = new Worker<BackgroundJobPayload>(
+  BACKGROUND_QUEUE_NAME,
+  async (job) => {
+    if (job.name === BACKGROUND_SEND_USER_PUSH_JOB) {
+      const data = job.data as Extract<
+        BackgroundJobPayload,
+        { targetUserId: string }
+      >;
+      await notificationService.sendToUser(data.targetUserId, data.input);
+      return;
+    }
+
+    if (job.name === BACKGROUND_RELEASE_CREATOR_EARNINGS_JOB) {
+      await creatorEarningService.releaseAvailablePendingEarnings();
+      return;
+    }
+
+    if (job.name === BACKGROUND_RECOMPUTE_REEL_RANKING_JOB) {
+      const data = job.data as Extract<BackgroundJobPayload, { reelId: string }>;
+      await reelRepository.updateRankingScore(data.reelId);
+    }
+  },
+  {
+    connection: createQueueWorkerConnection(),
+    prefix: redisConfig.bullMqPrefix,
+    concurrency: Math.max(2, Math.min(env.REEL_WORKER_CONCURRENCY, 8)),
+  },
+);
+
 worker.on('completed', (job) => {
   logger.info({ jobId: job.id, reelId: job.data.reelId }, 'Reel job completed');
 });
@@ -47,19 +86,31 @@ worker.on('failed', (job, error) => {
   );
 });
 
+backgroundWorker.on('completed', (job) => {
+  logger.info({ jobId: job.id, jobName: job.name }, 'Background job completed');
+});
+
+backgroundWorker.on('failed', (job, error) => {
+  logger.error(
+    { err: error, jobId: job?.id, jobName: job?.name },
+    'Background job failed',
+  );
+});
+
 logger.info(
   { concurrency: env.REEL_WORKER_CONCURRENCY, queue: REEL_QUEUE_NAME },
   'Reel media worker started',
 );
+logger.info({ queue: BACKGROUND_QUEUE_NAME }, 'Background worker started');
 
 const earningReleaseInterval = setInterval(() => {
-  void creatorEarningService.releaseAvailablePendingEarnings().catch((error) => {
-    logger.error({ err: error }, 'Creator earning release job failed');
+  void enqueueReleaseCreatorEarningsJob().catch((error) => {
+    logger.error({ err: error }, 'Creator earning release enqueue failed');
   });
 }, 60 * 60 * 1000);
 
-void creatorEarningService.releaseAvailablePendingEarnings().catch((error) => {
-  logger.error({ err: error }, 'Initial creator earning release job failed');
+void enqueueReleaseCreatorEarningsJob().catch((error) => {
+  logger.error({ err: error }, 'Initial creator earning release enqueue failed');
 });
 
 const shutdownSignals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
@@ -78,6 +129,13 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
     await worker.close();
   } catch (error) {
     logger.error({ err: error }, 'Worker close failed');
+    process.exitCode = 1;
+  }
+
+  try {
+    await backgroundWorker.close();
+  } catch (error) {
+    logger.error({ err: error }, 'Background worker close failed');
     process.exitCode = 1;
   }
 

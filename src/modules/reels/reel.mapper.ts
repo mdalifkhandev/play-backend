@@ -118,6 +118,7 @@ export interface ReelFeedItemDto {
   stats: {
     likes: number;
     comments: number;
+    saves?: number;
     shares: number;
     views: number;
   };
@@ -272,6 +273,7 @@ export function toReelFeedItemDto(
     stats: {
       likes: reel.likeCount || 0,
       comments: reel.commentCount || 0,
+      saves: reel.saveCount || 0,
       shares: reel.shareCount || 0,
       views: reel.viewCount || 0,
     },

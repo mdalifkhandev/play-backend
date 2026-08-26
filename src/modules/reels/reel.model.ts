@@ -127,7 +127,9 @@ export interface Reel {
   viewCount: number;
   likeCount: number;
   commentCount: number;
+  saveCount: number;
   shareCount: number;
+  rankingScore: number;
   reportCount: number;
   giftsCount: number;
   giftsTotalCoins: number;
@@ -146,7 +148,9 @@ export type CreateReelRecord = Omit<
   | 'viewCount'
   | 'likeCount'
   | 'commentCount'
+  | 'saveCount'
   | 'shareCount'
+  | 'rankingScore'
   | 'reportCount'
   | 'giftsCount'
   | 'giftsTotalCoins'
@@ -317,7 +321,9 @@ const reelSchema = new Schema<Reel>(
     viewCount: { type: Number, default: 0, min: 0, required: true },
     likeCount: { type: Number, default: 0, min: 0, required: true },
     commentCount: { type: Number, default: 0, min: 0, required: true },
+    saveCount: { type: Number, default: 0, min: 0, required: true },
     shareCount: { type: Number, default: 0, min: 0, required: true },
+    rankingScore: { type: Number, default: 0, required: true },
     reportCount: { type: Number, default: 0, min: 0, required: true },
     giftsCount: { type: Number, default: 0, min: 0, required: true },
     giftsTotalCoins: { type: Number, default: 0, min: 0, required: true },
@@ -341,8 +347,24 @@ reelSchema.index(
   { name: 'ix_reels_feed' },
 );
 reelSchema.index(
+  { status: 1, visibility: 1, createdAt: -1, _id: -1 },
+  { name: 'ix_reels_status_visibility_created' },
+);
+reelSchema.index(
+  { ownerId: 1, status: 1, visibility: 1, publishedAt: -1, _id: -1 },
+  { name: 'ix_reels_following_feed' },
+);
+reelSchema.index(
+  { ownerId: 1, status: 1, visibility: 1, createdAt: -1, _id: -1 },
+  { name: 'ix_reels_owner_status_visibility_created' },
+);
+reelSchema.index(
   { status: 1, visibility: 1, mediaType: 1, reportCount: 1 },
   { name: 'ix_reels_for_you_candidates' },
+);
+reelSchema.index(
+  { status: 1, visibility: 1, mediaType: 1, reportCount: 1, rankingScore: -1, publishedAt: -1, _id: -1 },
+  { name: 'ix_reels_for_you_ranked' },
 );
 reelSchema.index(
   { forKids: 1, status: 1, visibility: 1, reportCount: 1, createdAt: -1, _id: -1 },

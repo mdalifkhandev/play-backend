@@ -51,6 +51,10 @@ const withdrawalRequestSchema = new Schema<WithdrawalRequest>(
 
 withdrawalRequestSchema.index({ status: 1, createdAt: -1 });
 withdrawalRequestSchema.index({ userId: 1, createdAt: -1 });
+withdrawalRequestSchema.index(
+  { userId: 1, status: 1, createdAt: -1 },
+  { name: 'ix_withdrawals_user_status_created' },
+);
 
 export const WithdrawalRequestModel: Model<WithdrawalRequest> =
   (mongoose.models.WithdrawalRequest as Model<WithdrawalRequest> | undefined) ??

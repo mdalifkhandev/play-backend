@@ -20,19 +20,26 @@ import { activityService } from '../activities/activity.service.js';
 import type { GiftTargetType } from './sent-gift.model.js';
 import type { WithdrawalStatus } from './withdrawal-request.model.js';
 import { adminNotificationService } from '../notifications/admin-notification.service.js';
+import { cacheKeyPrefixes, cacheKeys } from '../../infrastructure/cache/cache-keys.js';
+import { cacheService } from '../../infrastructure/cache/cache.service.js';
+
+const COIN_CATALOG_CACHE_TTL_SECONDS = 300;
+const COIN_SETTINGS_CACHE_TTL_SECONDS = 120;
 
 export class CoinService {
   async getPackages() {
-    const packages = await coinRepository.getActivePackages();
-    return packages.map((pkg) => ({
-      id: pkg._id.toString(),
-      name: pkg.name,
-      coins: pkg.coins,
-      price: pkg.price,
-      currency: pkg.currency,
-      isPopular: pkg.isPopular,
-      sortOrder: pkg.sortOrder,
-    }));
+    return cacheService.getOrSet(cacheKeys.activeCoinPackages, COIN_CATALOG_CACHE_TTL_SECONDS, async () => {
+      const packages = await coinRepository.getActivePackages();
+      return packages.map((pkg) => ({
+        id: pkg._id.toString(),
+        name: pkg.name,
+        coins: pkg.coins,
+        price: pkg.price,
+        currency: pkg.currency,
+        isPopular: pkg.isPopular,
+        sortOrder: pkg.sortOrder,
+      }));
+    });
   }
 
   async getAdminPackages() {
@@ -42,6 +49,7 @@ export class CoinService {
 
   async createAdminPackage(input: CreateAdminCoinPackageInput) {
     const created = await coinRepository.createAdminPackage(input);
+    await cacheService.deleteByPrefix(cacheKeyPrefixes.coins);
     return mapCoinPackage(created);
   }
 
@@ -50,6 +58,7 @@ export class CoinService {
     if (!updated) {
       throw new NotFoundError('Coin package was not found.');
     }
+    await cacheService.deleteByPrefix(cacheKeyPrefixes.coins);
     return mapCoinPackage(updated);
   }
 
@@ -58,6 +67,7 @@ export class CoinService {
     if (!deleted) {
       throw new NotFoundError('Coin package was not found.');
     }
+    await cacheService.deleteByPrefix(cacheKeyPrefixes.coins);
     return { deleted: true, id: deleted._id.toString() };
   }
 
@@ -115,15 +125,17 @@ export class CoinService {
   }
 
   async getGiftCatalog() {
-    const gifts = await coinRepository.getActiveGifts();
-    return gifts.map((g) => ({
-      id: g._id.toString(),
-      name: g.name,
-      code: g.code,
-      icon: g.icon,
-      coinPrice: g.coinPrice,
-      sortOrder: g.sortOrder,
-    }));
+    return cacheService.getOrSet(cacheKeys.activeGiftCatalog, COIN_CATALOG_CACHE_TTL_SECONDS, async () => {
+      const gifts = await coinRepository.getActiveGifts();
+      return gifts.map((g) => ({
+        id: g._id.toString(),
+        name: g.name,
+        code: g.code,
+        icon: g.icon,
+        coinPrice: g.coinPrice,
+        sortOrder: g.sortOrder,
+      }));
+    });
   }
 
   async getAdminGiftCatalog() {
@@ -133,6 +145,7 @@ export class CoinService {
 
   async createAdminGift(input: CreateAdminGiftInput) {
     const created = await coinRepository.createAdminGift(input);
+    await cacheService.deleteByPrefix(cacheKeyPrefixes.coins);
     return mapGiftCatalog(created);
   }
 
@@ -141,6 +154,7 @@ export class CoinService {
     if (!updated) {
       throw new NotFoundError('Gift was not found.');
     }
+    await cacheService.deleteByPrefix(cacheKeyPrefixes.coins);
     return mapGiftCatalog(updated);
   }
 
@@ -149,6 +163,7 @@ export class CoinService {
     if (!deleted) {
       throw new NotFoundError('Gift was not found.');
     }
+    await cacheService.deleteByPrefix(cacheKeyPrefixes.coins);
     return { deleted: true, id: deleted._id.toString() };
   }
 
@@ -855,6 +870,7 @@ export class CoinService {
         : {}),
     };
     const updated = await coinRepository.updateCoinSettings(update, adminUserId);
+    await cacheService.deleteByPrefix(cacheKeyPrefixes.coins);
     return {
       coinsPerDollar: updated.coinsPerDollar,
       minWithdrawalCoins: updated.minWithdrawalCoins,
@@ -865,14 +881,16 @@ export class CoinService {
   }
 
   async getAdminCoinSettings() {
-    const setting = await coinRepository.getCoinSettings();
-    return {
-      coinsPerDollar: setting.coinsPerDollar,
-      minWithdrawalCoins: setting.minWithdrawalCoins,
-      maxWithdrawalCoins: setting.maxWithdrawalCoins,
-      minWithdrawalUsd: 10,
-      updatedAt: setting.updatedAt.toISOString(),
-    };
+    return cacheService.getOrSet(cacheKeys.adminCoinSettings, COIN_SETTINGS_CACHE_TTL_SECONDS, async () => {
+      const setting = await coinRepository.getCoinSettings();
+      return {
+        coinsPerDollar: setting.coinsPerDollar,
+        minWithdrawalCoins: setting.minWithdrawalCoins,
+        maxWithdrawalCoins: setting.maxWithdrawalCoins,
+        minWithdrawalUsd: 10,
+        updatedAt: setting.updatedAt.toISOString(),
+      };
+    });
   }
 }
 

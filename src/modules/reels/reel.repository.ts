@@ -1,10 +1,10 @@
-import { Types, type ClientSession, type PipelineStage } from 'mongoose';
+import { Types, type ClientSession } from 'mongoose';
 
 import { ReelQueueSubmissionState, ReelStatus, ReelVisibility } from './reel.constants.js';
 import type { ReelCursor } from './reel-cursor.js';
 import type { ReelForYouCursor } from './reel-for-you-cursor.js';
 import type { ReelWithOwner } from './reel.mapper.js';
-import { SaveModel } from '../engagement/save.model.js';
+import { AccountStatus } from '../../common/enums/account-status.enum.js';
 import { FollowModel } from '../users/follow.model.js';
 import {
   ReelModel,
@@ -15,7 +15,12 @@ import {
 } from './reel.model.js';
 import { ReelViewModel } from './reel-view.model.js';
 
-const OWNER_PROJECTION = '_id email profile.displayName profile.username profile.photoUrl subscriptionPlan subscriptionStatus subscriptionExpiresAt';
+const OWNER_PROJECTION = '_id email status profile.displayName profile.username profile.photoUrl subscriptionPlan subscriptionStatus subscriptionExpiresAt';
+const OWNER_POPULATE = {
+  path: 'ownerId',
+  select: OWNER_PROJECTION,
+  match: { status: AccountStatus.ACTIVE },
+};
 const FOR_YOU_REPORT_THRESHOLD = 3;
 
 export interface ReelPreferenceSignals {
@@ -26,6 +31,33 @@ export interface ReelPreferenceSignals {
 export interface RankedReel {
   reel: ReelWithOwner;
   score: number;
+}
+
+function isReelWithActiveOwner(reel: ReelWithOwner): boolean {
+  return Boolean(reel.ownerId && typeof reel.ownerId === 'object' && '_id' in reel.ownerId);
+}
+
+export function calculateReelRankingScore(input: {
+  viewCount?: number;
+  likeCount?: number;
+  commentCount?: number;
+  saveCount?: number;
+  shareCount?: number;
+  publishedAt?: Date;
+  createdAt?: Date;
+}): number {
+  const publishedAt = input.publishedAt ?? input.createdAt ?? new Date();
+  const ageHours = Math.max(0, (Date.now() - publishedAt.getTime()) / 3_600_000);
+  const freshness = Math.max(0, 14 - ageHours / 12);
+  const score =
+    Math.log((input.viewCount ?? 0) + 1) * 1.2 +
+    Math.log((input.likeCount ?? 0) + 1) * 4 +
+    Math.log((input.commentCount ?? 0) + 1) * 6 +
+    Math.log((input.saveCount ?? 0) + 1) * 7 +
+    Math.log((input.shareCount ?? 0) + 1) * 9 +
+    freshness;
+
+  return Number(score.toFixed(6));
 }
 
 export class ReelRepository {
@@ -90,19 +122,22 @@ export class ReelRepository {
       ...(cursor
         ? {
             $or: [
-              { createdAt: { $lt: cursor.publishedAt } },
-              { createdAt: cursor.publishedAt, _id: { $lt: cursor.id } },
+              { publishedAt: { $lt: cursor.publishedAt } },
+              { publishedAt: cursor.publishedAt, _id: { $lt: cursor.id } },
             ],
           }
         : {}),
     };
 
     return ReelModel.find(filter)
-      .sort({ createdAt: -1, _id: -1 })
+      .where('reportCount')
+      .lt(FOR_YOU_REPORT_THRESHOLD)
+      .sort({ publishedAt: -1, _id: -1 })
       .limit(limit)
-      .populate({ path: 'ownerId', select: OWNER_PROJECTION })
+      .populate(OWNER_POPULATE)
       .lean<ReelWithOwner[]>()
-      .exec();
+      .exec()
+      .then((records) => records.filter(isReelWithActiveOwner));
   }
 
   async listFollowingReadyPublic(
@@ -130,19 +165,22 @@ export class ReelRepository {
       ...(cursor
         ? {
             $or: [
-              { createdAt: { $lt: cursor.publishedAt } },
-              { createdAt: cursor.publishedAt, _id: { $lt: cursor.id } },
+              { publishedAt: { $lt: cursor.publishedAt } },
+              { publishedAt: cursor.publishedAt, _id: { $lt: cursor.id } },
             ],
           }
         : {}),
     };
 
     return ReelModel.find(filter)
-      .sort({ createdAt: -1, _id: -1 })
+      .where('reportCount')
+      .lt(FOR_YOU_REPORT_THRESHOLD)
+      .sort({ publishedAt: -1, _id: -1 })
       .limit(limit)
-      .populate({ path: 'ownerId', select: OWNER_PROJECTION })
+      .populate(OWNER_POPULATE)
       .lean<ReelWithOwner[]>()
-      .exec();
+      .exec()
+      .then((records) => records.filter(isReelWithActiveOwner));
   }
 
   async listKidsReadyPublic(
@@ -163,19 +201,22 @@ export class ReelRepository {
       ...(cursor
         ? {
             $or: [
-              { createdAt: { $lt: cursor.publishedAt } },
-              { createdAt: cursor.publishedAt, _id: { $lt: cursor.id } },
+              { publishedAt: { $lt: cursor.publishedAt } },
+              { publishedAt: cursor.publishedAt, _id: { $lt: cursor.id } },
             ],
           }
         : {}),
     };
 
     return ReelModel.find(filter)
-      .sort({ createdAt: -1, _id: -1 })
+      .where('reportCount')
+      .lt(FOR_YOU_REPORT_THRESHOLD)
+      .sort({ publishedAt: -1, _id: -1 })
       .limit(limit)
-      .populate({ path: 'ownerId', select: OWNER_PROJECTION })
+      .populate(OWNER_POPULATE)
       .lean<ReelWithOwner[]>()
-      .exec();
+      .exec()
+      .then((records) => records.filter(isReelWithActiveOwner));
   }
 
   async search(query: string, limit: number, skip: number): Promise<ReelWithOwner[]> {
@@ -188,9 +229,12 @@ export class ReelRepository {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate({ path: 'ownerId', select: OWNER_PROJECTION })
+      .where('reportCount')
+      .lt(FOR_YOU_REPORT_THRESHOLD)
+      .populate(OWNER_POPULATE)
       .lean<ReelWithOwner[]>()
-      .exec();
+      .exec()
+      .then((records) => records.filter(isReelWithActiveOwner));
   }
 
   async listForYou(
@@ -201,121 +245,45 @@ export class ReelRepository {
     deprioritizedReelIds: Types.ObjectId[] = [],
     preferences: ReelPreferenceSignals = { hashtags: [], ownerIds: [] },
   ): Promise<RankedReel[]> {
-    const publishedAtExpression = { $ifNull: ['$publishedAt', '$createdAt'] };
-    const ageHoursExpression = {
-      $max: [
-        0,
-        { $divide: [{ $subtract: [asOf, publishedAtExpression] }, 3_600_000] },
-      ],
-    };
-    const scoreExpression = {
-      $round: [
-        {
-          $add: [
-            { $multiply: [{ $ln: { $add: [{ $ifNull: ['$viewCount', 0] }, 1] } }, 1.2] },
-            { $multiply: [{ $ln: { $add: [{ $ifNull: ['$likeCount', 0] }, 1] } }, 4] },
-            { $multiply: [{ $ln: { $add: [{ $ifNull: ['$commentCount', 0] }, 1] } }, 6] },
-            { $multiply: [{ $ln: { $add: [{ $ifNull: ['$saveCount', 0] }, 1] } }, 7] },
-            { $multiply: [{ $ln: { $add: [{ $ifNull: ['$shareCount', 0] }, 1] } }, 9] },
-            { $max: [0, { $subtract: [14, { $divide: [ageHoursExpression, 12] }] }] },
-            {
-              $multiply: [
-                {
-                  $size: {
-                    $setIntersection: [{ $ifNull: ['$hashtags', []] }, preferences.hashtags],
-                  },
-                },
-                3,
-              ],
-            },
-            { $cond: [{ $in: ['$ownerId', preferences.ownerIds] }, 4, 0] },
-            { $cond: [{ $in: ['$_id', deprioritizedReelIds] }, -20, 0] },
-          ],
-        },
-        6,
-      ],
-    };
-    const pipeline: PipelineStage[] = [
-      {
-        $match: {
-          status: ReelStatus.READY,
-          visibility: ReelVisibility.PUBLIC,
-          mediaType: 'video',
-          deletedAt: { $exists: false },
-          $expr: {
-            $lt: [{ $ifNull: ['$reportCount', 0] }, FOR_YOU_REPORT_THRESHOLD],
-          },
-          ...(excludedReelIds.length > 0 ? { _id: { $nin: excludedReelIds } } : {}),
-        },
-      },
-      {
-        $lookup: {
-          from: SaveModel.collection.name,
-          let: { reelId: '$_id' },
-          pipeline: [
-            {
-              $match: {
-                targetType: 'reel',
-                $expr: { $eq: ['$targetId', '$$reelId'] },
-              },
-            },
-            { $count: 'count' },
-          ],
-          as: 'saveStats',
-        },
-      },
-      {
-        $addFields: {
-          saveCount: { $ifNull: [{ $arrayElemAt: ['$saveStats.count', 0] }, 0] },
-        },
-      },
-      {
-        $addFields: {
-          forYouPublishedAt: publishedAtExpression,
-          forYouScore: scoreExpression,
-        },
-      },
+    void asOf;
+    void deprioritizedReelIds;
+    void preferences;
+
+    const filter: Record<string, unknown> = {
+      status: ReelStatus.READY,
+      visibility: ReelVisibility.PUBLIC,
+      mediaType: 'video',
+      reportCount: { $lt: FOR_YOU_REPORT_THRESHOLD },
+      deletedAt: { $exists: false },
+      ...(excludedReelIds.length > 0 ? { _id: { $nin: excludedReelIds } } : {}),
       ...(cursor
-        ? [
-            {
-              $match: {
-                $or: [
-                  { forYouScore: { $lt: cursor.score } },
-                  {
-                    forYouScore: cursor.score,
-                    forYouPublishedAt: { $lt: cursor.publishedAt },
-                  },
-                  {
-                    forYouScore: cursor.score,
-                    forYouPublishedAt: cursor.publishedAt,
-                    _id: { $lt: cursor.id },
-                  },
-                ],
+        ? {
+            $or: [
+              { rankingScore: { $lt: cursor.score } },
+              {
+                rankingScore: cursor.score,
+                publishedAt: { $lt: cursor.publishedAt },
               },
-            } as PipelineStage.Match,
-          ]
-        : []),
-      { $sort: { forYouScore: -1, forYouPublishedAt: -1, _id: -1 } },
-      { $limit: limit },
-      { $project: { _id: 1, forYouScore: 1 } },
-    ];
-    const rankedIds = await ReelModel.aggregate<{
-      _id: Types.ObjectId;
-      forYouScore: number;
-    }>(pipeline).exec();
+              {
+                rankingScore: cursor.score,
+                publishedAt: cursor.publishedAt,
+                _id: { $lt: cursor.id },
+              },
+            ],
+          }
+        : {}),
+    };
 
-    if (rankedIds.length === 0) return [];
-
-    const reels = await ReelModel.find({ _id: { $in: rankedIds.map((item) => item._id) } })
-      .populate({ path: 'ownerId', select: OWNER_PROJECTION })
+    const reels = await ReelModel.find(filter)
+      .sort({ rankingScore: -1, publishedAt: -1, _id: -1 })
+      .limit(limit)
+      .populate(OWNER_POPULATE)
       .lean<ReelWithOwner[]>()
       .exec();
-    const reelsById = new Map(reels.map((reel) => [reel._id.toString(), reel]));
 
-    return rankedIds.flatMap((ranked) => {
-      const reel = reelsById.get(ranked._id.toString());
-      return reel ? [{ reel, score: ranked.forYouScore }] : [];
-    });
+    return reels
+      .filter(isReelWithActiveOwner)
+      .map((reel) => ({ reel, score: reel.rankingScore ?? 0 }));
   }
 
   async listRecentlyViewedReelIds(viewerId: string, limit = 500): Promise<Types.ObjectId[]> {
@@ -382,11 +350,14 @@ export class ReelRepository {
     };
 
     return ReelModel.find(filter)
+      .where('reportCount')
+      .lt(FOR_YOU_REPORT_THRESHOLD)
       .sort({ createdAt: -1, _id: -1 })
       .limit(limit)
-      .populate({ path: 'ownerId', select: OWNER_PROJECTION })
+      .populate(OWNER_POPULATE)
       .lean<ReelWithOwner[]>()
-      .exec();
+      .exec()
+      .then((records) => records.filter(isReelWithActiveOwner));
   }
 
   async markQueueSubmitted(
@@ -472,6 +443,8 @@ export class ReelRepository {
     processedMedia: ReelProcessedMediaSnapshot,
     thumbnail: ReelThumbnailSnapshot,
   ): Promise<ReelDocument | null> {
+    const publishedAt = new Date();
+
     return ReelModel.findOneAndUpdate(
       {
         _id: reelId,
@@ -484,8 +457,9 @@ export class ReelRepository {
           progress: 100,
           processedMedia,
           thumbnail,
-          publishedAt: new Date(),
-          'processing.completedAt': new Date(),
+          publishedAt,
+          rankingScore: calculateReelRankingScore({ publishedAt }),
+          'processing.completedAt': publishedAt,
           'processing.queueSubmissionState': ReelQueueSubmissionState.SUBMITTED,
         },
         $unset: {
@@ -630,11 +604,58 @@ export class ReelRepository {
       { $inc: { viewCount: 1 } },
       { new: true },
     )
-      .select('viewCount')
-      .lean<{ viewCount: number }>()
+      .select('viewCount likeCount commentCount saveCount shareCount publishedAt createdAt')
+      .lean<{
+        viewCount: number;
+        likeCount?: number;
+        commentCount?: number;
+        saveCount?: number;
+        shareCount?: number;
+        publishedAt?: Date;
+        createdAt?: Date;
+      }>()
       .exec();
 
+    if (reel) {
+      await this.updateRankingScore(reelId, reel);
+    }
+
     return reel?.viewCount ?? 0;
+  }
+
+  async updateRankingScore(
+    reelId: Types.ObjectId | string,
+    counters?: {
+      viewCount?: number;
+      likeCount?: number;
+      commentCount?: number;
+      saveCount?: number;
+      shareCount?: number;
+      publishedAt?: Date;
+      createdAt?: Date;
+    },
+  ): Promise<void> {
+    const input =
+      counters ??
+      (await ReelModel.findById(reelId)
+        .select('viewCount likeCount commentCount saveCount shareCount publishedAt createdAt')
+        .lean<{
+          viewCount?: number;
+          likeCount?: number;
+          commentCount?: number;
+          saveCount?: number;
+          shareCount?: number;
+          publishedAt?: Date;
+          createdAt?: Date;
+        }>()
+        .exec());
+
+    if (!input) return;
+
+    await ReelModel.updateOne(
+      { _id: reelId },
+      { $set: { rankingScore: calculateReelRankingScore(input) } },
+    ).exec();
   }
 }
 

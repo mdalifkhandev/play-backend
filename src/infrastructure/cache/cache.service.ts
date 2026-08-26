@@ -32,6 +32,17 @@ export class CacheService {
     }
   }
 
+  async getOrSet<T>(key: string, ttlSeconds: number, factory: () => Promise<T>): Promise<T> {
+    const cached = await this.get<T>(key);
+    if (cached !== null) {
+      return cached;
+    }
+
+    const value = await factory();
+    await this.set(key, value, ttlSeconds);
+    return value;
+  }
+
   async delete(key: string): Promise<void> {
     const client = getRedisClient();
 
@@ -43,6 +54,43 @@ export class CacheService {
       await client.del(key);
     } catch (error) {
       logger.warn({ err: error, cacheKey: key }, 'Cache invalidation failed');
+    }
+  }
+
+  async deleteMany(keys: string[]): Promise<void> {
+    const client = getRedisClient();
+
+    if (!client || client.status !== 'ready' || keys.length === 0) {
+      return;
+    }
+
+    try {
+      await client.del(...keys);
+    } catch (error) {
+      logger.warn({ err: error, cacheKeys: keys }, 'Cache invalidation failed');
+    }
+  }
+
+  async deleteByPrefix(keyPrefix: string): Promise<void> {
+    const client = getRedisClient();
+
+    if (!client || client.status !== 'ready') {
+      return;
+    }
+
+    try {
+      let cursor = '0';
+
+      do {
+        const [nextCursor, keys] = await client.scan(cursor, 'MATCH', `${keyPrefix}*`, 'COUNT', 100);
+        cursor = nextCursor;
+
+        if (keys.length > 0) {
+          await client.del(...keys);
+        }
+      } while (cursor !== '0');
+    } catch (error) {
+      logger.warn({ err: error, cacheKeyPrefix: keyPrefix }, 'Cache prefix invalidation failed');
     }
   }
 }

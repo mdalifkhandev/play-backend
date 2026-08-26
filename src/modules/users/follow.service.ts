@@ -7,6 +7,10 @@ import type { FollowListQuery } from './follow.validation.js';
 import { activityService } from '../activities/activity.service.js';
 import { notificationService } from '../notifications/notification.service.js';
 import { userRepository } from './user.repository.js';
+import {
+  enqueueBestEffort,
+  enqueueSendUserPushJob,
+} from '../../infrastructure/queue/background.queue.js';
 
 interface FollowUserDto {
   id: string;
@@ -146,15 +150,18 @@ export class FollowService {
       relatedEntityId: new Types.ObjectId(followerId),
     });
 
-    await notificationService.sendToUser(followingId, {
-      title: 'New Follower',
-      body: `${displayName} started following you.`,
-      data: {
-        type: 'follow',
-        targetId: followerId,
-        userId: followerId,
-      },
-    });
+    await enqueueBestEffort(
+      enqueueSendUserPushJob(followingId, {
+        title: 'New Follower',
+        body: `${displayName} started following you.`,
+        data: {
+          type: 'follow',
+          targetId: followerId,
+          userId: followerId,
+        },
+      }),
+      { followerId, followingId, job: 'follow-push' },
+    );
   }
 }
 

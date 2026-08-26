@@ -1,6 +1,11 @@
 import type { UploadApiOptions, UploadApiResponse } from 'cloudinary';
 
 import { assertCloudinaryConfigured, storageConfig } from '../../config/storage.config.js';
+import {
+  externalTimeoutMs,
+  toExternalProviderError,
+  withExternalTimeout,
+} from '../http/external-timeout.js';
 import { cloudinaryClient } from './cloudinary.client.js';
 import type {
   StorageDeleteOptions,
@@ -52,13 +57,26 @@ export class CloudinaryStorage implements StorageProvider {
       throw new TypeError('Cloudinary public ID must not be empty.');
     }
 
-    const result = (await cloudinaryClient.api.resource(publicId, {
-      resource_type: resourceType,
-      type: 'upload',
-      ...(resourceType === 'video' ? { media_metadata: true } : {}),
-    })) as unknown as CloudinaryAssetPayload;
+    let result: CloudinaryAssetPayload;
+    try {
+      result = (await withExternalTimeout(
+        cloudinaryClient.api.resource(publicId, {
+          resource_type: resourceType,
+          type: 'upload',
+          ...(resourceType === 'video' ? { media_metadata: true } : {}),
+        }),
+        {
+          provider: 'cloudinary',
+          operation: 'getAsset',
+          timeoutMs: externalTimeoutMs.cloudinaryAdmin,
+          code: 'CLOUDINARY_TIMEOUT',
+        },
+      )) as unknown as CloudinaryAssetPayload;
+    } catch (error) {
+      throw toExternalProviderError(error, 'cloudinary', 'getAsset', 'CLOUDINARY_REQUEST_FAILED');
+    }
 
-    return this.toStoredAsset(result as unknown as CloudinaryAssetPayload);
+    return this.toStoredAsset(result);
   }
 
   /**
@@ -122,10 +140,20 @@ export class CloudinaryStorage implements StorageProvider {
       throw new TypeError('Upload source must not be empty.');
     }
 
-    const result = await cloudinaryClient.uploader.upload(
-      source,
-      this.buildUploadOptions(options),
-    );
+    let result: UploadApiResponse;
+    try {
+      result = await withExternalTimeout(
+        cloudinaryClient.uploader.upload(source, this.buildUploadOptions(options)),
+        {
+          provider: 'cloudinary',
+          operation: 'upload',
+          timeoutMs: externalTimeoutMs.cloudinaryUpload,
+          code: 'CLOUDINARY_UPLOAD_TIMEOUT',
+        },
+      );
+    } catch (error) {
+      throw toExternalProviderError(error, 'cloudinary', 'upload', 'CLOUDINARY_UPLOAD_FAILED');
+    }
 
     return this.toStoredAsset(result as unknown as CloudinaryAssetPayload);
   }
@@ -140,26 +168,39 @@ export class CloudinaryStorage implements StorageProvider {
       throw new TypeError('Upload buffer must not be empty.');
     }
 
-    const result = await new Promise<UploadApiResponse>((resolve, reject) => {
-      const uploadStream = cloudinaryClient.uploader.upload_stream(
-        this.buildUploadOptions(options),
-        (error, uploadResult) => {
-          if (error) {
-            reject(error);
-            return;
-          }
+    let result: UploadApiResponse;
+    try {
+      result = await withExternalTimeout(
+        new Promise<UploadApiResponse>((resolve, reject) => {
+          const uploadStream = cloudinaryClient.uploader.upload_stream(
+            this.buildUploadOptions(options),
+            (error, uploadResult) => {
+              if (error) {
+                reject(error);
+                return;
+              }
 
-          if (!uploadResult) {
-            reject(new Error('Cloudinary upload completed without a result.'));
-            return;
-          }
+              if (!uploadResult) {
+                reject(new Error('Cloudinary upload completed without a result.'));
+                return;
+              }
 
-          resolve(uploadResult);
+              resolve(uploadResult);
+            },
+          );
+
+          uploadStream.end(buffer);
+        }),
+        {
+          provider: 'cloudinary',
+          operation: 'uploadBuffer',
+          timeoutMs: externalTimeoutMs.cloudinaryUpload,
+          code: 'CLOUDINARY_UPLOAD_TIMEOUT',
         },
       );
-
-      uploadStream.end(buffer);
-    });
+    } catch (error) {
+      throw toExternalProviderError(error, 'cloudinary', 'uploadBuffer', 'CLOUDINARY_UPLOAD_FAILED');
+    }
 
     return this.toStoredAsset(result as unknown as CloudinaryAssetPayload);
   }
@@ -174,11 +215,24 @@ export class CloudinaryStorage implements StorageProvider {
       throw new TypeError('Cloudinary public ID must not be empty.');
     }
 
-    const result = await cloudinaryClient.uploader.destroy(publicId, {
-      resource_type: options.resourceType ?? 'image',
-      invalidate: options.invalidate ?? true,
-      type: 'upload',
-    });
+    let result: { result: string };
+    try {
+      result = await withExternalTimeout(
+        cloudinaryClient.uploader.destroy(publicId, {
+          resource_type: options.resourceType ?? 'image',
+          invalidate: options.invalidate ?? true,
+          type: 'upload',
+        }),
+        {
+          provider: 'cloudinary',
+          operation: 'deleteAsset',
+          timeoutMs: externalTimeoutMs.cloudinaryDelete,
+          code: 'CLOUDINARY_DELETE_TIMEOUT',
+        },
+      );
+    } catch (error) {
+      throw toExternalProviderError(error, 'cloudinary', 'deleteAsset', 'CLOUDINARY_DELETE_FAILED');
+    }
 
     if (result.result === 'ok') {
       return { status: 'deleted' };

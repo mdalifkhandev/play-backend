@@ -33,6 +33,16 @@ export interface PublicUserDto {
 
 export function toPublicUser(user: UserDocument): PublicUserDto {
   const profile = user.profile;
+  const currentSubscription = resolveCurrentSubscription(user);
+  const subscriptionPlan = currentSubscription?.planId ?? user.subscriptionPlan;
+  const subscriptionStatus = currentSubscription?.status ?? user.subscriptionStatus ?? 'none';
+  const subscriptionExpiresAt = currentSubscription?.expiresAt ?? user.subscriptionExpiresAt;
+  const isPremium = isActivePremiumSubscription({
+    ...(subscriptionPlan ? { plan: subscriptionPlan } : {}),
+    status: subscriptionStatus,
+    ...(subscriptionExpiresAt ? { expiresAt: subscriptionExpiresAt } : {}),
+    ...(currentSubscription?.interval ? { interval: currentSubscription.interval } : {}),
+  });
 
   return {
     id: user._id.toString(),
@@ -46,16 +56,10 @@ export function toPublicUser(user: UserDocument): PublicUserDto {
     ...(user.stripeConnectAccountId ? { stripeConnectAccountId: user.stripeConnectAccountId } : {}),
     stripeConnectOnboardingComplete: user.stripeConnectOnboardingComplete ?? false,
     subscription: {
-      ...(user.subscriptionPlan ? { plan: user.subscriptionPlan } : {}),
-      status: user.subscriptionStatus ?? 'none',
-      ...(user.subscriptionExpiresAt ? { expiresAt: user.subscriptionExpiresAt.toISOString() } : {}),
-      isPremium: Boolean(
-        user.subscriptionStatus === 'active' &&
-        (
-          user.subscriptionPlan?.toLowerCase().includes('lifetime') ||
-          (user.subscriptionExpiresAt && user.subscriptionExpiresAt.getTime() > Date.now())
-        ),
-      ),
+      ...(subscriptionPlan ? { plan: subscriptionPlan } : {}),
+      status: subscriptionStatus,
+      ...(subscriptionExpiresAt ? { expiresAt: new Date(subscriptionExpiresAt).toISOString() } : {}),
+      isPremium,
     },
     ...(user.preferredLanguageCode ? { preferredLanguageCode: user.preferredLanguageCode } : {}),
     profile: {
@@ -70,4 +74,31 @@ export function toPublicUser(user: UserDocument): PublicUserDto {
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
   };
+}
+
+function resolveCurrentSubscription(user: UserDocument) {
+  const subscription = (user as any).currentSubscriptionId;
+  if (!subscription || typeof subscription !== 'object' || !('planId' in subscription)) {
+    return undefined;
+  }
+
+  return subscription as {
+    planId?: string;
+    status?: 'none' | 'active' | 'expired' | 'canceled' | 'hold';
+    expiresAt?: Date;
+    provider?: 'revenuecat' | 'apple_pay' | 'stripe';
+    providerSubscriptionId?: string;
+    interval?: string;
+  };
+}
+
+function isActivePremiumSubscription(input: {
+  plan?: string;
+  status?: string;
+  expiresAt?: Date;
+  interval?: string;
+}) {
+  if (input.status !== 'active') return false;
+  if (input.interval === 'lifetime' || input.plan?.toLowerCase().includes('lifetime')) return true;
+  return Boolean(input.expiresAt && new Date(input.expiresAt).getTime() > Date.now());
 }

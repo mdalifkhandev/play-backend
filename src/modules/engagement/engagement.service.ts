@@ -6,6 +6,7 @@ import { ForbiddenError } from '../../common/errors/forbidden-error.js';
 import { NotFoundError } from '../../common/errors/not-found-error.js';
 import { ReelStatus, ReelVisibility } from '../reels/reel.constants.js';
 import { ReelModel } from '../reels/reel.model.js';
+import { reelRepository } from '../reels/reel.repository.js';
 import {
   toReelFeedItemDto,
   type ReelFeedItemDto,
@@ -13,6 +14,10 @@ import {
 } from '../reels/reel.mapper.js';
 import { userRepository } from '../users/user.repository.js';
 import { notificationService } from '../notifications/notification.service.js';
+import {
+  enqueueBestEffort,
+  enqueueSendUserPushJob,
+} from '../../infrastructure/queue/background.queue.js';
 import { commentRepository, type CommentRepository } from './comment/comment.repository.js';
 import { engagementRepository, type EngagementRepository } from './engagement.repository.js';
 import type {
@@ -100,7 +105,11 @@ async function atomicCounterUpdate(
   field: 'likeCount' | 'commentCount' | 'shareCount' | 'saveCount',
   delta: 1 | -1,
 ): Promise<void> {
-  await ReelModel.updateOne({ _id: reelId }, { $inc: { [field]: delta } }).exec();
+  await ReelModel.updateOne(
+    { _id: reelId, ...(delta < 0 ? { [field]: { $gt: 0 } } : {}) },
+    { $inc: { [field]: delta } },
+  ).exec();
+  await reelRepository.updateRankingScore(reelId);
 }
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -150,12 +159,15 @@ export class EngagementService {
             metadata: { thumbnailUrl: (reel as any).thumbnail } 
           }).catch(console.error);
           
-          console.log(`[DEBUG] likeReel: sending push notification to ${reel.ownerId}`);
-          await notificationService.sendToUser(reel.ownerId.toString(), {
-            title: 'New Like',
-            body: `${displayName} liked your reel.`,
-            data: { type: 'like', targetId: reelId },
-          });
+          console.log(`[DEBUG] likeReel: enqueueing push notification to ${reel.ownerId}`);
+          await enqueueBestEffort(
+            enqueueSendUserPushJob(reel.ownerId.toString(), {
+              title: 'New Like',
+              body: `${displayName} liked your reel.`,
+              data: { type: 'like', targetId: reelId },
+            }),
+            { reelId, userId, job: 'like-push' },
+          );
         } catch (error) {
           console.error('Failed to send like notification:', error);
         }
@@ -377,11 +389,14 @@ export class EngagementService {
             metadata: { thumbnailUrl: (reel as any).thumbnail } 
           }).catch(console.error);
           
-          await notificationService.sendToUser(reel.ownerId.toString(), {
-            title: 'New Comment',
-            body: `${displayName} commented on your reel.`,
-            data: { type: 'comment', targetId: reelId },
-          });
+          await enqueueBestEffort(
+            enqueueSendUserPushJob(reel.ownerId.toString(), {
+              title: 'New Comment',
+              body: `${displayName} commented on your reel.`,
+              data: { type: 'comment', targetId: reelId },
+            }),
+            { reelId, userId, job: 'comment-push' },
+          );
         } catch (error) {
           console.error('Failed to send comment notification:', error);
         }
