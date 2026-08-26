@@ -2,7 +2,7 @@ import { BadRequestError } from '../../common/errors/bad-request-error.js';
 import { NotFoundError } from '../../common/errors/not-found-error.js';
 import { env } from '../../config/env.config.js';
 import { stripe } from '../../config/stripe.config.js';
-import { UserModel, type UserDocument } from '../users/user.model.js';
+import { UserModel } from '../users/user.model.js';
 import { SubscriptionPaymentModel } from './subscription-payment.model.js';
 import { SubscriptionPlanModel, SubscriptionPlanSeedStateModel, type SubscriptionPlan as SubscriptionPlanRecord } from './subscription-plan.model.js';
 import { UserSubscriptionModel } from './user-subscription.model.js';
@@ -58,10 +58,10 @@ const defaultPlans: SubscriptionPlan[] = [
 ];
 
 export class SubscriptionService {
-  async normalizeUserSubscription(user: UserDocument) {
+  async normalizeUserSubscription(user: any) {
     if (user.currentSubscriptionId) {
       const currentSubscription = await UserSubscriptionModel.findById(user.currentSubscriptionId).lean().exec();
-      const isCurrentPremium = currentSubscription ? isUserSubscriptionPremium(currentSubscription) : false;
+      const isCurrentPremium = currentSubscription ? isUserSubscriptionPremium(currentSubscription as any) : false;
 
       if (isCurrentPremium) return user;
 
@@ -79,19 +79,7 @@ export class SubscriptionService {
       return (await UserModel.findById(user._id).exec()) ?? user;
     }
 
-    if (!user.subscriptionPlan) return user;
-
-    const planExists = await SubscriptionPlanModel.exists({ planId: user.subscriptionPlan }).exec();
-    const isExpired =
-      user.subscriptionStatus === 'active'
-      && !user.subscriptionPlan.toLowerCase().includes('lifetime')
-      && (!user.subscriptionExpiresAt || user.subscriptionExpiresAt.getTime() <= Date.now());
-
-    if (planExists && !isExpired) return user;
-
-    await clearUserSubscription(user._id, planExists ? 'expired' : 'canceled');
-
-    return (await UserModel.findById(user._id).exec()) ?? user;
+    return user;
   }
 
   async getPlans() {
@@ -123,46 +111,42 @@ export class SubscriptionService {
     const requestedPlanId = input.planId && input.planId !== 'all' ? input.planId : undefined;
 
     if (input.status && input.status !== 'all') {
-      filter.subscriptionStatus = input.status;
-    } else {
-      filter.subscriptionStatus = { $ne: 'none' };
+      filter.status = input.status;
     }
 
     if (requestedPlanId) {
-      const matchingSubscriptions = await UserSubscriptionModel.find({ planId: requestedPlanId }).select('_id').lean().exec();
-      filter.$or = [
-        { subscriptionPlan: requestedPlanId },
-        { currentSubscriptionId: { $in: matchingSubscriptions.map((subscription) => subscription._id) } },
-      ];
+      filter.planId = requestedPlanId;
     }
 
     const [items, total] = await Promise.all([
-      UserModel.find(filter)
-        .select('email profile currentSubscriptionId subscriptionPlan subscriptionStatus subscriptionExpiresAt subscriptionProvider subscriptionPaymentId createdAt updatedAt')
-        .populate('currentSubscriptionId')
+      UserSubscriptionModel.find(filter)
+        .populate({ path: 'userId', select: 'email profile createdAt' })
         .sort({ updatedAt: -1, createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(limit)
         .lean()
         .exec(),
-      UserModel.countDocuments(filter).exec(),
+      UserSubscriptionModel.countDocuments(filter).exec(),
     ]);
 
     return {
-      items: items.map((user) => ({
-        id: user._id.toString(),
-        email: user.email,
-        displayName: user.profile?.displayName || user.profile?.username || user.email.split('@')[0],
-        username: user.profile?.username,
-        avatarUrl: user.profile?.photoUrl,
-        plan: getSubscriptionPlanId(user),
-        status: getSubscriptionStatus(user),
-        expiresAt: getSubscriptionExpiresAt(user),
-        provider: getSubscriptionProvider(user),
-        paymentId: getSubscriptionPaymentId(user),
-        isPremium: isSubscriptionPremium(user),
-        updatedAt: user.updatedAt ? user.updatedAt.toISOString() : undefined,
-      })),
+      items: items.map((sub: any) => {
+        const user = sub.userId;
+        return {
+          id: user?._id?.toString() || sub._id.toString(),
+          email: user?.email || '',
+          displayName: user?.profile?.displayName || user?.profile?.username || user?.email?.split('@')[0] || 'Unknown',
+          username: user?.profile?.username,
+          avatarUrl: user?.profile?.photoUrl,
+          plan: sub.planId,
+          status: sub.status,
+          expiresAt: sub.expiresAt ? sub.expiresAt.toISOString() : undefined,
+          provider: sub.provider,
+          paymentId: sub.providerSubscriptionId,
+          isPremium: sub.status === 'active' && (sub.interval === 'lifetime' || (sub.expiresAt && new Date(sub.expiresAt).getTime() > Date.now())),
+          updatedAt: sub.updatedAt ? sub.updatedAt.toISOString() : undefined,
+        };
+      }),
       pagination: {
         page,
         limit,
@@ -174,7 +158,7 @@ export class SubscriptionService {
 
   async updateSubscriberStatusForAdmin(userId: string, input: AdminUpdateSubscriberStatusInput) {
     const user = await UserModel.findById(userId)
-      .select('email profile currentSubscriptionId subscriptionPlan subscriptionStatus subscriptionExpiresAt subscriptionProvider subscriptionPaymentId updatedAt')
+      .select('email profile currentSubscriptionId updatedAt')
       .populate('currentSubscriptionId')
       .exec();
 
@@ -182,7 +166,7 @@ export class SubscriptionService {
       throw new NotFoundError('Subscriber was not found.');
     }
 
-    if (!getSubscriptionPlanId(user) && input.status === 'active') {
+    if (!user.currentSubscriptionId && input.status === 'active') {
       throw new BadRequestError('Subscriber does not have a subscription plan to activate.', {
         code: 'SUBSCRIPTION_PLAN_MISSING',
       });
@@ -200,7 +184,6 @@ export class SubscriptionService {
       ).exec();
     }
 
-    user.subscriptionStatus = input.status;
     await user.save();
     await user.populate('currentSubscriptionId');
 
@@ -331,64 +314,43 @@ export class SubscriptionService {
   }
 
   async getCurrentSubscription(userId: string) {
-    const user = await UserModel.findById(userId)
-      .select('currentSubscriptionId subscriptionPlan subscriptionStatus subscriptionExpiresAt subscriptionProvider subscriptionPaymentId')
-      .populate('currentSubscriptionId')
-      .exec();
-
-    if (!user) {
-      throw new NotFoundError('User was not found.');
-    }
-
-    const isPremium = isSubscriptionPremium(user);
-
-    if (user.subscriptionStatus === 'active' && !isPremium) {
-      await UserModel.updateOne({ _id: userId }, { $set: { subscriptionStatus: 'expired' } }).exec();
-      user.subscriptionStatus = 'expired';
-    }
-
+    const user = await UserModel.findById(userId).populate('currentSubscriptionId').exec();
+    if (!user) throw new NotFoundError('User was not found.');
+    
+    const sub = user.currentSubscriptionId as any;
+    
     return {
-      plan: getSubscriptionPlanId(user),
-      status: getSubscriptionStatus(user),
-      expiresAt: getSubscriptionExpiresAt(user),
-      provider: getSubscriptionProvider(user),
-      paymentId: getSubscriptionPaymentId(user),
-      isPremium,
+      plan: sub?.planId,
+      status: sub?.status ?? 'none',
+      expiresAt: sub?.expiresAt ? new Date(sub.expiresAt).toISOString() : undefined,
+      provider: sub?.provider,
+      paymentId: sub?.providerSubscriptionId,
+      isPremium: sub ? isUserSubscriptionPremium(sub) : false,
     };
   }
 
   async cancelCurrentSubscription(userId: string) {
-    const user = await UserModel.findById(userId)
-      .select('currentSubscriptionId subscriptionPlan subscriptionStatus subscriptionExpiresAt subscriptionProvider subscriptionPaymentId')
-      .populate('currentSubscriptionId')
-      .exec();
+    const user = await UserModel.findById(userId).populate('currentSubscriptionId').exec();
+    if (!user) throw new NotFoundError('User was not found.');
 
-    if (!user) {
-      throw new NotFoundError('User was not found.');
+    const sub = user.currentSubscriptionId as any;
+    if (!sub || (sub.status !== 'active' && sub.status !== 'hold')) {
+      throw new BadRequestError('There is no active subscription to cancel.', { code: 'SUBSCRIPTION_NOT_ACTIVE' });
     }
 
-    if (getSubscriptionStatus(user) !== 'active' && getSubscriptionStatus(user) !== 'hold') {
-      throw new BadRequestError('There is no active subscription to cancel.', {
-        code: 'SUBSCRIPTION_NOT_ACTIVE',
-      });
-    }
-
-    if (user.currentSubscriptionId) {
-      await UserSubscriptionModel.updateOne(
-        { _id: user.currentSubscriptionId },
-        { $set: { status: 'canceled', canceledAt: new Date() } },
-      ).exec();
-    }
-
-    user.subscriptionStatus = 'canceled';
-    await user.save();
+    await UserSubscriptionModel.updateOne(
+      { _id: sub._id },
+      { $set: { status: 'canceled', canceledAt: new Date() } }
+    ).exec();
+    
+    sub.status = 'canceled';
 
     return {
-      plan: getSubscriptionPlanId(user),
-      status: user.subscriptionStatus,
-      expiresAt: getSubscriptionExpiresAt(user),
-      provider: getSubscriptionProvider(user),
-      paymentId: getSubscriptionPaymentId(user),
+      plan: sub.planId,
+      status: sub.status,
+      expiresAt: sub.expiresAt ? new Date(sub.expiresAt).toISOString() : undefined,
+      provider: sub.provider,
+      paymentId: sub.providerSubscriptionId,
       isPremium: false,
     };
   }
@@ -439,16 +401,7 @@ export class SubscriptionService {
 
     await UserModel.updateOne(
       { _id: userId },
-      {
-        $set: {
-          currentSubscriptionId: subscription._id,
-          subscriptionPlan: plan.id,
-          subscriptionStatus: 'active',
-          ...(expiresAt ? { subscriptionExpiresAt: expiresAt } : {}),
-          subscriptionProvider: 'revenuecat',
-          subscriptionPaymentId: entitlement?.product_identifier || input.productIdentifier,
-        },
-      },
+      { $set: { currentSubscriptionId: subscription._id } }
     ).exec();
 
     return {
@@ -577,17 +530,7 @@ export class SubscriptionService {
 
     await UserModel.updateOne(
       { _id: userId },
-      {
-        $set: {
-          currentSubscriptionId: subscription._id,
-          subscriptionPlan: plan.id,
-          subscriptionStatus: 'active',
-          subscriptionProvider: 'stripe',
-          subscriptionPaymentId: paymentIntent.id,
-          ...(expiresAt ? { subscriptionExpiresAt: expiresAt } : {}),
-        },
-        ...(expiresAt ? {} : { $unset: { subscriptionExpiresAt: '' } }),
-      },
+      { $set: { currentSubscriptionId: subscription._id } }
     ).exec();
 
     return {
@@ -732,20 +675,8 @@ function isSubscriptionPremium(user: any) {
   return Boolean(user.subscriptionExpiresAt && user.subscriptionExpiresAt.getTime() > Date.now());
 }
 
-async function clearUserSubscription(userId: any, status: 'expired' | 'canceled' = 'expired') {
-  await UserModel.updateOne(
-    { _id: userId },
-    {
-      $set: { subscriptionStatus: status },
-      $unset: {
-        currentSubscriptionId: '',
-        subscriptionPlan: '',
-        subscriptionExpiresAt: '',
-        subscriptionProvider: '',
-        subscriptionPaymentId: '',
-      },
-    },
-  ).exec();
+async function clearUserSubscription(userId: any) {
+  await UserModel.updateOne({ _id: userId }, { $unset: { currentSubscriptionId: '' } }).exec();
 }
 
 type RevenueCatSubscriberResponse = {

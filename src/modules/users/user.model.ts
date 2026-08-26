@@ -43,11 +43,7 @@ export interface User {
   stripeConnectAccountId?: string;
   stripeConnectOnboardingComplete: boolean;
   currentSubscriptionId?: Types.ObjectId;
-  subscriptionPlan?: string;
-  subscriptionStatus: 'none' | 'active' | 'expired' | 'canceled' | 'hold';
-  subscriptionExpiresAt?: Date;
-  subscriptionProvider?: 'revenuecat' | 'apple_pay' | 'stripe';
-  subscriptionPaymentId?: string;
+
   preferredLanguageCode?: string;
   profile: UserProfile;
   kidsModePin?: string;
@@ -121,16 +117,7 @@ const userSchema = new Schema<User>(
     stripeConnectAccountId: { type: String, trim: true, sparse: true },
     stripeConnectOnboardingComplete: { type: Boolean, default: false, required: true },
     currentSubscriptionId: { type: Schema.Types.ObjectId, ref: 'UserSubscription' },
-    subscriptionPlan: { type: String, trim: true },
-    subscriptionStatus: {
-      type: String,
-      enum: ['none', 'active', 'expired', 'canceled', 'hold'],
-      default: 'none',
-      required: true,
-    },
-    subscriptionExpiresAt: { type: Date },
-    subscriptionProvider: { type: String, enum: ['revenuecat', 'apple_pay', 'stripe'], trim: true },
-    subscriptionPaymentId: { type: String, trim: true },
+
     preferredLanguageCode: { type: String, trim: true, lowercase: true, maxlength: 12 },
     profile: { type: userProfileSchema, default: () => ({ isSetupComplete: false }) },
     kidsModePin: { type: String, trim: true, select: false },
@@ -145,7 +132,7 @@ const userSchema = new Schema<User>(
 userSchema.index({ 'profile.username': 1 }, { unique: true, sparse: true });
 userSchema.index({ status: 1, role: 1 });
 userSchema.index({ currentSubscriptionId: 1 });
-userSchema.index({ subscriptionStatus: 1, subscriptionExpiresAt: 1 });
+
 
 export const UserModel: Model<User> =
   (mongoose.models.User as Model<User> | undefined) ?? model<User>('User', userSchema);

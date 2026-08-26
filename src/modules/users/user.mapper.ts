@@ -34,9 +34,9 @@ export interface PublicUserDto {
 export function toPublicUser(user: UserDocument): PublicUserDto {
   const profile = user.profile;
   const currentSubscription = resolveCurrentSubscription(user);
-  const subscriptionPlan = currentSubscription?.planId ?? user.subscriptionPlan;
-  const subscriptionStatus = currentSubscription?.status ?? user.subscriptionStatus ?? 'none';
-  const subscriptionExpiresAt = currentSubscription?.expiresAt ?? user.subscriptionExpiresAt;
+  const subscriptionPlan = currentSubscription?.planId;
+  const subscriptionStatus = currentSubscription?.status ?? 'none';
+  const subscriptionExpiresAt = currentSubscription?.expiresAt;
   const isPremium = isActivePremiumSubscription({
     ...(subscriptionPlan ? { plan: subscriptionPlan } : {}),
     status: subscriptionStatus,
