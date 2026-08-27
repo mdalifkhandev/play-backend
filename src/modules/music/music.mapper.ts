@@ -66,7 +66,15 @@ function optionalUrl(value: unknown): string | null {
 
   try {
     const parsed = new URL(candidate);
-    return ['http:', 'https:'].includes(parsed.protocol) ? parsed.toString() : null;
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return null;
+    }
+
+    if (parsed.protocol === 'http:') {
+      parsed.protocol = 'https:';
+    }
+
+    return parsed.toString();
   } catch {
     return null;
   }
