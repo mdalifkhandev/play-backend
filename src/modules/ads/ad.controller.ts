@@ -1,7 +1,9 @@
 import type { Request, Response } from 'express';
+import { createHash } from 'node:crypto';
 
 import { sendSuccess } from '../../common/responses/api-response.js';
 import { asyncHandler } from '../../common/utils/async-handler.js';
+import type { AdMetricActor } from './ad.repository.js';
 import { adService } from './ad.service.js';
 
 export class AdController {
@@ -36,12 +38,12 @@ export class AdController {
   });
 
   recordImpression = asyncHandler(async (request: Request, response: Response) => {
-    const result = await adService.recordImpression(param(request, 'adId'));
+    const result = await adService.recordImpression(param(request, 'adId'), metricActor(request));
     return sendSuccess(response, 200, 'Ad impression recorded.', result);
   });
 
   recordClick = asyncHandler(async (request: Request, response: Response) => {
-    const result = await adService.recordClick(param(request, 'adId'));
+    const result = await adService.recordClick(param(request, 'adId'), metricActor(request));
     return sendSuccess(response, 200, 'Ad click recorded.', result);
   });
 
@@ -80,4 +82,17 @@ export const adController = new AdController();
 function param(request: Request, name: string): string {
   const value = request.params[name];
   return typeof value === 'string' ? value : '';
+}
+
+function metricActor(request: Request): AdMetricActor {
+  if (request.user?.userId) {
+    return { userId: request.user.userId };
+  }
+
+  const userAgent = request.get('user-agent') || 'unknown-agent';
+  const forwardedFor = request.get('x-forwarded-for') || '';
+  const source = `${request.ip}|${forwardedFor}|${userAgent}`;
+  return {
+    anonymousKey: createHash('sha256').update(source).digest('hex'),
+  };
 }

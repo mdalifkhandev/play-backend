@@ -3,6 +3,7 @@ import { NotFoundError } from '../../common/errors/not-found-error.js';
 import { adminNotificationService } from '../notifications/admin-notification.service.js';
 import {
   adRepository,
+  type AdMetricActor,
   type AdRepository,
 } from './ad.repository.js';
 import type { AdCampaignDocument, AdCampaignStatus } from './ad-campaign.model.js';
@@ -57,16 +58,14 @@ export class AdService {
     };
   }
 
-  async recordImpression(adId: string) {
+  async recordImpression(adId: string, actor: AdMetricActor) {
     await this.requireAd(adId);
-    await this.ads.incrementMetric(adId, 'impressions');
-    return { recorded: true };
+    return this.ads.recordMetric(adId, 'impression', actor);
   }
 
-  async recordClick(adId: string) {
+  async recordClick(adId: string, actor: AdMetricActor) {
     await this.requireAd(adId);
-    await this.ads.incrementMetric(adId, 'clicks');
-    return { recorded: true };
+    return this.ads.recordMetric(adId, 'click', actor);
   }
 
   async listForAdmin(query: ListAdsQuery) {

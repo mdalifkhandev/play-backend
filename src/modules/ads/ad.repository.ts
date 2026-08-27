@@ -1,11 +1,24 @@
-import type { Types } from 'mongoose';
+import { Types } from 'mongoose';
 
 import {
   AdCampaignModel,
   type AdCampaignDocument,
   type AdCampaignStatus,
 } from './ad-campaign.model.js';
+import { AdEventModel, type AdEventType } from './ad-event.model.js';
 import type { CreateAdCampaignInput, ListAdsQuery } from './ad.validation.js';
+
+export type AdMetricActor = {
+  userId?: string;
+  anonymousKey?: string;
+};
+
+export type AdMetricResult = {
+  recorded: boolean;
+  duplicate: boolean;
+  completed: boolean;
+  spendUsd: number;
+};
 
 export class AdRepository {
   async create(ownerId: string, input: CreateAdCampaignInput): Promise<AdCampaignDocument> {
@@ -79,11 +92,63 @@ export class AdRepository {
       .exec();
   }
 
-  async incrementMetric(adId: string, metric: 'impressions' | 'clicks'): Promise<void> {
+  async recordMetric(
+    adId: string,
+    type: AdEventType,
+    actor: AdMetricActor,
+  ): Promise<AdMetricResult> {
+    const ad = await AdCampaignModel.findOne({
+      _id: adId,
+      status: 'active',
+      placement: 'feed',
+      $or: [{ startsAt: { $exists: false } }, { startsAt: { $lte: new Date() } }],
+      $and: [{ $or: [{ endsAt: { $exists: false } }, { endsAt: { $gt: new Date() } }] }],
+    }).exec();
+
+    if (!ad) {
+      return { recorded: false, duplicate: false, completed: false, spendUsd: 0 };
+    }
+
+    const eventPayload = {
+      adId: ad._id,
+      type,
+      ...(actor.userId ? { userId: new Types.ObjectId(actor.userId) } : {}),
+      ...(actor.anonymousKey ? { anonymousKey: actor.anonymousKey } : {}),
+    };
+
+    try {
+      await AdEventModel.create(eventPayload);
+    } catch (error) {
+      if (isDuplicateKeyError(error)) {
+        return { recorded: false, duplicate: true, completed: ad.status === 'completed', spendUsd: 0 };
+      }
+      throw error;
+    }
+
+    if (type === 'click') {
+      await AdCampaignModel.updateOne({ _id: ad._id }, { $inc: { 'metrics.clicks': 1 } }).exec();
+      return { recorded: true, duplicate: false, completed: false, spendUsd: 0 };
+    }
+
+    const currentSpend = ad.metrics?.spendUsd || 0;
+    const perImpressionSpend = ad.targetUsers > 0 ? ad.budgetUsd / ad.targetUsers : 0;
+    const spendUsd = Math.max(0, Math.min(perImpressionSpend, ad.budgetUsd - currentSpend));
+    const nextImpressions = (ad.metrics?.impressions || 0) + 1;
+    const nextSpend = currentSpend + spendUsd;
+    const completed = nextImpressions >= ad.targetUsers || nextSpend >= ad.budgetUsd;
+
     await AdCampaignModel.updateOne(
-      { _id: adId },
-      { $inc: { [`metrics.${metric}`]: 1 } },
+      { _id: ad._id },
+      {
+        $inc: {
+          'metrics.impressions': 1,
+          'metrics.spendUsd': spendUsd,
+        },
+        ...(completed ? { $set: { status: 'completed' } } : {}),
+      },
     ).exec();
+
+    return { recorded: true, duplicate: false, completed, spendUsd };
   }
 
   async updateStatus(
@@ -134,6 +199,13 @@ export class AdRepository {
 }
 
 export const adRepository = new AdRepository();
+
+function isDuplicateKeyError(error: unknown): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && (error as { code?: number }).code === 11000;
+}
 
 function targetUsersFromBudget(budgetUsd: number): number {
   if (budgetUsd >= 500) return 10000;

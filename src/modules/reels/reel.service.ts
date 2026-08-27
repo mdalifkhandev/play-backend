@@ -815,7 +815,10 @@ export class ReelService {
         {
           status: LIVE_STREAM_STATUS.ENDED,
           'recording.status': 'stopped',
-          'recording.fileList': { $exists: true },
+          $or: [
+            { 'recording.fileList': { $exists: true } },
+            { 'recording.cloudinaryUrl': { $exists: true, $ne: '' } },
+          ],
         },
       ],
     })
@@ -856,7 +859,9 @@ export class ReelService {
   private mapLiveStreamToFeedItem(stream: ILiveStream): ReelFeedItemDto | null {
     const host = stream.hostId as any;
     const isLive = stream.status === LIVE_STREAM_STATUS.LIVE;
-    const replayUrl = isLive ? null : this.resolveRecordingPlaybackUrl(stream.recording?.fileList);
+    const replayUrl = isLive
+      ? null
+      : stream.recording?.cloudinaryUrl || this.resolveRecordingPlaybackUrl(stream.recording?.fileList);
 
     if (!isLive && !replayUrl) {
       return null;
@@ -924,18 +929,34 @@ export class ReelService {
   }
 
   private resolveRecordingPlaybackUrl(fileList: unknown): string | null {
-    const baseUrl = env.AGORA_RECORDING_PUBLIC_BASE_URL?.replace(/\/+$/, '');
-    if (!baseUrl) return null;
+    const urls = new Set<string>();
+    const queue: unknown[] = [fileList];
 
-    const files = Array.isArray(fileList) ? fileList : [];
-    const preferred = files.find((file) => {
-      const fileName = typeof file === 'string' ? file : (file as any)?.fileName;
-      return typeof fileName === 'string' && /\.(mp4|m3u8)$/i.test(fileName);
-    });
-    const fileName = typeof preferred === 'string' ? preferred : (preferred as any)?.fileName;
-    if (typeof fileName !== 'string') return null;
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current) continue;
 
-    return `${baseUrl}/${fileName.replace(/^\/+/, '')}`;
+      if (typeof current === 'string') {
+        addRecordingPlaybackUrl(urls, current);
+        continue;
+      }
+
+      if (Array.isArray(current)) {
+        queue.push(...current);
+        continue;
+      }
+
+      if (typeof current === 'object') {
+        const record = current as Record<string, unknown>;
+        for (const key of ['url', 'fileUrl', 'fileURL', 'downloadUrl', 'playUrl', 'location', 'fileName']) {
+          const value = record[key];
+          if (typeof value === 'string') addRecordingPlaybackUrl(urls, value);
+        }
+        queue.push(...Object.values(record));
+      }
+    }
+
+    return [...urls].sort((left, right) => recordingUrlRank(left) - recordingUrlRank(right))[0] ?? null;
   }
 
   private async requirePublishableAsset(
@@ -1160,6 +1181,29 @@ function isActivePremiumSubscription(subscription?: {
     return true;
   }
   return Boolean(subscription.expiresAt && new Date(subscription.expiresAt).getTime() > Date.now());
+}
+
+function addRecordingPlaybackUrl(urls: Set<string>, value: string): void {
+  if (!isRecordingVideoPath(value)) return;
+  if (/^https?:\/\//i.test(value)) {
+    urls.add(value);
+    return;
+  }
+
+  const baseUrl = env.AGORA_RECORDING_PUBLIC_BASE_URL?.replace(/\/+$/, '');
+  if (!baseUrl) return;
+
+  urls.add(`${baseUrl}/${value.replace(/^\/+/, '')}`);
+}
+
+function isRecordingVideoPath(value: string): boolean {
+  return /\.(mp4|m3u8|mov|webm)(\?|$)/i.test(value);
+}
+
+function recordingUrlRank(value: string): number {
+  if (/\.mp4(\?|$)/i.test(value)) return 0;
+  if (/\.m3u8(\?|$)/i.test(value)) return 1;
+  return 2;
 }
 
 function validateIdempotencyKey(value: string | undefined): string {

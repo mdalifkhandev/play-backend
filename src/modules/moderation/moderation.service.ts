@@ -5,6 +5,7 @@ import { AppError } from '../../common/errors/app-error.js';
 import { NotFoundError } from '../../common/errors/not-found-error.js';
 import { CommentModel } from '../engagement/comment/comment.model.js';
 import { adminNotificationService } from '../notifications/admin-notification.service.js';
+import { notificationService } from '../notifications/notification.service.js';
 import { ReelStatus } from '../reels/reel.constants.js';
 import { ReelModel } from '../reels/reel.model.js';
 import { LiveStreamModel } from '../live-streams/live-stream.model.js';
@@ -99,6 +100,10 @@ export class ModerationService {
     report.reviewedAt = new Date();
     await report.save();
 
+    if (report.ownerId && action !== 'keep') {
+      await this.notifyOwnerAboutAction(report.ownerId, report.targetId, report.targetType, action, reason);
+    }
+
     return { id: report._id.toString(), status: report.status, action: report.action };
   }
 
@@ -152,6 +157,46 @@ export class ModerationService {
 
   private async updateUserStatus(userId: string, status: AccountStatus): Promise<void> {
     await UserModel.updateOne({ _id: userId }, { $set: { status } }).exec();
+  }
+
+  private async notifyOwnerAboutAction(
+    ownerId: Types.ObjectId,
+    targetId: Types.ObjectId,
+    targetType: ModerationTargetType,
+    action: ModerationReportAction,
+    reason?: string,
+  ): Promise<void> {
+    const title = action === 'warn'
+      ? 'Account warning'
+      : action === 'remove'
+        ? 'Content removed'
+        : action === 'suspend'
+          ? 'Account suspended'
+          : action === 'ban'
+            ? 'Account banned'
+            : 'Moderation action taken';
+
+    const body = reason
+      ? `${title}: ${reason}`
+      : `${title}. Please review our community guidelines.`;
+
+    await notificationService.createNotification({
+      userId: ownerId,
+      type: 'system',
+      source: 'moderator',
+      title,
+      body,
+      relatedEntityId: targetId,
+      data: {
+        targetType,
+        action,
+        deepLink: targetType === 'reel'
+          ? `/screens/reel/${targetId.toString()}`
+          : targetType === 'live_stream'
+            ? '/(tab)/home'
+            : '/notification',
+      },
+    });
   }
 
   private async mapAdminReport(report: any) {
