@@ -118,6 +118,20 @@ export class NotificationRepository {
     return NotificationModel.insertMany(items.map((item) => ({ ...item, isRead: false })));
   }
 
+  async attachDeliverySummary(
+    notificationIds: readonly Types.ObjectId[],
+    summary: Record<string, unknown>,
+  ): Promise<void> {
+    if (notificationIds.length === 0) {
+      return;
+    }
+
+    await NotificationModel.updateMany(
+      { _id: { $in: notificationIds }, source: { $in: ['admin', 'moderator'] } },
+      { $set: { 'data.delivery': summary } },
+    ).exec();
+  }
+
   async getUserNotifications(
     userId: string | Types.ObjectId,
     limit: number,

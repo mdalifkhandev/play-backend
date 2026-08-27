@@ -61,22 +61,19 @@ export class SubscriptionService {
   async normalizeUserSubscription(user: any) {
     if (user.currentSubscriptionId) {
       const currentSubscription = await UserSubscriptionModel.findById(user.currentSubscriptionId).lean().exec();
-      const isCurrentPremium = currentSubscription ? isUserSubscriptionPremium(currentSubscription as any) : false;
+      if (!currentSubscription) {
+        await clearUserSubscription(user._id);
+        return (await UserModel.findById(user._id).populate('currentSubscriptionId').exec()) ?? user;
+      }
 
-      if (isCurrentPremium) return user;
+      if (!isUserSubscriptionPremium(currentSubscription as any) && currentSubscription.status === 'active') {
+        await UserSubscriptionModel.updateOne(
+          { _id: user.currentSubscriptionId, status: 'active' },
+          { $set: { status: 'expired' } },
+        ).exec();
+      }
 
-      await UserSubscriptionModel.updateOne(
-        { _id: user.currentSubscriptionId, status: 'active' },
-        {
-          $set: {
-            status: currentSubscription ? 'expired' : 'canceled',
-            ...(currentSubscription ? {} : { canceledAt: new Date() }),
-          },
-        },
-      ).exec();
-
-      await clearUserSubscription(user._id);
-      return (await UserModel.findById(user._id).exec()) ?? user;
+      return (await UserModel.findById(user._id).populate('currentSubscriptionId').exec()) ?? user;
     }
 
     return user;
@@ -245,7 +242,7 @@ export class SubscriptionService {
     if (Object.keys(unset).length) update.$unset = unset;
 
     const updated = await SubscriptionPlanModel.findOneAndUpdate(
-      { planId },
+      { planId, isDeleted: { $ne: true } },
       update,
       { new: true, runValidators: true },
     )
@@ -264,7 +261,7 @@ export class SubscriptionService {
   async deletePlan(planId: SubscriptionPlanId) {
     const deleted = await SubscriptionPlanModel.findOneAndUpdate(
       { planId, isDeleted: { $ne: true } },
-      { $set: { isDeleted: true, isActive: false } },
+      { $set: { isDeleted: true, isActive: false, deletedAt: new Date() } },
       { new: false },
     ).lean().exec();
 
@@ -278,7 +275,8 @@ export class SubscriptionService {
   }
 
   async getCurrentSubscription(userId: string) {
-    const user = await UserModel.findById(userId).populate('currentSubscriptionId').exec();
+    const foundUser = await UserModel.findById(userId).exec();
+    const user = foundUser ? await this.normalizeUserSubscription(foundUser) : null;
     if (!user) throw new NotFoundError('User was not found.');
     
     const sub = user.currentSubscriptionId as any;
@@ -518,7 +516,11 @@ export const subscriptionService = new SubscriptionService();
 
 async function getPlan(planId: SubscriptionPlanId): Promise<SubscriptionPlan> {
   await ensureDefaultPlans();
-  const plan = await SubscriptionPlanModel.findOne({ planId, isActive: true }).lean().exec();
+  const plan = await SubscriptionPlanModel.findOne({
+    planId,
+    isActive: true,
+    isDeleted: { $ne: true },
+  }).lean().exec();
   if (!plan) {
     throw new NotFoundError('Subscription plan was not found.');
   }

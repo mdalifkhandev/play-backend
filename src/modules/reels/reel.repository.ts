@@ -15,11 +15,15 @@ import {
 } from './reel.model.js';
 import { ReelViewModel } from './reel-view.model.js';
 
-const OWNER_PROJECTION = '_id email status profile.displayName profile.username profile.photoUrl subscriptionPlan subscriptionStatus subscriptionExpiresAt';
+const OWNER_PROJECTION = '_id email status profile.displayName profile.username profile.photoUrl currentSubscriptionId';
 const OWNER_POPULATE = {
   path: 'ownerId',
   select: OWNER_PROJECTION,
   match: { status: AccountStatus.ACTIVE },
+  populate: {
+    path: 'currentSubscriptionId',
+    select: 'planId interval status expiresAt',
+  },
 };
 const FOR_YOU_REPORT_THRESHOLD = 3;
 

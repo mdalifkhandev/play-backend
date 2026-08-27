@@ -6,9 +6,12 @@ import type { Reel } from './reel.model.js';
 export interface PopulatedReelOwner {
   _id: Types.ObjectId;
   email?: string;
-  subscriptionPlan?: string;
-  subscriptionStatus?: 'none' | 'active' | 'expired' | 'canceled';
-  subscriptionExpiresAt?: Date;
+  currentSubscriptionId?: {
+    planId?: string;
+    interval?: string;
+    status?: 'none' | 'active' | 'expired' | 'canceled' | 'hold';
+    expiresAt?: Date;
+  };
   profile?: {
     displayName?: string;
     username?: string;
@@ -205,13 +208,7 @@ export function toReelFeedItemDto(
   const owner = isPopulatedOwner(reel.ownerId) ? reel.ownerId : undefined;
   const ownerId = owner?._id.toString() ?? reel.ownerId.toString();
   const profile = owner?.profile;
-  const isPremium = Boolean(
-    owner?.subscriptionStatus === 'active' &&
-    (
-      owner.subscriptionPlan?.toLowerCase().includes('lifetime') ||
-      (owner.subscriptionExpiresAt && owner.subscriptionExpiresAt.getTime() > Date.now())
-    ),
-  );
+  const isPremium = isActivePremiumSubscription(owner?.currentSubscriptionId);
 
   const videoUrl = reel.processedMedia?.secureUrl || reel.rawMedia?.secureUrl || '';
   const thumbnailUrl = reel.thumbnail?.secureUrl || reel.rawMedia?.secureUrl || '';
@@ -281,6 +278,19 @@ export function toReelFeedItemDto(
     createdAt: reel.createdAt ? reel.createdAt.toISOString() : new Date().toISOString(),
     publishedAt: (reel.publishedAt ?? reel.createdAt ?? new Date()).toISOString(),
   };
+}
+
+function isActivePremiumSubscription(subscription?: {
+  planId?: string;
+  interval?: string;
+  status?: string;
+  expiresAt?: Date;
+}) {
+  if (!subscription || subscription.status !== 'active') return false;
+  if (subscription.interval === 'lifetime' || subscription.planId?.toLowerCase().includes('lifetime')) {
+    return true;
+  }
+  return Boolean(subscription.expiresAt && new Date(subscription.expiresAt).getTime() > Date.now());
 }
 
 function isPopulatedOwner(

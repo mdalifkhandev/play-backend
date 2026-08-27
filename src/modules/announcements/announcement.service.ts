@@ -1,4 +1,6 @@
 import { NotFoundError } from '../../common/errors/not-found-error.js';
+import { UserRole } from '../../common/enums/user-role.enum.js';
+import { UserModel } from '../users/user.model.js';
 import { announcementRepository } from './announcement.repository.js';
 import type { AnnouncementDocument } from './announcement.model.js';
 import type {
@@ -31,12 +33,20 @@ export class AnnouncementService {
     };
   }
 
-  async listActive() {
+  async listActive(userId?: string) {
     await this.syncTimedStatuses();
 
-    return cacheService.getOrSet(cacheKeys.activeAnnouncements, ACTIVE_ANNOUNCEMENT_CACHE_TTL_SECONDS, async () => {
+    const items = await cacheService.getOrSet(cacheKeys.activeAnnouncements, ACTIVE_ANNOUNCEMENT_CACHE_TTL_SECONDS, async () => {
       const items = await announcementRepository.findActiveForUser();
       return items.map(mapAnnouncement);
+    });
+
+    const audience = await this.resolveAudience(userId);
+    return items.filter((item) => {
+      if (item.placement === 'maintenance' || item.audience === 'all') return true;
+      if (item.audience === 'creators') return audience.isCreator;
+      if (item.audience === 'premium') return audience.isPremium;
+      return false;
     });
   }
 
@@ -78,6 +88,28 @@ export class AnnouncementService {
     }
     return result;
   }
+
+  private async resolveAudience(userId?: string) {
+    if (!userId) return { isCreator: false, isPremium: false };
+
+    const user = await UserModel.findById(userId)
+      .select('role currentSubscriptionId')
+      .populate('currentSubscriptionId', 'planId interval status expiresAt')
+      .lean()
+      .exec();
+
+    const subscription = user?.currentSubscriptionId as {
+      planId?: string;
+      interval?: string;
+      status?: string;
+      expiresAt?: Date;
+    } | undefined;
+
+    return {
+      isCreator: user?.role === UserRole.CREATOR,
+      isPremium: isActivePremiumSubscription(subscription),
+    };
+  }
 }
 
 function mapAnnouncement(item: AnnouncementDocument) {
@@ -99,3 +131,16 @@ function mapAnnouncement(item: AnnouncementDocument) {
 }
 
 export const announcementService = new AnnouncementService();
+
+function isActivePremiumSubscription(subscription?: {
+  planId?: string;
+  interval?: string;
+  status?: string;
+  expiresAt?: Date;
+}) {
+  if (!subscription || subscription.status !== 'active') return false;
+  if (subscription.interval === 'lifetime' || subscription.planId?.toLowerCase().includes('lifetime')) {
+    return true;
+  }
+  return Boolean(subscription.expiresAt && new Date(subscription.expiresAt).getTime() > Date.now());
+}

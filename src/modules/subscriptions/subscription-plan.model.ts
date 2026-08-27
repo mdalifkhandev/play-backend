@@ -12,6 +12,7 @@ export interface SubscriptionPlan {
   features: string[];
   isActive: boolean;
   isDeleted: boolean;
+  deletedAt?: Date;
   sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
@@ -46,12 +47,13 @@ const subscriptionPlanSchema = new Schema<SubscriptionPlan>(
     features: { type: [String], default: [], validate: { validator: (items: string[]) => items.length <= 20 } },
     isActive: { type: Boolean, default: true, required: true, index: true },
     isDeleted: { type: Boolean, default: false, required: true },
+    deletedAt: { type: Date },
     sortOrder: { type: Number, default: 0, required: true },
   },
   { timestamps: true, versionKey: false },
 );
 
-subscriptionPlanSchema.index({ isActive: 1, sortOrder: 1 });
+subscriptionPlanSchema.index({ isActive: 1, isDeleted: 1, sortOrder: 1 });
 
 export const SubscriptionPlanModel: Model<SubscriptionPlan> =
   (mongoose.models.SubscriptionPlan as Model<SubscriptionPlan> | undefined)

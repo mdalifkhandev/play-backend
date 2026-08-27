@@ -10,8 +10,8 @@ import type {
 } from './announcement.validation.js';
 
 export class AnnouncementController {
-  listActive = asyncHandler(async (_request: Request, response: Response) => {
-    const result = await announcementService.listActive();
+  listActive = asyncHandler(async (request: Request, response: Response) => {
+    const result = await announcementService.listActive(request.user?.userId);
     return sendSuccess(response, 200, 'Announcements retrieved successfully.', result);
   });
 

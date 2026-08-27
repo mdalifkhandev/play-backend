@@ -4,6 +4,7 @@ import { AccountStatus } from '../../common/enums/account-status.enum.js';
 import { UserRole } from '../../common/enums/user-role.enum.js';
 import { userRepository } from '../users/user.repository.js';
 import { UserModel } from '../users/user.model.js';
+import { UserSubscriptionModel } from '../subscriptions/user-subscription.model.js';
 import { firebasePushService, type PushSendResult } from './firebase-push.service.js';
 import {
   notificationRepository,
@@ -136,6 +137,17 @@ export class NotificationService {
     const tokens = tokenDocuments.map((token) => token.token);
 
     if (tokens.length === 0) {
+      await this.repository.attachDeliverySummary(
+        notifications.map((notification) => notification._id),
+        {
+          targetedUserCount: notifications.length,
+          targetedDeviceCount: 0,
+          successCount: 0,
+          failureCount: 0,
+          invalidTokenCount: 0,
+        },
+      );
+
       return {
         targetedUserCount: notifications.length,
         targetedDeviceCount: 0,
@@ -159,6 +171,16 @@ export class NotificationService {
     });
 
     await this.repository.deactivateTokens(result.invalidTokens);
+    await this.repository.attachDeliverySummary(
+      notifications.map((notification) => notification._id),
+      {
+        targetedUserCount: notifications.length,
+        targetedDeviceCount: tokens.length,
+        successCount: result.successCount,
+        failureCount: result.failureCount,
+        invalidTokenCount: result.invalidTokens.length,
+      },
+    );
 
     return {
       targetedUserCount: notifications.length,
@@ -322,7 +344,21 @@ export class NotificationService {
     }
 
     if (input.audience === 'premium') {
-      filter.subscriptionStatus = 'active';
+      const now = new Date();
+      const premiumUserIds = await UserSubscriptionModel.distinct('userId', {
+        status: 'active',
+        $or: [
+          { interval: 'lifetime' },
+          { planId: /lifetime/i },
+          { expiresAt: { $gt: now } },
+        ],
+      }).exec();
+
+      if (premiumUserIds.length === 0) {
+        return [];
+      }
+
+      filter._id = { $in: premiumUserIds };
     }
 
     if (input.audience === 'kids') {

@@ -821,7 +821,14 @@ export class ReelService {
     })
       .sort({ status: 1, startedAt: -1, endedAt: -1 })
       .limit(Math.min(5, Math.max(1, limit)))
-      .populate('hostId', 'profile email isVerified subscriptionPlan subscriptionStatus subscriptionExpiresAt')
+      .populate({
+        path: 'hostId',
+        select: 'profile email isVerified currentSubscriptionId',
+        populate: {
+          path: 'currentSubscriptionId',
+          select: 'planId interval status expiresAt',
+        },
+      })
       .exec();
 
     return streams
@@ -860,11 +867,7 @@ export class ReelService {
     const createdAt = stream.startedAt ?? stream.createdAt ?? new Date();
     const publishedAt = isLive ? createdAt : stream.endedAt ?? createdAt;
     const coverImage = stream.coverImage || profile?.photoUrl || '';
-    const isPremium = Boolean(
-      host?.subscriptionStatus === 'active' &&
-        (host.subscriptionPlan?.toLowerCase().includes('lifetime') ||
-          (host.subscriptionExpiresAt && host.subscriptionExpiresAt.getTime() > Date.now())),
-    );
+    const isPremium = isActivePremiumSubscription(host?.currentSubscriptionId);
 
     return {
       kind: isLive ? 'live' : 'live_replay',
@@ -1144,6 +1147,19 @@ export class ReelService {
       downloadUrl: input.soundUri,
     };
   }
+}
+
+function isActivePremiumSubscription(subscription?: {
+  planId?: string;
+  interval?: string;
+  status?: string;
+  expiresAt?: Date;
+}) {
+  if (!subscription || subscription.status !== 'active') return false;
+  if (subscription.interval === 'lifetime' || subscription.planId?.toLowerCase().includes('lifetime')) {
+    return true;
+  }
+  return Boolean(subscription.expiresAt && new Date(subscription.expiresAt).getTime() > Date.now());
 }
 
 function validateIdempotencyKey(value: string | undefined): string {
