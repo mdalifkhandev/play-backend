@@ -82,7 +82,7 @@ export class LiveStreamRepository {
     const skip = (options.page - 1) * options.limit;
     const filter: Record<string, unknown> = {
       status: LIVE_STREAM_STATUS.ENDED,
-      'recording.status': { $exists: true, $ne: 'disabled' },
+      'recording.status': { $exists: true },
     };
 
     const [streams, total] = await Promise.all([

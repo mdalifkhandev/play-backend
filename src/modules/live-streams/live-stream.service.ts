@@ -506,6 +506,11 @@ export class LiveStreamService {
 
   private async startRecordingInBackground(streamId: string, channelName: string): Promise<void> {
     if (!liveStreamRecordingService.isEnabled()) {
+      await this.repository.updateRecordingState(streamId, {
+        status: 'disabled',
+        mode: env.AGORA_RECORDING_MODE,
+        errorMessage: 'Agora cloud recording is disabled. Set AGORA_CLOUD_RECORDING_ENABLED=true and configure Agora recording storage to save live videos.',
+      });
       return;
     }
 
