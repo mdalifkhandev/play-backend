@@ -30,6 +30,7 @@ const redactionPaths = [
   'AGORA_RECORDING_STORAGE_ACCESS_KEY',
   'AGORA_RECORDING_STORAGE_SECRET_KEY',
   'BREVO_API_KEY',
+  'NODEMAIL_PASS',
   'signature',
   'uploadUrl',
   'audioSourceUrl',

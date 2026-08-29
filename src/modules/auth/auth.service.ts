@@ -79,31 +79,10 @@ export class AuthService {
       await legalConsentService.assertCurrentVersions(input.legalConsents);
     }
 
-    const user = await userRepository.create({
-      email: input.email,
-      passwordHash: await hashPassword(input.password),
-      status: AccountStatus.ACTIVE,
-      isEmailVerified: false,
-    });
-
-    if (input.legalConsents) {
-      await legalConsentService.acceptInitialConsents(
-        user._id.toString(),
-        input.legalConsents,
-        {
-          ...(context.ipAddress ? { ipAddress: context.ipAddress } : {}),
-          ...(context.userAgent ? { userAgent: context.userAgent } : {}),
-        },
-      );
-    }
-
-    const verification = await this.createAndDispatchCode(
-      user,
-      'email_verification',
-    );
+    const verification = await this.createAndDispatchPendingSignupCode(input, context);
 
     return {
-      user: toPublicUser(user),
+      user: this.pendingSignupUser(input.email),
       verification,
     };
   }
@@ -251,7 +230,29 @@ export class AuthService {
     const user = await userRepository.findByEmail(input.email);
 
     if (!user) {
-      throw this.invalidCodeError();
+      const pendingSignup = await this.requireValidPendingSignup(input.email, input.code);
+      const createdUser = await userRepository.create({
+        email: pendingSignup.email,
+        passwordHash: pendingSignup.passwordHash,
+        status: AccountStatus.ACTIVE,
+        isEmailVerified: true,
+      });
+
+      const verifiedUser = await userRepository.markEmailVerified(createdUser._id);
+      await authRepository.deletePendingSignup(pendingSignup._id);
+
+      if (pendingSignup.legalConsents) {
+        await legalConsentService.acceptInitialConsents(
+          createdUser._id.toString(),
+          pendingSignup.legalConsents as any,
+          {
+            ...(pendingSignup.ipAddress ? { ipAddress: pendingSignup.ipAddress } : {}),
+            ...(pendingSignup.userAgent ? { userAgent: pendingSignup.userAgent } : {}),
+          },
+        );
+      }
+
+      return { user: toPublicUser(verifiedUser ?? createdUser) };
     }
 
     const authCode = await this.requireValidCode(
@@ -276,16 +277,29 @@ export class AuthService {
     const user = await userRepository.findByEmail(input.email);
 
     if (!user) {
-      throw new UnauthorizedError('Email address not found.', {
-        code: AUTH_ERROR_CODES.EMAIL_NOT_FOUND,
-        fieldErrors: [
-          {
-            field: 'email',
-            message: 'Email address not found.',
-            code: AUTH_ERROR_CODES.EMAIL_NOT_FOUND,
-          },
-        ],
-      });
+      const pendingSignup = await authRepository.findPendingSignupByEmail(input.email);
+
+      if (!pendingSignup) {
+        throw new UnauthorizedError('Email address not found.', {
+          code: AUTH_ERROR_CODES.EMAIL_NOT_FOUND,
+          fieldErrors: [
+            {
+              field: 'email',
+              message: 'Email address not found.',
+              code: AUTH_ERROR_CODES.EMAIL_NOT_FOUND,
+            },
+          ],
+        });
+      }
+
+      return this.createAndDispatchPendingSignupCode({
+        email: pendingSignup.email,
+        password: '',
+        ...(pendingSignup.legalConsents ? { legalConsents: pendingSignup.legalConsents as any } : {}),
+      }, {
+        ...(pendingSignup.ipAddress ? { ipAddress: pendingSignup.ipAddress } : {}),
+        ...(pendingSignup.userAgent ? { userAgent: pendingSignup.userAgent } : {}),
+      }, pendingSignup.passwordHash);
     }
 
     if (user.isEmailVerified) {
@@ -767,6 +781,38 @@ export class AuthService {
     };
   }
 
+  private async createAndDispatchPendingSignupCode(
+    input: Pick<SignUpInput, 'email' | 'password' | 'legalConsents'>,
+    context: RequestContext,
+    existingPasswordHash?: string,
+  ): Promise<VerificationResult> {
+    const code = this.generateSixDigitCode();
+    const expiresAt = this.codeExpiresAt();
+
+    await authRepository.upsertPendingSignup({
+      email: input.email,
+      passwordHash: existingPasswordHash ?? await hashPassword(input.password),
+      ...(input.legalConsents ? { legalConsents: input.legalConsents } : {}),
+      ...(context.ipAddress ? { ipAddress: context.ipAddress } : {}),
+      ...(context.userAgent ? { userAgent: context.userAgent } : {}),
+      code,
+      expiresAt,
+    });
+
+    await mailService.sendAuthCode({
+      to: input.email,
+      code,
+      purpose: 'email_verification',
+      expiresInMinutes: env.AUTH_CODE_TTL_MINUTES,
+    });
+
+    return {
+      email: input.email,
+      expiresAt: expiresAt.toISOString(),
+      ...(env.NODE_ENV === 'production' ? {} : { devCode: code }),
+    };
+  }
+
   private async requireValidCode(
     email: string,
     purpose: AuthCodePurpose,
@@ -799,6 +845,61 @@ export class AuthService {
     }
 
     return authCode;
+  }
+
+  private async requireValidPendingSignup(
+    email: string,
+    code: string,
+  ) {
+    const pendingSignup = await authRepository.findPendingSignupByEmail(email);
+
+    if (!pendingSignup) {
+      throw this.invalidCodeError();
+    }
+
+    if (pendingSignup.attempts >= env.AUTH_MAX_CODE_ATTEMPTS) {
+      await authRepository.deletePendingSignup(pendingSignup._id);
+
+      throw new BadRequestError('Verification code has expired. Please request a new code.', {
+        code: AUTH_ERROR_CODES.CODE_EXPIRED,
+        fieldErrors: [
+          {
+            field: 'code',
+            message: 'Verification code has expired. Please request a new code.',
+            code: AUTH_ERROR_CODES.CODE_EXPIRED,
+          },
+        ],
+      });
+    }
+
+    if (sha256(code) !== pendingSignup.codeHash) {
+      await authRepository.incrementPendingSignupAttempts(pendingSignup);
+      throw this.invalidCodeError();
+    }
+
+    return pendingSignup;
+  }
+
+  private pendingSignupUser(email: string): PublicUserDto {
+    const now = new Date().toISOString();
+    return {
+      id: '',
+      email,
+      role: 'user',
+      status: AccountStatus.ACTIVE,
+      isEmailVerified: false,
+      coinBalance: 0,
+      stripeConnectOnboardingComplete: false,
+      subscription: {
+        status: 'none',
+        isPremium: false,
+      },
+      profile: {
+        isSetupComplete: false,
+      },
+      createdAt: now,
+      updatedAt: now,
+    };
   }
 
   private invalidCodeError(): BadRequestError {

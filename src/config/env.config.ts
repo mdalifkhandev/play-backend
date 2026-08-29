@@ -70,6 +70,8 @@ const environmentSchema = z
     BREVO_API_KEY: z.string().trim().min(1).optional(),
     BREVO_TIMEOUT_SECONDS: z.coerce.number().int().positive().default(30),
     BREVO_MAX_RETRIES: z.coerce.number().int().nonnegative().max(5).default(2),
+    NODEMAIL_USER: z.string().trim().email().optional(),
+    NODEMAIL_PASS: z.string().trim().min(1).optional(),
     MAIL_FROM: z
       .string()
       .trim()
@@ -243,7 +245,7 @@ const environmentSchema = z
 
     if (value.NODE_ENV === 'production') {
       const requiredMailFields = [
-        ['BREVO_API_KEY', value.BREVO_API_KEY],
+        ['mail provider', value.NODEMAIL_USER && value.NODEMAIL_PASS ? 'nodemailer' : value.BREVO_API_KEY],
         ['MAIL_FROM', value.MAIL_FROM],
       ] as const;
 

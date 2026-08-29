@@ -3,6 +3,7 @@ import type { Types } from 'mongoose';
 import { sha256 } from '../../common/utils/hash.util.js';
 import { SessionModel, type SessionDocument } from '../sessions/session.model.js';
 import { AuthCodeModel, type AuthCodeDocument, type AuthCodePurpose } from './auth-code.model.js';
+import { PendingSignupModel, type PendingSignupDocument } from './pending-signup.model.js';
 
 interface CreateSessionInput {
   userId: Types.ObjectId;
@@ -17,6 +18,16 @@ interface CreateAuthCodeInput {
   userId: Types.ObjectId;
   email: string;
   purpose: AuthCodePurpose;
+  code: string;
+  expiresAt: Date;
+}
+
+interface UpsertPendingSignupInput {
+  email: string;
+  passwordHash: string;
+  legalConsents?: unknown;
+  ipAddress?: string;
+  userAgent?: string;
   code: string;
   expiresAt: Date;
 }
@@ -98,6 +109,49 @@ export class AuthRepository {
       codeHash: sha256(input.code),
       expiresAt: input.expiresAt,
     });
+  }
+
+  async upsertPendingSignup(input: UpsertPendingSignupInput): Promise<PendingSignupDocument> {
+    const set: Record<string, unknown> = {
+      email: input.email,
+      passwordHash: input.passwordHash,
+      codeHash: sha256(input.code),
+      attempts: 0,
+      expiresAt: input.expiresAt,
+    };
+    const unset: Record<string, ''> = {};
+
+    if (input.legalConsents) set.legalConsents = input.legalConsents;
+    else unset.legalConsents = '';
+    if (input.ipAddress) set.ipAddress = input.ipAddress;
+    else unset.ipAddress = '';
+    if (input.userAgent) set.userAgent = input.userAgent;
+    else unset.userAgent = '';
+
+    return PendingSignupModel.findOneAndUpdate(
+      { email: input.email },
+      {
+        $set: set,
+        ...(Object.keys(unset).length > 0 ? { $unset: unset } : {}),
+      },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    ).exec();
+  }
+
+  async findPendingSignupByEmail(email: string): Promise<PendingSignupDocument | null> {
+    return PendingSignupModel.findOne({
+      email,
+      expiresAt: { $gt: new Date() },
+    }).exec();
+  }
+
+  async deletePendingSignup(pendingSignupId: string | Types.ObjectId): Promise<void> {
+    await PendingSignupModel.deleteOne({ _id: pendingSignupId }).exec();
+  }
+
+  async incrementPendingSignupAttempts(pendingSignup: PendingSignupDocument): Promise<void> {
+    pendingSignup.attempts += 1;
+    await pendingSignup.save();
   }
 
   async findActiveAuthCode(

@@ -1,4 +1,6 @@
 import { BrevoClient } from '@getbrevo/brevo';
+import nodemailer from 'nodemailer';
+import type SMTPTransport from 'nodemailer/lib/smtp-transport/index.js';
 
 import { env } from '../../config/env.config.js';
 import { AppError } from '../../common/errors/app-error.js';
@@ -22,19 +24,28 @@ interface AuthEmailContent {
 
 class BrevoMailService implements MailService {
   private client: BrevoClient | undefined;
+  private smtpTransport: nodemailer.Transporter<SMTPTransport.SentMessageInfo> | undefined;
 
   async sendAuthCode(input: SendAuthCodeInput): Promise<void> {
-    if (env.NODE_ENV !== 'production') {
-      logger.info(
-        { email: input.to, purpose: input.purpose, devCode: input.code },
-        'Development auth email skipped; use this auth code',
-      );
-      return;
-    }
-
     const content = buildAuthEmailContent(input);
 
     try {
+      if (this.shouldUseNodeMailer()) {
+        const result = await this.getSmtpTransport().sendMail({
+          from: this.getSenderAddress(),
+          to: input.to,
+          subject: content.subject,
+          text: content.textContent,
+          html: content.htmlContent,
+        });
+
+        logger.info(
+          { email: input.to, purpose: input.purpose, messageId: result.messageId },
+          'Nodemailer auth email sent',
+        );
+        return;
+      }
+
       const result = await this.getClient().transactionalEmails.sendTransacEmail({
         sender: this.getSender(),
         to: [{ email: input.to }],
@@ -45,19 +56,15 @@ class BrevoMailService implements MailService {
 
       logger.info({ email: input.to, purpose: input.purpose, messageId: result.messageId }, 'Brevo auth email sent');
     } catch (error) {
-      logger.error({ err: error, email: input.to, purpose: input.purpose }, 'Brevo email send failed');
+      const providerMessage = getMailProviderErrorMessage(error);
+      logger.error(
+        { err: error, providerMessage, email: input.to, purpose: input.purpose },
+        'Brevo email send failed',
+      );
 
-      if (env.NODE_ENV !== 'production') {
-        logger.warn(
-          { email: input.to, purpose: input.purpose, devCode: input.code },
-          'Development auth email skipped after provider failure',
-        );
-        return;
-      }
-
-      throw new AppError('Email could not be sent.', 502, {
+      throw new AppError(`Email could not be sent: ${providerMessage}`, 502, {
         code: 'EMAIL_SEND_FAILED',
-        details: error,
+        details: { providerMessage },
       });
     }
   }
@@ -74,6 +81,19 @@ class BrevoMailService implements MailService {
     const content = buildSupportEmailContent(input);
 
     try {
+      if (this.shouldUseNodeMailer()) {
+        const result = await this.getSmtpTransport().sendMail({
+          from: this.getSenderAddress(),
+          to: input.to,
+          subject: content.subject,
+          text: content.textContent,
+          html: content.htmlContent,
+        });
+
+        logger.info({ email: input.to, messageId: result.messageId }, 'Nodemailer support email sent');
+        return;
+      }
+
       const result = await this.getClient().transactionalEmails.sendTransacEmail({
         sender: this.getSender(),
         to: [{ email: input.to }],
@@ -84,10 +104,11 @@ class BrevoMailService implements MailService {
 
       logger.info({ email: input.to, messageId: result.messageId }, 'Brevo support email sent');
     } catch (error) {
-      logger.error({ err: error, email: input.to, subject: input.subject }, 'Brevo support email send failed');
-      throw new AppError('Support email could not be sent.', 502, {
+      const providerMessage = getMailProviderErrorMessage(error);
+      logger.error({ err: error, providerMessage, email: input.to, subject: input.subject }, 'Brevo support email send failed');
+      throw new AppError(`Support email could not be sent: ${providerMessage}`, 502, {
         code: 'SUPPORT_EMAIL_SEND_FAILED',
-        details: error,
+        details: { providerMessage },
       });
     }
   }
@@ -106,12 +127,37 @@ class BrevoMailService implements MailService {
     return this.client;
   }
 
+  private shouldUseNodeMailer(): boolean {
+    return Boolean(env.NODEMAIL_USER && env.NODEMAIL_PASS);
+  }
+
+  private getSmtpTransport(): nodemailer.Transporter<SMTPTransport.SentMessageInfo> {
+    if (!env.NODEMAIL_USER || !env.NODEMAIL_PASS) {
+      throw new Error('NODEMAIL_USER and NODEMAIL_PASS are required to send email with Nodemailer.');
+    }
+
+    this.smtpTransport ??= nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: env.NODEMAIL_USER,
+        pass: env.NODEMAIL_PASS,
+      },
+    });
+
+    return this.smtpTransport;
+  }
+
   private getSender(): MailSender {
     if (!env.MAIL_FROM) {
       throw new Error('MAIL_FROM is required to send email.');
     }
 
     return parseMailFromAddress(env.MAIL_FROM);
+  }
+
+  private getSenderAddress(): string {
+    const sender = this.getSender();
+    return sender.name ? `${sender.name} <${sender.email}>` : sender.email;
   }
 }
 
@@ -353,6 +399,34 @@ function escapeHtml(value: string | number): string {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+}
+
+function getMailProviderErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error !== 'object' || error === null) {
+    return String(error || 'Unknown mail provider error.');
+  }
+
+  const record = error as Record<string, any>;
+  const responseBody = record.response?.body ?? record.body;
+
+  if (typeof responseBody === 'string' && responseBody.trim()) {
+    return responseBody.trim();
+  }
+
+  if (responseBody && typeof responseBody === 'object') {
+    const code = responseBody.code ? `${responseBody.code}: ` : '';
+    const message = responseBody.message || responseBody.error || responseBody.detail;
+    if (message) return `${code}${String(message)}`;
+  }
+
+  if (record.message) return String(record.message);
+  if (record.code) return String(record.code);
+
+  return 'Unknown mail provider error.';
 }
 
 export const mailService: MailService = new BrevoMailService();
