@@ -255,6 +255,8 @@ function mapAd(ad: AdCampaignDocument) {
     title: ad.title ?? null,
     description: ad.description ?? null,
     destinationUrl: ad.destinationUrl ?? null,
+    ctaType: ad.ctaType ?? 'none',
+    ctaLabel: ad.ctaLabel ?? null,
     status: ad.status,
     adminReason: ad.adminReason ?? null,
     startsAt: ad.startsAt?.toISOString() ?? null,

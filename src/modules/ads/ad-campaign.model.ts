@@ -23,6 +23,9 @@ export type AdAudienceType = (typeof adAudienceTypes)[number];
 export const adAreaTypes = ['city', 'country', 'world'] as const;
 export type AdAreaType = (typeof adAreaTypes)[number];
 
+export const adCtaTypes = ['none', 'learn_more', 'send_message'] as const;
+export type AdCtaType = (typeof adCtaTypes)[number];
+
 export interface AdCampaign {
   _id: Types.ObjectId;
   ownerId: Types.ObjectId;
@@ -41,6 +44,8 @@ export interface AdCampaign {
   title?: string;
   description?: string;
   destinationUrl?: string;
+  ctaType?: AdCtaType;
+  ctaLabel?: string;
   status: AdCampaignStatus;
   adminReason?: string;
   reviewedBy?: Types.ObjectId;
@@ -78,6 +83,8 @@ const adCampaignSchema = new Schema<AdCampaign>(
     title: { type: String, trim: true, maxlength: 120 },
     description: { type: String, trim: true, maxlength: 500 },
     destinationUrl: { type: String, trim: true, maxlength: 1000 },
+    ctaType: { type: String, enum: adCtaTypes, default: 'none' },
+    ctaLabel: { type: String, trim: true, maxlength: 40 },
     status: { type: String, enum: adCampaignStatuses, default: 'pending', required: true, index: true },
     adminReason: { type: String, trim: true, maxlength: 500 },
     reviewedBy: { type: Schema.Types.ObjectId, ref: 'User' },

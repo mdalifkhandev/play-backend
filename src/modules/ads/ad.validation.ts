@@ -4,6 +4,7 @@ import {
   adAreaTypes,
   adAudienceTypes,
   adCampaignStatuses,
+  adCtaTypes,
   adPlacements,
 } from './ad-campaign.model.js';
 
@@ -30,6 +31,17 @@ export const createAdCampaignBodySchema = z
     title: z.string().trim().min(1).max(120).optional(),
     description: z.string().trim().min(1).max(500).optional(),
     destinationUrl: z.string().trim().url().max(1000).optional(),
+    ctaType: z.enum(adCtaTypes).default('none'),
+    ctaLabel: z.string().trim().min(1).max(40).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.ctaType === 'learn_more' && !data.destinationUrl) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['destinationUrl'],
+        message: 'Destination URL is required for Learn more button.',
+      });
+    }
   })
   .strict();
 

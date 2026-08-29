@@ -47,6 +47,8 @@ export class AdRepository {
       'title',
       'description',
       'destinationUrl',
+      'ctaType',
+      'ctaLabel',
     ] as const) {
       if (input[key] !== undefined) {
         payload[key] = input[key];
