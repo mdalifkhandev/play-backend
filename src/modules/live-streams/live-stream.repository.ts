@@ -211,6 +211,20 @@ export class LiveStreamRepository {
     ).populate('hostId', 'profile email isVerified');
   }
 
+  async updateCoverImage(id: string, coverImage: string): Promise<ILiveStream | null> {
+    if (!mongoose.Types.ObjectId.isValid(id)) return null;
+
+    return LiveStreamModel.findByIdAndUpdate(
+      id,
+      {
+        $set: {
+          coverImage,
+        },
+      },
+      { new: true },
+    ).populate('hostId', 'profile email isVerified');
+  }
+
   async incrementViewerCount(id: string): Promise<ILiveStream | null> {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
 

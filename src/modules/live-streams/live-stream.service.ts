@@ -47,6 +47,10 @@ export class LiveStreamService {
         { hostId, streamId: String(activeStream._id), status: activeStream.status },
         'Reusing active live stream for host',
       );
+      if (dto.coverImage && dto.coverImage !== activeStream.coverImage) {
+        const updated = await this.repository.updateCoverImage(String(activeStream._id), dto.coverImage);
+        if (updated) return this.mapToResponse(updated);
+      }
       return this.mapToResponse(activeStream);
     }
 
@@ -306,6 +310,31 @@ export class LiveStreamService {
       throw new AppError('Live stream not found.', 404, { code: 'STREAM_NOT_FOUND' });
     }
     return this.mapToResponse(stream);
+  }
+
+  async updateCoverImage(streamId: string, hostId: string, coverImage: string): Promise<LiveStreamResponseDTO> {
+    const stream = await this.repository.findById(streamId);
+    if (!stream) {
+      throw new AppError('Live stream not found.', 404, { code: 'STREAM_NOT_FOUND' });
+    }
+
+    const hostIdStr = (stream.hostId as any)._id?.toString() || stream.hostId.toString();
+    if (hostIdStr !== hostId) {
+      throw new AppError('Only the stream host can update this live thumbnail.', 403, { code: 'FORBIDDEN' });
+    }
+
+    if (stream.status === LIVE_STREAM_STATUS.ENDED) {
+      throw new AppError('Cannot update thumbnail for an ended stream.', 409, { code: 'STREAM_ENDED' });
+    }
+
+    const updated = await this.repository.updateCoverImage(streamId, coverImage);
+    if (!updated) {
+      throw new AppError('Failed to update live thumbnail.', 500, { code: 'UPDATE_FAILED' });
+    }
+
+    const response = this.mapToResponse(updated);
+    broadcastLiveStreamStatus(response);
+    return response;
   }
 
   async listForAdmin(query: AdminLiveStreamsQuery) {

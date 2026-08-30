@@ -36,6 +36,10 @@ export const postLiveStreamCommentSchema = z.object({
   text: z.string().trim().min(1, 'Comment text is required.').max(500, 'Comment cannot exceed 500 characters.'),
 });
 
+export const updateLiveStreamCoverSchema = z.object({
+  coverImage: z.string().url('Invalid cover image URL.'),
+});
+
 export const adminLiveStreamsQuerySchema = z.object({
   status: z.enum(Object.values(LIVE_STREAM_STATUS) as [string, ...string[]]).optional(),
   reported: z.coerce.boolean().optional().default(false),

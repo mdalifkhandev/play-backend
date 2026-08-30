@@ -15,6 +15,7 @@ import {
   liveStreamIdParamsSchema,
   postLiveStreamCommentSchema,
   searchLiveStreamsQuerySchema,
+  updateLiveStreamCoverSchema,
 } from './live-stream.validation.js';
 
 export const liveStreamRouter: ExpressRouter = Router();
@@ -95,6 +96,15 @@ liveStreamRouter.post(
   '/:id/end',
   validateRequest({ params: liveStreamIdParamsSchema }),
   liveStreamController.end,
+);
+
+liveStreamRouter.patch(
+  '/:id/cover',
+  validateRequest({
+    params: liveStreamIdParamsSchema,
+    body: updateLiveStreamCoverSchema,
+  }),
+  liveStreamController.updateCover,
 );
 
 liveStreamRouter.post(

@@ -26,6 +26,14 @@ export class LiveStreamController {
     sendSuccess(res, 200, 'Live stream ended.', stream);
   };
 
+  updateCover = async (req: Request, res: Response): Promise<void> => {
+    const userId = req.user!.userId;
+    const { id } = req.params;
+    const { coverImage } = req.body;
+    const stream = await this.service.updateCoverImage(id as string, userId, coverImage);
+    sendSuccess(res, 200, 'Live stream thumbnail updated.', stream);
+  };
+
   getToken = async (req: Request, res: Response): Promise<void> => {
     const userId = req.user!.userId;
     const { id } = req.params;
