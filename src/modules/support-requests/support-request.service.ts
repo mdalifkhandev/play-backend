@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
+import { Types } from 'mongoose';
 import { UserRole } from '../../common/enums/user-role.enum.js';
 import { BadRequestError } from '../../common/errors/bad-request-error.js';
 import { ConflictError } from '../../common/errors/conflict-error.js';
@@ -10,6 +11,7 @@ import { logger } from '../../infrastructure/logger/logger.js';
 import { mailService } from '../../infrastructure/mail/mail.service.js';
 import { auditService } from '../audit/audit.service.js';
 import { adminNotificationService } from '../notifications/admin-notification.service.js';
+import { notificationService } from '../notifications/notification.service.js';
 import { UserModel } from '../users/user.model.js';
 import {
   SupportMessageSenderType,
@@ -136,6 +138,7 @@ export class SupportRequestService {
     await this.audit(staffUserId, 'support_request.staff_reply');
     const detail = await this.getForAdmin(id);
     void this.notifyUserAboutStaffReply(detail.request, input.message);
+    void this.createSupportUpdateNotification(detail.request, input.message);
     return detail;
   }
 
@@ -179,6 +182,9 @@ export class SupportRequestService {
     const updated = await supportRequestRepository.updateByAdmin(id, input);
     if (!updated) throw this.notFoundError();
     await this.audit(staffUserId, 'support_request.update');
+    if (input.status && input.status !== existing.status) {
+      void this.createSupportStatusNotification(toSupportRequestDto(updated));
+    }
     return { request: toSupportRequestDto(updated) };
   }
 
@@ -305,6 +311,53 @@ export class SupportRequestService {
     });
   }
 
+  private async createSupportUpdateNotification(
+    request: ReturnType<typeof toSupportRequestDto>,
+    message: string,
+  ): Promise<void> {
+    try {
+      await notificationService.createNotification({
+        userId: new Types.ObjectId(request.requesterUserId),
+        type: 'system',
+        source: 'system',
+        title: 'Support replied',
+        body: message.length > 140 ? `${message.slice(0, 137)}...` : message,
+        relatedEntityId: new Types.ObjectId(request.id),
+        data: {
+          deepLink: `/screens/settings/support/${request.id}`,
+          supportRequestId: request.id,
+          ticketNumber: request.ticketNumber,
+          status: request.status,
+        },
+      });
+    } catch (error) {
+      logger.error({ err: error, requestId: request.id }, 'Support reply notification failed');
+    }
+  }
+
+  private async createSupportStatusNotification(
+    request: ReturnType<typeof toSupportRequestDto>,
+  ): Promise<void> {
+    try {
+      await notificationService.createNotification({
+        userId: new Types.ObjectId(request.requesterUserId),
+        type: 'system',
+        source: 'system',
+        title: 'Support status updated',
+        body: `${request.ticketNumber} is now ${formatSupportStatus(request.status)}.`,
+        relatedEntityId: new Types.ObjectId(request.id),
+        data: {
+          deepLink: `/screens/settings/support/${request.id}`,
+          supportRequestId: request.id,
+          ticketNumber: request.ticketNumber,
+          status: request.status,
+        },
+      });
+    } catch (error) {
+      logger.error({ err: error, requestId: request.id }, 'Support status notification failed');
+    }
+  }
+
   private async findUserEmail(userId: string): Promise<string | null> {
     const user = await UserModel.findById(userId).select('email').lean<{ email: string }>().exec();
     return user?.email ?? null;
@@ -331,6 +384,10 @@ function pageResult<T>(items: T[], total: number, page: number, limit: number) {
     items,
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   };
+}
+
+function formatSupportStatus(status: string) {
+  return status === 'in_progress' ? 'in progress' : status;
 }
 
 export const supportRequestService = new SupportRequestService();
