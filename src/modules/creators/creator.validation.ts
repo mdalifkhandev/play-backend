@@ -22,6 +22,13 @@ export const createCreatorApplicationBodySchema = z
   .strict();
 
 export const creatorApplicationIdParamSchema = z.object({ id: objectIdSchema }).strict();
+export const creatorUserIdParamSchema = z.object({ userId: objectIdSchema }).strict();
+
+export const creatorAnalyticsQuerySchema = z
+  .object({
+    range: z.enum(['7d', '28d', '60d', '90d']).default('7d'),
+  })
+  .strict();
 
 export const adminListCreatorApplicationsQuerySchema = z
   .object({
@@ -39,3 +46,4 @@ export const adminReviewCreatorApplicationBodySchema = z
 export type CreateCreatorApplicationInput = z.infer<typeof createCreatorApplicationBodySchema>;
 export type AdminListCreatorApplicationsQuery = z.infer<typeof adminListCreatorApplicationsQuerySchema>;
 export type AdminReviewCreatorApplicationInput = z.infer<typeof adminReviewCreatorApplicationBodySchema>;
+export type CreatorAnalyticsQuery = z.infer<typeof creatorAnalyticsQuerySchema>;

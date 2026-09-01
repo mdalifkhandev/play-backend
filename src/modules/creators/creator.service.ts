@@ -1,9 +1,15 @@
+import { Types } from 'mongoose';
+
 import { AppError } from '../../common/errors/app-error.js';
 import { NotFoundError } from '../../common/errors/not-found-error.js';
 import { UserRole } from '../../common/enums/user-role.enum.js';
+import { CreatorEarningModel } from '../monetization/creator-earning.model.js';
 import { CreatorRequirementSettingModel } from './creator-requirement-setting.model.js';
 import { creatorRepository, type CreatorRepository } from './creator.repository.js';
 import { adminNotificationService } from '../notifications/admin-notification.service.js';
+import { ReelModel } from '../reels/reel.model.js';
+import { ReelStatus, ReelVisibility } from '../reels/reel.constants.js';
+import { FollowModel } from '../users/follow.model.js';
 import type {
   CreatorApplicationSummaryDTO,
   CreatorEligibilityDTO,
@@ -12,6 +18,7 @@ import type {
 import type {
   AdminListCreatorApplicationsQuery,
   CreateCreatorApplicationInput,
+  CreatorAnalyticsQuery,
 } from './creator.validation.js';
 
 export class CreatorService {
@@ -165,6 +172,126 @@ export class CreatorService {
 
     return mapApplicationSummary(application);
   }
+
+  async getAnalytics(userId: string, query: CreatorAnalyticsQuery) {
+    const userObjectId = new Types.ObjectId(userId);
+    const days = rangeToDays(query.range);
+    const since = startOfDay(daysAgo(days - 1));
+    const publicReadyFilter = {
+      ownerId: userObjectId,
+      status: ReelStatus.READY,
+      visibility: ReelVisibility.PUBLIC,
+      deletedAt: { $exists: false },
+    };
+
+    const [summaryRows, followers, newFollowers, earningsRows, trendRows, topReels] = await Promise.all([
+      ReelModel.aggregate<{
+        reels: number;
+        views: number;
+        likes: number;
+        comments: number;
+        shares: number;
+        saves: number;
+      }>([
+        { $match: publicReadyFilter },
+        {
+          $group: {
+            _id: null,
+            reels: { $sum: 1 },
+            views: { $sum: '$viewCount' },
+            likes: { $sum: '$likeCount' },
+            comments: { $sum: '$commentCount' },
+            shares: { $sum: '$shareCount' },
+            saves: { $sum: '$saveCount' },
+          },
+        },
+      ]).exec(),
+      FollowModel.countDocuments({ followingId: userObjectId }).exec(),
+      FollowModel.countDocuments({ followingId: userObjectId, createdAt: { $gte: since } }).exec(),
+      CreatorEarningModel.aggregate<{ total: number; pending: number; available: number }>([
+        { $match: { userId: userObjectId } },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$amountUsd' },
+            pending: {
+              $sum: {
+                $cond: [{ $in: ['$status', ['pending', 'held']] }, '$amountUsd', 0],
+              },
+            },
+            available: {
+              $sum: {
+                $cond: [{ $eq: ['$status', 'available'] }, '$amountUsd', 0],
+              },
+            },
+          },
+        },
+      ]).exec(),
+      ReelModel.aggregate<{ _id: string; views: number; likes: number; comments: number; shares: number; saves: number }>([
+        { $match: { ...publicReadyFilter, publishedAt: { $gte: since } } },
+        {
+          $group: {
+            _id: { $dateToString: { format: '%Y-%m-%d', date: '$publishedAt' } },
+            views: { $sum: '$viewCount' },
+            likes: { $sum: '$likeCount' },
+            comments: { $sum: '$commentCount' },
+            shares: { $sum: '$shareCount' },
+            saves: { $sum: '$saveCount' },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ]).exec(),
+      ReelModel.find(publicReadyFilter)
+        .sort({ viewCount: -1, likeCount: -1, publishedAt: -1 })
+        .limit(5)
+        .select('caption viewCount likeCount commentCount shareCount saveCount thumbnail processedMedia rawMedia publishedAt')
+        .lean()
+        .exec(),
+    ]);
+
+    const summary = summaryRows[0] ?? { reels: 0, views: 0, likes: 0, comments: 0, shares: 0, saves: 0 };
+    const earnings = earningsRows[0] ?? { total: 0, pending: 0, available: 0 };
+    const engagementTotal = summary.likes + summary.comments + summary.shares + summary.saves;
+    const engagementRate = summary.views > 0 ? Number(((engagementTotal / summary.views) * 100).toFixed(1)) : 0;
+    const trendMap = new Map(trendRows.map((row) => [row._id, row]));
+
+    return {
+      range: query.range,
+      summary: {
+        reels: summary.reels,
+        views: summary.views,
+        likes: summary.likes,
+        comments: summary.comments,
+        shares: summary.shares,
+        saves: summary.saves,
+        followers,
+        newFollowers,
+        engagementRate,
+        earningsUsd: roundMoney(earnings.total),
+        pendingEarningsUsd: roundMoney(earnings.pending),
+        availableEarningsUsd: roundMoney(earnings.available),
+      },
+      trend: buildDateBuckets(days).map((date) => ({
+        date,
+        views: trendMap.get(date)?.views ?? 0,
+        likes: trendMap.get(date)?.likes ?? 0,
+        comments: trendMap.get(date)?.comments ?? 0,
+        shares: trendMap.get(date)?.shares ?? 0,
+        saves: trendMap.get(date)?.saves ?? 0,
+      })),
+      topReels: topReels.map((reel) => ({
+        id: reel._id.toString(),
+        title: reel.caption || 'Untitled reel',
+        thumbnailUrl: reel.thumbnail?.secureUrl || reel.processedMedia?.secureUrl || reel.rawMedia?.secureUrl,
+        views: reel.viewCount || 0,
+        likes: reel.likeCount || 0,
+        comments: reel.commentCount || 0,
+        shares: reel.shareCount || 0,
+        saves: reel.saveCount || 0,
+        publishedAt: reel.publishedAt?.toISOString?.() ?? null,
+      })),
+    };
+  }
 }
 
 export const creatorService = new CreatorService();
@@ -252,4 +379,34 @@ function mapAdminApplication(application: any) {
         }
       : {}),
   };
+}
+
+function rangeToDays(range: string) {
+  if (range === '28d') return 28;
+  if (range === '60d') return 60;
+  if (range === '90d') return 90;
+  return 7;
+}
+
+function daysAgo(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date;
+}
+
+function startOfDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function buildDateBuckets(days: number) {
+  return Array.from({ length: days }, (_, index) => {
+    const date = startOfDay(daysAgo(days - index - 1));
+    return date.toISOString().slice(0, 10);
+  });
+}
+
+function roundMoney(value: number) {
+  return Number(value.toFixed(2));
 }

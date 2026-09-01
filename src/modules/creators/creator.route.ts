@@ -11,7 +11,9 @@ import {
   adminListCreatorApplicationsQuerySchema,
   adminReviewCreatorApplicationBodySchema,
   createCreatorApplicationBodySchema,
+  creatorAnalyticsQuerySchema,
   creatorApplicationIdParamSchema,
+  creatorUserIdParamSchema,
 } from './creator.validation.js';
 
 export const creatorRouter = Router();
@@ -19,6 +21,11 @@ export const creatorAdminRouter = Router();
 
 creatorRouter.use(authenticate);
 creatorRouter.get('/me/eligibility', creatorController.eligibility);
+creatorRouter.get(
+  '/me/analytics',
+  validateRequest({ query: creatorAnalyticsQuerySchema }),
+  creatorController.myAnalytics,
+);
 creatorRouter.post(
   '/applications',
   requirePlatformFeature('creatorApplications'),
@@ -27,6 +34,11 @@ creatorRouter.post(
 );
 
 creatorAdminRouter.use(authenticate, adminAuditMiddleware, authorize(UserRole.ADMIN, UserRole.MODERATOR));
+creatorAdminRouter.get(
+  '/:userId/analytics',
+  validateRequest({ params: creatorUserIdParamSchema, query: creatorAnalyticsQuerySchema }),
+  creatorController.analyticsForAdmin,
+);
 creatorAdminRouter.get(
   '/applications',
   validateRequest({ query: adminListCreatorApplicationsQuerySchema }),

@@ -16,6 +16,16 @@ export class CreatorController {
     return sendSuccess(response, 201, 'Creator application submitted.', result);
   });
 
+  myAnalytics = asyncHandler(async (request: Request, response: Response) => {
+    const result = await creatorService.getAnalytics(userId(request), request.query as never);
+    return sendSuccess(response, 200, 'Creator analytics fetched.', result);
+  });
+
+  analyticsForAdmin = asyncHandler(async (request: Request, response: Response) => {
+    const result = await creatorService.getAnalytics(routeParam(request, 'userId'), request.query as never);
+    return sendSuccess(response, 200, 'Creator analytics fetched.', result);
+  });
+
   listForAdmin = asyncHandler(async (request: Request, response: Response) => {
     const result = await creatorService.listApplications(request.query as never);
     return sendSuccess(response, 200, 'Creator applications fetched.', result);
