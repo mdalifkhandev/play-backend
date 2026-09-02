@@ -277,7 +277,14 @@ const environmentSchema = z
     }
   });
 
-const parsedEnvironment = environmentSchema.safeParse(process.env);
+const sanitizedEnvironment = Object.fromEntries(
+  Object.entries(process.env).map(([key, value]) => [
+    key,
+    typeof value === 'string' && value.trim() === '' ? undefined : value,
+  ]),
+);
+
+const parsedEnvironment = environmentSchema.safeParse(sanitizedEnvironment);
 
 if (!parsedEnvironment.success) {
   const details = parsedEnvironment.error.issues
