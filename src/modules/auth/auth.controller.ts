@@ -11,11 +11,13 @@ import { authService } from './auth.service.js';
 export class AuthController {
   signUp = asyncHandler(async (request: Request, response: Response) => {
     const result = await authService.signUp(request.body, getRequestContext(request));
+    setRefreshCookie(response, result.tokens.refreshToken, result.tokens.refreshTokenExpiresAt);
     return sendSuccess(response, 201, 'Sign up successful. Please verify your email.', result);
   });
 
   verifyEmail = asyncHandler(async (request: Request, response: Response) => {
-    const result = await authService.verifyEmail(request.body);
+    const result = await authService.verifyEmail(request.body, getRequestContext(request));
+    setRefreshCookie(response, result.tokens.refreshToken, result.tokens.refreshTokenExpiresAt);
     return sendSuccess(response, 200, 'Email verified successfully.', result);
   });
 

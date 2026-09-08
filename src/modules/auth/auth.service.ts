@@ -46,7 +46,7 @@ export class AuthService {
   async signUp(
     input: SignUpInput,
     context: RequestContext,
-  ): Promise<{ user: PublicUserDto; verification: VerificationResult }> {
+  ): Promise<AuthResult & { verification: VerificationResult }> {
     const existingUser = await userRepository.existsByEmail(input.email);
 
     if (existingUser) {
@@ -79,10 +79,29 @@ export class AuthService {
       await legalConsentService.assertCurrentVersions(input.legalConsents);
     }
 
-    const verification = await this.createAndDispatchPendingSignupCode(input, context);
+    const user = await userRepository.create({
+      email: input.email,
+      passwordHash: await hashPassword(input.password),
+      status: AccountStatus.ACTIVE,
+      isEmailVerified: false,
+    });
+
+    if (input.legalConsents) {
+      await legalConsentService.acceptInitialConsents(
+        user._id.toString(),
+        input.legalConsents,
+        context,
+      );
+    }
+
+    const verification = await this.createAndDispatchCode(
+      user,
+      'email_verification',
+    );
+    const authResult = await this.createAuthResult(user, false, context);
 
     return {
-      user: this.pendingSignupUser(input.email),
+      ...authResult,
       verification,
     };
   }
@@ -226,7 +245,7 @@ export class AuthService {
     return this.createAuthResult(user, Boolean(input.rememberMe), context);
   }
 
-  async verifyEmail(input: VerifyCodeInput): Promise<{ user: PublicUserDto }> {
+  async verifyEmail(input: VerifyCodeInput, context: RequestContext): Promise<AuthResult> {
     const user = await userRepository.findByEmail(input.email);
 
     if (!user) {
@@ -252,7 +271,7 @@ export class AuthService {
         );
       }
 
-      return { user: toPublicUser(verifiedUser ?? createdUser) };
+      return this.createAuthResult(verifiedUser ?? createdUser, false, context);
     }
 
     const authCode = await this.requireValidCode(
@@ -270,7 +289,7 @@ export class AuthService {
       });
     }
 
-    return { user: toPublicUser(verifiedUser) };
+    return this.createAuthResult(verifiedUser, false, context);
   }
 
   async resendVerification(input: EmailInput): Promise<VerificationResult> {
