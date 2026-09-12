@@ -1,4 +1,4 @@
-import { BrevoClient } from '@getbrevo/brevo';
+import * as tls from 'node:tls';
 import nodemailer from 'nodemailer';
 import type SMTPTransport from 'nodemailer/lib/smtp-transport/index.js';
 
@@ -22,44 +22,30 @@ interface AuthEmailContent {
   htmlContent: string;
 }
 
-class BrevoMailService implements MailService {
-  private client: BrevoClient | undefined;
+class NodemailerMailService implements MailService {
   private smtpTransport: nodemailer.Transporter<SMTPTransport.SentMessageInfo> | undefined;
 
   async sendAuthCode(input: SendAuthCodeInput): Promise<void> {
     const content = buildAuthEmailContent(input);
 
     try {
-      if (this.shouldUseNodeMailer()) {
-        const result = await this.getSmtpTransport().sendMail({
-          from: this.getSenderAddress(),
-          to: input.to,
-          subject: content.subject,
-          text: content.textContent,
-          html: content.htmlContent,
-        });
-
-        logger.info(
-          { email: input.to, purpose: input.purpose, messageId: result.messageId },
-          'Nodemailer auth email sent',
-        );
-        return;
-      }
-
-      const result = await this.getClient().transactionalEmails.sendTransacEmail({
-        sender: this.getSender(),
-        to: [{ email: input.to }],
+      const result = await this.getSmtpTransport().sendMail({
+        from: this.getSenderAddress(),
+        to: input.to,
         subject: content.subject,
-        textContent: content.textContent,
-        htmlContent: content.htmlContent,
+        text: content.textContent,
+        html: content.htmlContent,
       });
 
-      logger.info({ email: input.to, purpose: input.purpose, messageId: result.messageId }, 'Brevo auth email sent');
+      logger.info(
+        { email: input.to, purpose: input.purpose, messageId: result.messageId },
+        'Nodemailer auth email sent',
+      );
     } catch (error) {
       const providerMessage = getMailProviderErrorMessage(error);
       logger.error(
         { err: error, providerMessage, email: input.to, purpose: input.purpose },
-        'Brevo email send failed',
+        'Nodemailer email send failed',
       );
 
       throw new AppError(`Email could not be sent: ${providerMessage}`, 502, {
@@ -70,7 +56,7 @@ class BrevoMailService implements MailService {
   }
 
   async sendSupportNotification(input: SendSupportNotificationInput): Promise<void> {
-    if (!env.BREVO_API_KEY || !env.MAIL_FROM) {
+    if (!env.NODEMAIL_USER || !env.NODEMAIL_PASS || !env.MAIL_FROM) {
       logger.warn(
         { email: input.to, subject: input.subject },
         'Support email skipped because mail provider is not configured',
@@ -81,54 +67,23 @@ class BrevoMailService implements MailService {
     const content = buildSupportEmailContent(input);
 
     try {
-      if (this.shouldUseNodeMailer()) {
-        const result = await this.getSmtpTransport().sendMail({
-          from: this.getSenderAddress(),
-          to: input.to,
-          subject: content.subject,
-          text: content.textContent,
-          html: content.htmlContent,
-        });
-
-        logger.info({ email: input.to, messageId: result.messageId }, 'Nodemailer support email sent');
-        return;
-      }
-
-      const result = await this.getClient().transactionalEmails.sendTransacEmail({
-        sender: this.getSender(),
-        to: [{ email: input.to }],
+      const result = await this.getSmtpTransport().sendMail({
+        from: this.getSenderAddress(),
+        to: input.to,
         subject: content.subject,
-        textContent: content.textContent,
-        htmlContent: content.htmlContent,
+        text: content.textContent,
+        html: content.htmlContent,
       });
 
-      logger.info({ email: input.to, messageId: result.messageId }, 'Brevo support email sent');
+      logger.info({ email: input.to, messageId: result.messageId }, 'Nodemailer support email sent');
     } catch (error) {
       const providerMessage = getMailProviderErrorMessage(error);
-      logger.error({ err: error, providerMessage, email: input.to, subject: input.subject }, 'Brevo support email send failed');
+      logger.error({ err: error, providerMessage, email: input.to, subject: input.subject }, 'Nodemailer support email send failed');
       throw new AppError(`Support email could not be sent: ${providerMessage}`, 502, {
         code: 'SUPPORT_EMAIL_SEND_FAILED',
         details: { providerMessage },
       });
     }
-  }
-
-  private getClient(): BrevoClient {
-    if (!env.BREVO_API_KEY) {
-      throw new Error('BREVO_API_KEY is required to send email.');
-    }
-
-    this.client ??= new BrevoClient({
-      apiKey: env.BREVO_API_KEY,
-      timeoutInSeconds: env.BREVO_TIMEOUT_SECONDS,
-      maxRetries: env.BREVO_MAX_RETRIES,
-    });
-
-    return this.client;
-  }
-
-  private shouldUseNodeMailer(): boolean {
-    return Boolean(env.NODEMAIL_USER && env.NODEMAIL_PASS);
   }
 
   private getSmtpTransport(): nodemailer.Transporter<SMTPTransport.SentMessageInfo> {
@@ -138,6 +93,10 @@ class BrevoMailService implements MailService {
 
     this.smtpTransport ??= nodemailer.createTransport({
       service: 'gmail',
+      // Include OS-trusted certificates for local antivirus or corporate TLS inspection.
+      ...(typeof tls.getCACertificates === 'function'
+        ? { tls: { ca: [...tls.getCACertificates('default'), ...tls.getCACertificates('system')] } }
+        : {}),
       auth: {
         user: env.NODEMAIL_USER,
         pass: env.NODEMAIL_PASS,
@@ -429,4 +388,4 @@ function getMailProviderErrorMessage(error: unknown): string {
   return 'Unknown mail provider error.';
 }
 
-export const mailService: MailService = new BrevoMailService();
+export const mailService: MailService = new NodemailerMailService();

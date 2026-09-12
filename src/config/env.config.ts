@@ -245,7 +245,8 @@ const environmentSchema = z
 
     if (value.NODE_ENV === 'production') {
       const requiredMailFields = [
-        ['mail provider', value.NODEMAIL_USER && value.NODEMAIL_PASS ? 'nodemailer' : value.BREVO_API_KEY],
+        ['NODEMAIL_USER', value.NODEMAIL_USER],
+        ['NODEMAIL_PASS', value.NODEMAIL_PASS],
         ['MAIL_FROM', value.MAIL_FROM],
       ] as const;
 
