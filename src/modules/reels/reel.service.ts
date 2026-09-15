@@ -14,6 +14,8 @@ import {
   cancelProcessReelJob,
   enqueueProcessReelJob,
 } from '../../infrastructure/queue/reel.queue.js';
+import { cacheService } from '../../infrastructure/cache/cache.service.js';
+import { cacheKeys } from '../../infrastructure/cache/cache-keys.js';
 import {
   MediaAssetAttachmentStatus,
   MediaAssetPurpose,
@@ -379,6 +381,14 @@ export class ReelService {
     query: ReelForYouQuery,
     viewerId?: string,
   ): Promise<ReelFeedResult> {
+    const isPublicInitialFeed = !viewerId && !query.cursor;
+    if (isPublicInitialFeed) {
+      const cached = await cacheService.get<ReelFeedResult>(cacheKeys.publicForYouFeed(query.limit));
+      if (cached) {
+        return cached;
+      }
+    }
+
     const cursor = query.cursor ? decodeReelForYouCursor(query.cursor) : undefined;
     const asOf = cursor?.asOf ?? new Date();
     let excludedReelIds: Types.ObjectId[] = [];
@@ -445,11 +455,17 @@ export class ReelService {
       });
     const liveItems = await this.getLiveFeedItems(query.limit);
 
-    return {
+    const feedResult: ReelFeedResult = {
       items: this.mixLiveItems(reelItems, liveItems, query.limit),
       nextCursor: nextCursorValue,
       pagination: { nextCursor: nextCursorValue, hasNextPage },
     };
+
+    if (isPublicInitialFeed) {
+      await cacheService.set(cacheKeys.publicForYouFeed(query.limit), feedResult, 30);
+    }
+
+    return feedResult;
   }
 
   async getKidsFeed(query: ReelFeedQuery, viewerId: string): Promise<ReelFeedResult> {

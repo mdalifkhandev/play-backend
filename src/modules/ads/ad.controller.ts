@@ -37,6 +37,21 @@ export class AdController {
     return sendSuccess(response, 200, 'Ad campaign resumed.', result);
   });
 
+  createStripePaymentIntent = asyncHandler(async (request: Request, response: Response) => {
+    const result = await adService.createStripePaymentIntent(request.user!.userId, param(request, 'adId'));
+    return sendSuccess(response, 200, 'Stripe payment intent created.', result);
+  });
+
+  verifyStripePayment = asyncHandler(async (request: Request, response: Response) => {
+    const result = await adService.verifyStripePayment(request.user!.userId, param(request, 'adId'), request.body);
+    return sendSuccess(response, 200, 'Ad payment verified successfully.', result);
+  });
+
+  payWithCoins = asyncHandler(async (request: Request, response: Response) => {
+    const result = await adService.payWithCoins(request.user!.userId, param(request, 'adId'));
+    return sendSuccess(response, 200, 'Ad paid with coins successfully.', result);
+  });
+
   recordImpression = asyncHandler(async (request: Request, response: Response) => {
     const result = await adService.recordImpression(param(request, 'adId'), metricActor(request));
     return sendSuccess(response, 200, 'Ad impression recorded.', result);

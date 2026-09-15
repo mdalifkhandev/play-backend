@@ -67,7 +67,14 @@ export const adminAdActionBodySchema = z
   })
   .strict();
 
+export const verifyAdStripePaymentBodySchema = z
+  .object({
+    paymentIntentId: z.string().trim().min(1, 'Payment intent id is required.'),
+  })
+  .strict();
+
 export type CreateAdCampaignInput = z.infer<typeof createAdCampaignBodySchema>;
 export type ListAdsQuery = z.infer<typeof listMyAdsQuerySchema>;
 export type AdFeedQuery = z.infer<typeof adFeedQuerySchema>;
 export type AdminAdActionInput = z.infer<typeof adminAdActionBodySchema>;
+export type VerifyAdStripePaymentInput = z.infer<typeof verifyAdStripePaymentBodySchema>;

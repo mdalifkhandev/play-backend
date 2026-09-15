@@ -19,4 +19,5 @@ export const cacheKeys = Object.freeze({
   activeGiftCatalog: `${cacheKeyPrefixes.coins}gifts:active`,
   adminCoinSettings: `${cacheKeyPrefixes.coins}settings:admin`,
   activeAnnouncements: `${cacheKeyPrefixes.announcements}active`,
+  publicForYouFeed: (limit: number) => `${prefix}:reels:foryou:public:${limit}`,
 });

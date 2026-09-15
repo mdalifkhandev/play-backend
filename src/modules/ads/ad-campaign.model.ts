@@ -26,6 +26,12 @@ export type AdAreaType = (typeof adAreaTypes)[number];
 export const adCtaTypes = ['none', 'learn_more', 'send_message'] as const;
 export type AdCtaType = (typeof adCtaTypes)[number];
 
+export const adPaymentStatuses = ['unpaid', 'paid', 'failed', 'refunded'] as const;
+export type AdPaymentStatus = (typeof adPaymentStatuses)[number];
+
+export const adPaymentProviders = ['stripe', 'coins'] as const;
+export type AdPaymentProvider = (typeof adPaymentProviders)[number];
+
 export interface AdCampaign {
   _id: Types.ObjectId;
   ownerId: Types.ObjectId;
@@ -47,6 +53,12 @@ export interface AdCampaign {
   ctaType?: AdCtaType;
   ctaLabel?: string;
   status: AdCampaignStatus;
+  paymentStatus: AdPaymentStatus;
+  paymentProvider?: AdPaymentProvider;
+  stripePaymentIntentId?: string;
+  stripeClientSecret?: string;
+  paidAt?: Date;
+  paymentAmountUsd?: number;
   adminReason?: string;
   reviewedBy?: Types.ObjectId;
   reviewedAt?: Date;
@@ -86,6 +98,12 @@ const adCampaignSchema = new Schema<AdCampaign>(
     ctaType: { type: String, enum: adCtaTypes, default: 'none' },
     ctaLabel: { type: String, trim: true, maxlength: 40 },
     status: { type: String, enum: adCampaignStatuses, default: 'pending', required: true, index: true },
+    paymentStatus: { type: String, enum: adPaymentStatuses, default: 'unpaid', required: true, index: true },
+    paymentProvider: { type: String, enum: adPaymentProviders },
+    stripePaymentIntentId: { type: String, trim: true },
+    stripeClientSecret: { type: String, trim: true },
+    paidAt: { type: Date },
+    paymentAmountUsd: { type: Number, min: 0 },
     adminReason: { type: String, trim: true, maxlength: 500 },
     reviewedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     reviewedAt: { type: Date },
@@ -106,6 +124,7 @@ const adCampaignSchema = new Schema<AdCampaign>(
 );
 
 adCampaignSchema.index({ status: 1, createdAt: -1 });
+adCampaignSchema.index({ paymentStatus: 1, createdAt: -1 });
 adCampaignSchema.index({ ownerId: 1, createdAt: -1 });
 adCampaignSchema.index({ placement: 1, status: 1, startsAt: 1, endsAt: 1 });
 adCampaignSchema.index(

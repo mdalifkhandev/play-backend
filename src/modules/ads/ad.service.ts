@@ -1,6 +1,10 @@
 import { AppError as AdAppError } from '../../common/errors/app-error.js';
+import { BadRequestError } from '../../common/errors/bad-request-error.js';
 import { NotFoundError } from '../../common/errors/not-found-error.js';
+import { env } from '../../config/env.config.js';
+import { stripe } from '../../config/stripe.config.js';
 import { adminNotificationService } from '../notifications/admin-notification.service.js';
+import { UserModel } from '../users/user.model.js';
 import {
   adRepository,
   type AdMetricActor,
@@ -12,6 +16,7 @@ import type {
   AdminAdActionInput,
   CreateAdCampaignInput,
   ListAdsQuery,
+  VerifyAdStripePaymentInput,
 } from './ad.validation.js';
 
 type AdAction = 'approve' | 'reject' | 'hold' | 'pause' | 'resume' | 'cancel';
@@ -29,13 +34,100 @@ export class AdService {
 
   async create(ownerId: string, input: CreateAdCampaignInput) {
     const ad = await this.ads.create(ownerId, input);
+    return mapAd(ad);
+  }
+
+  async createStripePaymentIntent(userId: string, adId: string) {
+    const ad = await this.ads.findMine(userId, adId);
+    if (!ad) {
+      throw new NotFoundError('Ad campaign was not found.', { code: 'AD_NOT_FOUND' });
+    }
+    if (ad.paymentStatus === 'paid') {
+      throw new BadRequestError('This ad campaign is already paid.');
+    }
+
+    const amountInCents = Math.round(ad.budgetUsd * 100);
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amountInCents,
+      currency: 'usd',
+      automatic_payment_methods: {
+        enabled: true,
+      },
+      metadata: {
+        adId: ad._id.toString(),
+        userId,
+        type: 'ad_campaign',
+        budgetUsd: ad.budgetUsd.toString(),
+      },
+    });
+
+    await this.ads.updatePaymentIntent(adId, paymentIntent.id, paymentIntent.client_secret ?? '');
+
+    return {
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+      publishableKey: env.STRIPE_PUBLISHABLE_KEY ?? '',
+      amount: ad.budgetUsd,
+      currency: 'usd',
+      adId: ad._id.toString(),
+    };
+  }
+
+  async verifyStripePayment(userId: string, adId: string, input: VerifyAdStripePaymentInput) {
+    const ad = await this.ads.findMine(userId, adId);
+    if (!ad) {
+      throw new NotFoundError('Ad campaign was not found.', { code: 'AD_NOT_FOUND' });
+    }
+
+    const paymentIntent = await stripe.paymentIntents.retrieve(input.paymentIntentId);
+    if (paymentIntent.status !== 'succeeded') {
+      throw new BadRequestError(`Payment not completed. Status: ${paymentIntent.status}`);
+    }
+
+    const updated = await this.ads.markAsPaid(adId, 'stripe', ad.budgetUsd, paymentIntent.id);
     void adminNotificationService.notifyAdmins({
       event: 'ad_campaign_submitted',
-      title: 'New ad campaign submitted',
-      body: `${input.title || input.category || 'Ad campaign'} is waiting for admin review.`,
-      relatedEntityId: ad._id.toString(),
+      title: 'New paid ad campaign submitted',
+      body: `${ad.title || ad.category || 'Ad campaign'} ($${ad.budgetUsd} paid via Stripe) is ready for review.`,
+      relatedEntityId: adId,
     });
-    return mapAd(ad);
+
+    return mapAd(updated!);
+  }
+
+  async payWithCoins(userId: string, adId: string) {
+    const ad = await this.ads.findMine(userId, adId);
+    if (!ad) {
+      throw new NotFoundError('Ad campaign was not found.', { code: 'AD_NOT_FOUND' });
+    }
+    if (ad.paymentStatus === 'paid') {
+      throw new BadRequestError('This ad campaign is already paid.');
+    }
+
+    const coinsNeeded = Math.round(ad.budgetUsd * 100);
+    const updatedUser = await UserModel.findOneAndUpdate(
+      { _id: userId, coinBalance: { $gte: coinsNeeded } },
+      { $inc: { coinBalance: -coinsNeeded } },
+      { new: true },
+    );
+
+    if (!updatedUser) {
+      throw new BadRequestError(`Insufficient coin balance. You need ${coinsNeeded} coins to buy this ad.`);
+    }
+
+    const updated = await this.ads.markAsPaid(adId, 'coins', ad.budgetUsd);
+    void adminNotificationService.notifyAdmins({
+      event: 'ad_campaign_submitted',
+      title: 'New paid ad campaign submitted',
+      body: `${ad.title || ad.category || 'Ad campaign'} ($${ad.budgetUsd} paid via ${coinsNeeded} coins) is ready for review.`,
+      relatedEntityId: adId,
+    });
+
+    return {
+      ad: mapAd(updated!),
+      coinBalance: updatedUser.coinBalance,
+      coinsDeducted: coinsNeeded,
+    };
   }
 
   async listMine(userId: string, query: ListAdsQuery) {
@@ -258,6 +350,10 @@ function mapAd(ad: AdCampaignDocument) {
     ctaType: ad.ctaType ?? 'none',
     ctaLabel: ad.ctaLabel ?? null,
     status: ad.status,
+    paymentStatus: ad.paymentStatus ?? 'unpaid',
+    paymentProvider: ad.paymentProvider ?? null,
+    paidAt: ad.paidAt?.toISOString() ?? null,
+    paymentAmountUsd: ad.paymentAmountUsd ?? null,
     adminReason: ad.adminReason ?? null,
     startsAt: ad.startsAt?.toISOString() ?? null,
     endsAt: ad.endsAt?.toISOString() ?? null,

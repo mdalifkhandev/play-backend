@@ -14,10 +14,11 @@ import {
   createAdCampaignBodySchema,
   listAdminAdsQuerySchema,
   listMyAdsQuerySchema,
+  verifyAdStripePaymentBodySchema,
 } from './ad.validation.js';
 
-export const adRouter = Router();
-export const adAdminRouter = Router();
+export const adRouter: Router = Router();
+export const adAdminRouter: Router = Router();
 
 adRouter.get('/feed', requirePlatformFeature('ads'), optionalAuthenticate, validateRequest({ query: adFeedQuerySchema }), adController.feed);
 adRouter.post('/:adId/impressions', requirePlatformFeature('ads'), optionalAuthenticate, validateRequest({ params: adIdParamsSchema }), adController.recordImpression);
@@ -30,6 +31,13 @@ adRouter.post('/', validateRequest({ body: createAdCampaignBodySchema }), adCont
 adRouter.get('/:adId', validateRequest({ params: adIdParamsSchema }), adController.getMine);
 adRouter.post('/:adId/pause', validateRequest({ params: adIdParamsSchema }), adController.pauseMine);
 adRouter.post('/:adId/resume', validateRequest({ params: adIdParamsSchema }), adController.resumeMine);
+adRouter.post('/:adId/payment/stripe-intent', validateRequest({ params: adIdParamsSchema }), adController.createStripePaymentIntent);
+adRouter.post(
+  '/:adId/payment/verify-stripe',
+  validateRequest({ params: adIdParamsSchema, body: verifyAdStripePaymentBodySchema }),
+  adController.verifyStripePayment,
+);
+adRouter.post('/:adId/payment/pay-coins', validateRequest({ params: adIdParamsSchema }), adController.payWithCoins);
 
 adAdminRouter.use(authenticate, adminAuditMiddleware, authorize(UserRole.ADMIN, UserRole.MODERATOR));
 adAdminRouter.get('/', validateRequest({ query: listAdminAdsQuerySchema }), adController.listForAdmin);

@@ -62,6 +62,40 @@ export class AdRepository {
     return AdCampaignModel.findOne({ _id: adId, ownerId: userId }).exec();
   }
 
+  async updatePaymentIntent(
+    adId: string,
+    paymentIntentId: string,
+    clientSecret: string,
+  ): Promise<AdCampaignDocument | null> {
+    return AdCampaignModel.findByIdAndUpdate(
+      adId,
+      {
+        stripePaymentIntentId: paymentIntentId,
+        stripeClientSecret: clientSecret,
+      },
+      { new: true },
+    ).exec();
+  }
+
+  async markAsPaid(
+    adId: string,
+    provider: 'stripe' | 'coins',
+    amountPaidUsd: number,
+    paymentIntentId?: string,
+  ): Promise<AdCampaignDocument | null> {
+    return AdCampaignModel.findByIdAndUpdate(
+      adId,
+      {
+        paymentStatus: 'paid',
+        paymentProvider: provider,
+        paidAt: new Date(),
+        paymentAmountUsd: amountPaidUsd,
+        ...(paymentIntentId ? { stripePaymentIntentId: paymentIntentId } : {}),
+      },
+      { new: true },
+    ).exec();
+  }
+
   async findById(adId: string): Promise<AdCampaignDocument | null> {
     return AdCampaignModel.findById(adId)
       .populate('ownerId', 'email profile.username profile.displayName profile.photoUrl')
