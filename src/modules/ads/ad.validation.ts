@@ -73,8 +73,51 @@ export const verifyAdStripePaymentBodySchema = z
   })
   .strict();
 
+export const packageIdParamsSchema = z
+  .object({
+    packageId: z.string().length(24, 'Invalid package identifier.'),
+  })
+  .strict();
+
+export const categoryIdParamsSchema = z
+  .object({
+    categoryId: z.string().length(24, 'Invalid category identifier.'),
+  })
+  .strict();
+
+export const createAdPackageBodySchema = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+    days: z.coerce.number().int().min(1).max(365),
+    priceUsd: z.coerce.number().min(1).max(1_000_000),
+    targetUsers: z.coerce.number().int().min(1).max(100_000_000),
+    description: z.string().trim().max(500).optional(),
+    isPopular: z.boolean().optional().default(false),
+    isActive: z.boolean().optional().default(true),
+    sortOrder: z.coerce.number().int().min(0).optional().default(0),
+  })
+  .strict();
+
+export const updateAdPackageBodySchema = createAdPackageBodySchema.partial();
+
+export const createAdCategoryBodySchema = z
+  .object({
+    name: z.string().trim().min(1).max(100),
+    icon: z.string().trim().max(60).optional(),
+    description: z.string().trim().max(500).optional(),
+    isActive: z.boolean().optional().default(true),
+    sortOrder: z.coerce.number().int().min(0).optional().default(0),
+  })
+  .strict();
+
+export const updateAdCategoryBodySchema = createAdCategoryBodySchema.partial();
+
 export type CreateAdCampaignInput = z.infer<typeof createAdCampaignBodySchema>;
 export type ListAdsQuery = z.infer<typeof listMyAdsQuerySchema>;
 export type AdFeedQuery = z.infer<typeof adFeedQuerySchema>;
 export type AdminAdActionInput = z.infer<typeof adminAdActionBodySchema>;
 export type VerifyAdStripePaymentInput = z.infer<typeof verifyAdStripePaymentBodySchema>;
+export type CreateAdPackageInput = z.infer<typeof createAdPackageBodySchema>;
+export type UpdateAdPackageInput = z.infer<typeof updateAdPackageBodySchema>;
+export type CreateAdCategoryInput = z.infer<typeof createAdCategoryBodySchema>;
+export type UpdateAdCategoryInput = z.infer<typeof updateAdCategoryBodySchema>;

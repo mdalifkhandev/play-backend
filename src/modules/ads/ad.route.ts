@@ -11,15 +11,23 @@ import {
   adIdParamsSchema,
   adFeedQuerySchema,
   adminAdActionBodySchema,
+  categoryIdParamsSchema,
   createAdCampaignBodySchema,
+  createAdPackageBodySchema,
+  createAdCategoryBodySchema,
   listAdminAdsQuerySchema,
   listMyAdsQuerySchema,
+  packageIdParamsSchema,
+  updateAdPackageBodySchema,
+  updateAdCategoryBodySchema,
   verifyAdStripePaymentBodySchema,
 } from './ad.validation.js';
 
 export const adRouter: Router = Router();
 export const adAdminRouter: Router = Router();
 
+adRouter.get('/packages', optionalAuthenticate, adController.getActivePackages);
+adRouter.get('/categories', optionalAuthenticate, adController.getActiveCategories);
 adRouter.get('/feed', requirePlatformFeature('ads'), optionalAuthenticate, validateRequest({ query: adFeedQuerySchema }), adController.feed);
 adRouter.post('/:adId/impressions', requirePlatformFeature('ads'), optionalAuthenticate, validateRequest({ params: adIdParamsSchema }), adController.recordImpression);
 adRouter.post('/:adId/clicks', requirePlatformFeature('ads'), optionalAuthenticate, validateRequest({ params: adIdParamsSchema }), adController.recordClick);
@@ -71,4 +79,38 @@ adAdminRouter.patch(
   '/:adId/cancel',
   validateRequest({ params: adIdParamsSchema, body: adminAdActionBodySchema }),
   adController.cancel,
+);
+
+adAdminRouter.get('/packages', adController.listPackagesForAdmin);
+adAdminRouter.post(
+  '/packages',
+  validateRequest({ body: createAdPackageBodySchema }),
+  adController.createPackage,
+);
+adAdminRouter.put(
+  '/packages/:packageId',
+  validateRequest({ params: packageIdParamsSchema, body: updateAdPackageBodySchema }),
+  adController.updatePackage,
+);
+adAdminRouter.delete(
+  '/packages/:packageId',
+  validateRequest({ params: packageIdParamsSchema }),
+  adController.deletePackage,
+);
+
+adAdminRouter.get('/categories', adController.listCategoriesForAdmin);
+adAdminRouter.post(
+  '/categories',
+  validateRequest({ body: createAdCategoryBodySchema }),
+  adController.createCategory,
+);
+adAdminRouter.put(
+  '/categories/:categoryId',
+  validateRequest({ params: categoryIdParamsSchema, body: updateAdCategoryBodySchema }),
+  adController.updateCategory,
+);
+adAdminRouter.delete(
+  '/categories/:categoryId',
+  validateRequest({ params: categoryIdParamsSchema }),
+  adController.deleteCategory,
 );

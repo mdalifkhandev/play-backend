@@ -79,6 +79,56 @@ export class AdController {
   resume = this.adminAction('resume', 'Ad campaign resumed by admin.');
   cancel = this.adminAction('cancel', 'Ad campaign cancelled by admin.');
 
+  getActivePackages = asyncHandler(async (_request: Request, response: Response) => {
+    const result = await adService.getActivePackages();
+    return sendSuccess(response, 200, 'Ad packages fetched.', result);
+  });
+
+  listPackagesForAdmin = asyncHandler(async (_request: Request, response: Response) => {
+    const result = await adService.listPackagesForAdmin();
+    return sendSuccess(response, 200, 'Admin ad packages fetched.', result);
+  });
+
+  createPackage = asyncHandler(async (request: Request, response: Response) => {
+    const result = await adService.createPackage(request.body);
+    return sendSuccess(response, 201, 'Ad package created.', result);
+  });
+
+  updatePackage = asyncHandler(async (request: Request, response: Response) => {
+    const result = await adService.updatePackage(param(request, 'packageId'), request.body);
+    return sendSuccess(response, 200, 'Ad package updated.', result);
+  });
+
+  deletePackage = asyncHandler(async (request: Request, response: Response) => {
+    const result = await adService.deletePackage(param(request, 'packageId'));
+    return sendSuccess(response, 200, 'Ad package deleted.', result);
+  });
+
+  getActiveCategories = asyncHandler(async (_request: Request, response: Response) => {
+    const result = await adService.getActiveCategories();
+    return sendSuccess(response, 200, 'Ad categories fetched.', result);
+  });
+
+  listCategoriesForAdmin = asyncHandler(async (_request: Request, response: Response) => {
+    const result = await adService.listCategoriesForAdmin();
+    return sendSuccess(response, 200, 'Admin ad categories fetched.', result);
+  });
+
+  createCategory = asyncHandler(async (request: Request, response: Response) => {
+    const result = await adService.createCategory(request.body);
+    return sendSuccess(response, 201, 'Ad category created.', result);
+  });
+
+  updateCategory = asyncHandler(async (request: Request, response: Response) => {
+    const result = await adService.updateCategory(param(request, 'categoryId'), request.body);
+    return sendSuccess(response, 200, 'Ad category updated.', result);
+  });
+
+  deleteCategory = asyncHandler(async (request: Request, response: Response) => {
+    const result = await adService.deleteCategory(param(request, 'categoryId'));
+    return sendSuccess(response, 200, 'Ad category deleted.', result);
+  });
+
   private adminAction(action: 'approve' | 'reject' | 'hold' | 'pause' | 'resume' | 'cancel', message: string) {
     return asyncHandler(async (request: Request, response: Response) => {
       const result = await adService.adminAction(

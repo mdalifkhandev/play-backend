@@ -11,11 +11,17 @@ import {
   type AdRepository,
 } from './ad.repository.js';
 import type { AdCampaignDocument, AdCampaignStatus } from './ad-campaign.model.js';
+import { AdPackageModel, DEFAULT_AD_PACKAGES } from './ad-package.model.js';
+import { AdCategoryModel, DEFAULT_AD_CATEGORIES } from './ad-category.model.js';
 import type {
   AdFeedQuery,
   AdminAdActionInput,
   CreateAdCampaignInput,
+  CreateAdPackageInput,
+  CreateAdCategoryInput,
   ListAdsQuery,
+  UpdateAdPackageInput,
+  UpdateAdCategoryInput,
   VerifyAdStripePaymentInput,
 } from './ad.validation.js';
 
@@ -239,6 +245,148 @@ export class AdService {
     }
     return ad;
   }
+
+  async getActivePackages() {
+    const count = await AdPackageModel.countDocuments();
+    if (count === 0) {
+      await AdPackageModel.insertMany(DEFAULT_AD_PACKAGES);
+    }
+    const packages = await AdPackageModel.find({ isActive: true })
+      .sort({ sortOrder: 1, days: 1, priceUsd: 1 })
+      .lean();
+    return packages.map(mapAdPackage);
+  }
+
+  async listPackagesForAdmin() {
+    const count = await AdPackageModel.countDocuments();
+    if (count === 0) {
+      await AdPackageModel.insertMany(DEFAULT_AD_PACKAGES);
+    }
+    const packages = await AdPackageModel.find()
+      .sort({ sortOrder: 1, days: 1, priceUsd: 1 })
+      .lean();
+    return packages.map(mapAdPackage);
+  }
+
+  async createPackage(input: CreateAdPackageInput) {
+    const payload: Record<string, unknown> = {
+      name: input.name,
+      days: input.days,
+      priceUsd: input.priceUsd,
+      targetUsers: input.targetUsers,
+      isPopular: input.isPopular ?? false,
+      isActive: input.isActive ?? true,
+      sortOrder: input.sortOrder ?? 0,
+    };
+    if (input.description !== undefined) {
+      payload.description = input.description;
+    }
+    const created = await AdPackageModel.create(payload);
+    return mapAdPackage(created);
+  }
+
+  async updatePackage(packageId: string, input: UpdateAdPackageInput) {
+    const updatePayload: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(input)) {
+      if (value !== undefined) {
+        updatePayload[key] = value;
+      }
+    }
+
+    const updated = await AdPackageModel.findByIdAndUpdate(
+      packageId,
+      { $set: updatePayload },
+      { new: true, runValidators: true },
+    );
+    if (!updated) {
+      throw new NotFoundError('Ad package was not found.', { code: 'AD_PACKAGE_NOT_FOUND' });
+    }
+    return mapAdPackage(updated);
+  }
+
+  async deletePackage(packageId: string) {
+    const deleted = await AdPackageModel.findByIdAndDelete(packageId);
+    if (!deleted) {
+      throw new NotFoundError('Ad package was not found.', { code: 'AD_PACKAGE_NOT_FOUND' });
+    }
+    return { id: packageId, deleted: true };
+  }
+
+  async getActiveCategories() {
+    const count = await AdCategoryModel.countDocuments();
+    if (count === 0) {
+      await AdCategoryModel.insertMany(DEFAULT_AD_CATEGORIES);
+    }
+    const categories = await AdCategoryModel.find({ isActive: true })
+      .sort({ sortOrder: 1, name: 1 })
+      .lean();
+    return categories.map(mapAdCategory);
+  }
+
+  async listCategoriesForAdmin() {
+    const count = await AdCategoryModel.countDocuments();
+    if (count === 0) {
+      await AdCategoryModel.insertMany(DEFAULT_AD_CATEGORIES);
+    }
+    const categories = await AdCategoryModel.find()
+      .sort({ sortOrder: 1, name: 1 })
+      .lean();
+    return categories.map(mapAdCategory);
+  }
+
+  async createCategory(input: CreateAdCategoryInput) {
+    const slug = input.name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+    const payload: Record<string, unknown> = {
+      name: input.name.trim(),
+      slug: slug || `category-${Date.now()}`,
+      isActive: input.isActive ?? true,
+      sortOrder: input.sortOrder ?? 0,
+    };
+    if (input.icon !== undefined) payload.icon = input.icon;
+    if (input.description !== undefined) payload.description = input.description;
+
+    const created = await AdCategoryModel.create(payload);
+    return mapAdCategory(created);
+  }
+
+  async updateCategory(categoryId: string, input: UpdateAdCategoryInput) {
+    const updatePayload: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(input)) {
+      if (value !== undefined) {
+        updatePayload[key] = value;
+      }
+    }
+    if (input.name) {
+      updatePayload.name = input.name.trim();
+      updatePayload.slug = input.name
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+    }
+
+    const updated = await AdCategoryModel.findByIdAndUpdate(
+      categoryId,
+      { $set: updatePayload },
+      { new: true, runValidators: true },
+    );
+    if (!updated) {
+      throw new NotFoundError('Ad category was not found.', { code: 'AD_CATEGORY_NOT_FOUND' });
+    }
+    return mapAdCategory(updated);
+  }
+
+  async deleteCategory(categoryId: string) {
+    const deleted = await AdCategoryModel.findByIdAndDelete(categoryId);
+    if (!deleted) {
+      throw new NotFoundError('Ad category was not found.', { code: 'AD_CATEGORY_NOT_FOUND' });
+    }
+    return { id: categoryId, deleted: true };
+  }
 }
 
 export const adService = new AdService();
@@ -362,5 +510,35 @@ function mapAd(ad: AdCampaignDocument) {
     metrics: ad.metrics,
     createdAt: ad.createdAt.toISOString(),
     updatedAt: ad.updatedAt.toISOString(),
+  };
+}
+
+function mapAdPackage(pkg: any) {
+  return {
+    id: pkg._id.toString(),
+    name: pkg.name,
+    days: pkg.days,
+    priceUsd: pkg.priceUsd,
+    targetUsers: pkg.targetUsers,
+    description: pkg.description ?? '',
+    isPopular: Boolean(pkg.isPopular),
+    isActive: Boolean(pkg.isActive),
+    sortOrder: pkg.sortOrder ?? 0,
+    createdAt: pkg.createdAt ? new Date(pkg.createdAt).toISOString() : new Date().toISOString(),
+    updatedAt: pkg.updatedAt ? new Date(pkg.updatedAt).toISOString() : new Date().toISOString(),
+  };
+}
+
+function mapAdCategory(cat: any) {
+  return {
+    id: cat._id.toString(),
+    name: cat.name,
+    slug: cat.slug,
+    icon: cat.icon ?? '',
+    description: cat.description ?? '',
+    isActive: Boolean(cat.isActive),
+    sortOrder: cat.sortOrder ?? 0,
+    createdAt: cat.createdAt ? new Date(cat.createdAt).toISOString() : new Date().toISOString(),
+    updatedAt: cat.updatedAt ? new Date(cat.updatedAt).toISOString() : new Date().toISOString(),
   };
 }
