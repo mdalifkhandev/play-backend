@@ -225,7 +225,7 @@ function roundNumber(value: number): number {
 
 function renderTelemetryPage(): string {
   const projectName = 'Play Platform';
-  const refreshIntervalSeconds = 5;
+  const refreshIntervalSeconds = 30;
 
   return `<!doctype html>
 <html lang="en">
