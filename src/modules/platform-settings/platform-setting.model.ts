@@ -18,6 +18,13 @@ export interface PlatformFeatureFlags {
   withdrawals: boolean;
 }
 
+export interface AdMobConfig {
+  androidAppId?: string;
+  iosAppId?: string;
+  androidNativeAdId?: string;
+  iosNativeAdId?: string;
+}
+
 export interface PlatformSetting {
   _id: mongoose.Types.ObjectId;
   maintenanceMode: boolean;
@@ -28,6 +35,7 @@ export interface PlatformSetting {
   platformSharePercentage: number;
   languages: PlatformLanguage[];
   featureFlags: PlatformFeatureFlags;
+  adMobConfig?: AdMobConfig;
   updatedBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -76,6 +84,12 @@ const platformSettingSchema = new Schema<PlatformSetting>(
       creatorApplications: { type: Boolean, required: true, default: true },
       coinPurchase: { type: Boolean, required: true, default: true },
       withdrawals: { type: Boolean, required: true, default: true },
+    },
+    adMobConfig: {
+      androidAppId: { type: String, trim: true },
+      iosAppId: { type: String, trim: true },
+      androidNativeAdId: { type: String, trim: true },
+      iosNativeAdId: { type: String, trim: true },
     },
     updatedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   },

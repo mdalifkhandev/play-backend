@@ -18,6 +18,13 @@ const featureFlagsSchema = z.object({
   withdrawals: z.boolean(),
 });
 
+const adMobConfigSchema = z.object({
+  androidAppId: z.string().trim().optional(),
+  iosAppId: z.string().trim().optional(),
+  androidNativeAdId: z.string().trim().optional(),
+  iosNativeAdId: z.string().trim().optional(),
+});
+
 export const updatePlatformSettingsBodySchema = z
   .object({
     maintenanceMode: z.boolean().optional(),
@@ -28,6 +35,7 @@ export const updatePlatformSettingsBodySchema = z
     platformSharePercentage: z.coerce.number().int().min(0).max(100).optional(),
     languages: z.array(languageSchema).min(1).max(50).optional(),
     featureFlags: featureFlagsSchema.partial().optional(),
+    adMobConfig: adMobConfigSchema.optional(),
   })
   .strict()
   .refine(
